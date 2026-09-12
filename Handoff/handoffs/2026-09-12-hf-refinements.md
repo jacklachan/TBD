@@ -24,7 +24,9 @@ preserved. Work is in `C:/Users/Utkarsh/Desktop/Project/TBD-refinements`, branch
 - `backend/api.py`: memory no longer invents a widened search or a binding
   constraint. `backend/agent/llm.py`: legacy transport timing includes retries.
 - The rationale guard recognizes the exact comfortable-clearance threshold
-  already reported by the validation tool. Invented distances remain flagged.
+  and clearance margin already reported by the validation tool, plus remaining
+  delta-v. Invented distances remain flagged. Planner instructions explicitly
+  limit rejection claims to checked options; prose is still not a proof.
 - `frontend/src/components/PriorCaseEvidence.tsx`, `frontend/src/App.tsx`,
   `frontend/src/styles.css`: read-only earlier-case inspection with policy,
   proposal, reviewer, execution and versioned numerical evidence. Missing cases
@@ -92,8 +94,29 @@ preserved. Work is in `C:/Users/Utkarsh/Desktop/Project/TBD-refinements`, branch
    403, oversized request 413, and no configured secret exposed at `/.env`.
 
 The ten-second complete-agent target is not established. No provider ranking or
-quality comparison was measured. Docker/HF build and deployed runtime checks
-are recorded below when actually observed. Secret values are never in this packet.
+quality comparison was measured. Secret values are never in this packet.
+
+## Deployment
+
+- Application source: GitHub `4d7c6639e4f18b79db389d09e19817668d68076b`.
+- Space revision: `b63a69ff03c8908ccce7c3c101f30a45032db25f`, observed RUNNING
+  on CPU Upgrade, one replica. Docker dependencies and frontend build succeeded.
+- App: https://auenchanters-tbh.hf.space
+- HF_TOKEN and DESK_ACCESS_TOKEN are Space secrets. The local ignored `.env`
+  stores the operator password under DESK_ACCESS_TOKEN (line 29 in this checkout).
+- The first attempt on this revision encountered HF HTTP 429 before the first
+  model reply. The API returned unresolved with no proposal. The live checker
+  now reports that cleanly rather than dereferencing a missing proposal.
+- After a pause the provider recovered. Initial plan took 7.2 s, but exposed
+  another guard false positive on the reported 1,491.9 m margin; regression
+  reproduced and fixed. Later model replies were incomplete/filtered and remained
+  unresolved. Response allowance increased from 2,048 to 8,192 tokens, preserving
+  GLM's default reasoning setting; incomplete replies remain errors and now report
+  finish_reason. GLM has built-in thinking (see its official model card at
+  https://huggingface.co/zai-org/GLM-5.3-Flash); token truncation was a suspected
+  cause, not established from the earlier combined error message.
+- After these transport/guard edits: 106 affected agent, HF-provider and
+  refinement tests passed in 14.71 s. The earlier full 322-test suite passed.
 
 ## Contract / next action
 

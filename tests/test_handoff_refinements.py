@@ -136,6 +136,6 @@ def test_grid_completion_cannot_mint_a_proposal(scenario, expected, validation_l
 def test_guard_accepts_computed_margin_but_flags_invented_distance(session):
     outcome = plan_case(ScriptedProvider([
         tool_call("validate_proposal", candidate_id="t30_ret_200"),
-        text_reply("The 1250 m comfortable threshold is passed. An invented 98765 m distance."),
+        text_reply("The 1250 m comfortable threshold is passed with a 1491.9 m margin above the floor. An invented 98765 m distance."),
     ]), session)
     assert outcome.flagged_numbers == (98765.0,)

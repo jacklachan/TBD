@@ -58,7 +58,7 @@ class HuggingFaceProvider:
     def call(self, system: str, messages: list[Message], tools: list[dict]) -> LLMResponse:
         started = time.perf_counter()
         body = {"model": self.model, "messages": self._messages(system, messages),
-                "temperature": self.temperature, "max_tokens": 2048, "stream": False}
+                "temperature": self.temperature, "max_tokens": 8192, "stream": False}
         # This model supports low/medium/high. Other model families keep their
         # own defaults rather than receiving a model-specific parameter.
         if "gpt-oss" in self.model:
@@ -97,7 +97,7 @@ class HuggingFaceProvider:
         try:
             choice = payload["choices"][0]
             if choice.get("finish_reason") not in {"stop", "tool_calls"}:
-                raise ValueError("incomplete or filtered reply")
+                raise ValueError(f"incomplete or filtered reply (finish_reason={choice.get('finish_reason')!r})")
             message = choice["message"]
             text = message.get("content") or ""
             if not isinstance(text, str):

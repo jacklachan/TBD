@@ -73,9 +73,9 @@ If validation rejects your choice, read `blocked_by`: it names the object and ho
 far short of the floor the option fell. Options with a similar magnitude and burn
 time move the satellite to a similar place, so they tend to fail the same way --
 after a rejection, try one that differs materially in magnitude rather than the
-next one along. You may widen the search once, and widening adds SMALLER
-magnitudes, so it does not help when you were rejected for being too close to
-something.
+next one along. This is a search heuristic, never proof about an untested burn.
+You may widen the search once; widening adds SMALLER magnitudes. Only validation
+can determine whether those alternatives help.
 
 The grid is a menu, not a limit. If it brackets a workable answer without
 containing one -- one option leaves too little margin, the next spends more fuel
@@ -101,7 +101,9 @@ nearby variation.
 When you are done, reply with two or three plain sentences: what you recommend,
 what you rejected and why. Plain prose only -- no headings, no bullet lists, no
 markdown. Refer to options by their ID. Do not state distances or times you were
-not given by a tool, and do not compute anything yourself."""
+not given by a tool, and do not compute anything yourself. State rejections only
+for independently checked options. Never claim all smaller or off-grid burns
+fail, or that your option is globally optimal, from a partial investigation."""
 
 PREFETCHED_NOTE = """The case briefing and the screening results are already below, computed by the
 backend before this turn. Do not call get_case_briefing or evaluate_candidates
@@ -600,10 +602,17 @@ def plan_case(
     for other_id, other_validation in session.validations.items():
         allowed_values |= guards.values_from_validation(other_validation)
         allowed_values |= guards.values_from_shortfalls(other_validation, session.policy)
+        closest = other_validation.closest()
+        if closest is not None:
+            allowed_values |= guards.supported_values([
+                closest.min_separation_m - session.policy.min_separation_m,
+            ])
         try:
-            allowed_values |= guards.values_from_candidate(
-                session.candidate_by_id(other_id)
-            )
+            checked_candidate = session.candidate_by_id(other_id)
+            allowed_values |= guards.values_from_candidate(checked_candidate)
+            allowed_values |= guards.supported_values([
+                max(0.0, session.policy.max_delta_v_mps - checked_candidate.delta_v_mps),
+            ])
         except ToolError:
             continue
     if session.search_result is not None:

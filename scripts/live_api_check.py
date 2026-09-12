@@ -109,7 +109,7 @@ def main() -> int:
     run_id = check.post(f"/cases/{case_id}/plan", versions(case)).json()["run_id"]
     run = check.wait(run_id)
     plan_seconds = time.perf_counter() - started
-    result = run["result"]
+    result = run.get("result") or {}
     check.ok("run finished", run["status"] == "DONE", run.get("error", ""))
     check.ok(
         "proposal ready",
@@ -119,6 +119,12 @@ def main() -> int:
     check.ok("no invented figures", not result.get("flagged_numbers"), str(result.get("flagged_numbers")))
 
     snapshot = check.get(f"/cases/{case_id}").json()
+    if result.get("status") != "PROPOSAL_READY" or not snapshot.get("proposal"):
+        for event in snapshot.get("events", []):
+            if event.get("event_type") in {"model_error", "unresolved", "limit", "grid_audit"}:
+                print(f"  {event['event_type']}: {event['summary']}")
+        print("FAILED: no reviewed proposal; the remaining workflow needs a working provider.")
+        return 1
     statuses = {v["candidate_id"]: v["status"] for v in snapshot["validations"]}
     check.ok("an option was rejected", any(s == "BLOCK" for s in statuses.values()), str(statuses))
     check.ok("an option passed", any(s == "PASS" for s in statuses.values()))
