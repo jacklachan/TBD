@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
@@ -229,3 +230,90 @@ def test_the_endpoint_is_behind_the_same_guard_as_the_rest_of_the_api():
     )
     assert denied.status_code == 403
     assert denied.json()["detail"]["error"] == "ORIGIN_DENIED"
+
+
+def many_objects(count: int = 12) -> str:
+    """A full paste, spaced around the same shell.
+
+    Contrived values, because the point is how the chain behaves with the
+    maximum number of objects rather than whether these particular ones exist.
+    """
+    sets = []
+    for n in range(count):
+        norad = 40000 + n
+        mean_anomaly = (n * 29.7) % 360.0
+        sets.append(
+            f"OBJ-{n}\n"
+            f"1 {norad:05d}U 17073A   26254.91060846  .00000019  00000+0  "
+            f"30092-4 0  999{n % 10}\n"
+            f"2 {norad:05d}  98.7810 193.6155 0001610  53.1622 "
+            f"{mean_anomaly:8.4f} 14.19525379456774\n"
+        )
+    return "".join(sets)
+
+
+def test_a_full_paste_screens_and_exports_a_record_that_still_verifies():
+    """Twelve objects is the limit, and every step downstream has to take it.
+
+    The record grows with the number of screened pairs, and it has to stay
+    inside the request cap or the operator cannot hand their own record back
+    for checking.
+    """
+    from backend.security import MAX_REQUEST_BYTES
+
+    client = TestClient(create_app(store=Store(":memory:")))
+    created = client.post("/ingest/tle", json={"text": many_objects()})
+    assert created.status_code == 201, created.text
+    case_id = created.json()["case_id"]
+    assert len(created.json()["ingest"]["objects"]) == 12
+
+    analysis = client.post(
+        f"/cases/{case_id}/analysis",
+        json={"expected_scenario_version": 1, "expected_policy_version": 1},
+    ).json()
+    assert analysis["candidate_count"] >= 25
+
+    record = client.get(f"/cases/{case_id}/export", params={"format": "cdm"}).text
+    size = len(record.encode())
+    assert size < MAX_REQUEST_BYTES, (
+        f"a full paste exports {size:,} bytes, over the {MAX_REQUEST_BYTES:,} "
+        "byte request cap, so it could not be handed back for checking"
+    )
+
+    checked = client.post("/interop/verify-cdm", json={"text": record})
+    assert checked.status_code == 200, checked.text
+    assert checked.json()["verdict"] in ("AGREES", "NO_CLAIMS")
+    print(f"\n[full paste] 12 objects, record {size:,} bytes of {MAX_REQUEST_BYTES:,}")
+
+
+def test_the_primary_threat_is_the_object_that_actually_comes_closest():
+    """Not whichever one was typed first.
+
+    The search path ranks burns against the named primary threat. Naming an
+    object that never comes near means the ranking is about nothing, while the
+    approach that matters sits unranked. The verifier screens everything either
+    way, so this is about the ranking being meaningful rather than about safety.
+    """
+    from backend.core.trajectory import Trajectory
+    from backend.ingest import evaluate_tles
+
+    text = many_objects()
+    document = scenario_from_tles(text)
+    objects = evaluate_tles(text)
+    satellite = objects[0]
+
+    grid = np.arange(0.0, document["horizon_s"], 30.0)
+    own, _ = Trajectory.from_state(satellite.r_m, satellite.v_mps).states_at(grid)
+
+    closest, best = "", float("inf")
+    for other in objects[1:]:
+        theirs, _ = Trajectory.from_state(other.r_m, other.v_mps).states_at(grid)
+        separation = float(np.min(np.linalg.norm(theirs - own, axis=1)))
+        if separation < best:
+            closest, best = f"NORAD-{other.norad_id}", separation
+
+    assert document["primary_threat_id"] == closest
+    assert document["primary_threat_id"] != f"NORAD-{objects[1].norad_id}" or (
+        closest == f"NORAD-{objects[1].norad_id}"
+    )
+    print(f"\n[primary threat] {closest} at roughly {best / 1000:,.0f} km")

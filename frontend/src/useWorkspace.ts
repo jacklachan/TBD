@@ -55,7 +55,13 @@ export function useWorkspace() {
     setAnalysis(null);
     setBundle(null);
     setDiff(null);
-    setBusy("Comparing maneuvers and independently checking both objects");
+    const screened = next.scenario.objects.filter(
+      (o) => o.object_id !== next.scenario.satellite_id,
+    ).length;
+    setBusy(
+      `Comparing maneuvers and independently checking ${screened} ` +
+        (screened === 1 ? "object" : "objects"),
+    );
     const computed = await api.analysis(next.case_id, versionsOf(next));
     if (ticket !== generation.current) return;
     guard(computed, versionsOf(current.current!));

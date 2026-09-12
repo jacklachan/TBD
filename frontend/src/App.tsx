@@ -1126,7 +1126,7 @@ export default function App() {
           <div className="dialog-intro">
             {analysis?.candidate_count ?? 25} options include the no-burn
             baseline. The first screen considers the primary threat; independent
-            verification checks both objects.
+            verification checks every object in the scenario.
             {designedCount > 0 && (
               <>
                 {" "}

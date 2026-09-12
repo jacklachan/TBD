@@ -39,6 +39,10 @@ DEFAULT_HORIZON_S = 21_600.0
 MAX_OBJECTS = 12
 MIN_OBJECTS = 2
 
+# Sampling for the coarse pass that picks the primary threat. Only the ordering
+# matters here, so this is far cruder than anything the verifier uses.
+COARSE_STEP_S = 30.0
+
 # A TLE line is 69 characters and starts with its line number. Checking the
 # shape before handing it to SGP4 turns a library exception into a message that
 # names the offending line.
@@ -183,6 +187,40 @@ def evaluate_tles(text: str) -> list[TleObject]:
     return objects
 
 
+def closest_object(
+    objects: list[TleObject], satellite_index: int, horizon_s: float
+) -> str:
+    """Which pasted object comes nearest the spacecraft over the horizon.
+
+    The search path screens candidates against one named primary threat, and for
+    a generated fixture that is the object the case was built around. A paste
+    has no such object, and taking whichever happened to be typed first made the
+    ranking meaningless: the search would rank burns against an object that was
+    never close while the real approach sat unranked. Everything is still
+    screened by the verifier either way; this only decides which one the search
+    is ranking against.
+
+    Deliberately coarse. It picks a name, it does not report a distance -- the
+    verifier recomputes every figure properly later, and a number produced here
+    would be a second, worse answer to a question already answered elsewhere.
+    """
+    from backend.core.trajectory import Trajectory
+
+    satellite = objects[satellite_index]
+    grid = np.arange(0.0, horizon_s + COARSE_STEP_S, COARSE_STEP_S)
+    own, _ = Trajectory.from_state(satellite.r_m, satellite.v_mps).states_at(grid)
+
+    nearest, best = "", float("inf")
+    for index, other in enumerate(objects):
+        if index == satellite_index:
+            continue
+        theirs, _ = Trajectory.from_state(other.r_m, other.v_mps).states_at(grid)
+        separation = float(np.min(np.linalg.norm(theirs - own, axis=1)))
+        if separation < best:
+            nearest, best = f"NORAD-{other.norad_id}", separation
+    return nearest
+
+
 def scenario_from_tles(
     text: str,
     satellite_index: int = 0,
@@ -239,7 +277,8 @@ def scenario_from_tles(
         "satellite_id": f"NORAD-{satellite.norad_id}",
         # Screening covers every object regardless; this only names which one
         # the search path treats as the case's primary threat.
-        "primary_threat_id": f"NORAD-{others[0].norad_id}",
+        "primary_threat_id": closest_object(objects, satellite_index, horizon_s)
+        or f"NORAD-{others[0].norad_id}",
         "known_windows": [],
         "default_policy": {
             "policy_version": 1,
