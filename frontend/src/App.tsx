@@ -19,7 +19,7 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { api } from "./api";
-import type { CdmVerification } from "./contracts";
+import type { CdmVerification, PriorCase } from "./contracts";
 import { useWorkspace } from "./useWorkspace";
 import {
   currentVariant,
@@ -33,6 +33,7 @@ import {
 import { isApprovable } from "./contracts";
 import { SeparationChart } from "./components/SeparationChart";
 import { Dialog } from "./components/Dialog";
+import { PriorCaseEvidence } from "./components/PriorCaseEvidence";
 import type { ViewMode } from "./scene/OrbitalScene";
 
 const OrbitalScene = lazy(() =>
@@ -115,6 +116,7 @@ export default function App() {
   const [exchangeError, setExchangeError] = useState("");
   const [exchangeBusy, setExchangeBusy] = useState("");
   const [filter, setFilter] = useState("all");
+  const [priorCase, setPriorCase] = useState<PriorCase | null>(null);
   const variant = currentVariant(bundle, selected);
   const option = analysis?.options.find((o) => o.candidate_id === selected);
   const worst = useMemo(
@@ -156,8 +158,7 @@ export default function App() {
   const status = option
     ? optionStatus(option)
     : { label: "Awaiting analysis", tone: "muted" };
-  const designedCount =
-    analysis?.options.filter((o) => o.designed).length ?? 0;
+  const designedCount = analysis?.options.filter((o) => o.designed).length ?? 0;
   const comparison = analysis
     ? comparisonIds(analysis, snapshot?.proposal?.candidate_id)
         .map((id) => analysis.options.find((o) => o.candidate_id === id))
@@ -220,7 +221,9 @@ export default function App() {
       setIssued(await api.exportCdm(snapshot.case_id));
     } catch (reason) {
       setExchangeError(
-        reason instanceof Error ? reason.message : "The record could not be issued.",
+        reason instanceof Error
+          ? reason.message
+          : "The record could not be issued.",
       );
     } finally {
       setExchangeBusy("");
@@ -743,7 +746,7 @@ export default function App() {
                   Change the brief
                 </h2>
                 <Status tone={desk.health?.model_access ? "good" : "muted"}>
-                  {desk.health?.model_access ? "AI ready" : "AI offline"}
+                  {desk.health?.model_access ? "AI configured" : "AI offline"}
                 </Status>
               </div>
               <form
@@ -777,7 +780,7 @@ export default function App() {
               </form>
               {!desk.health?.model_access && (
                 <p className="caption">
-                  Set GEMINI_API_KEY on the server to enable AI. Numerical
+                  Set HF_TOKEN on the server to enable AI. Numerical
                   controls remain available.
                 </p>
               )}
@@ -950,8 +953,8 @@ export default function App() {
         >
           <p className="dialog-intro">
             Paste two-line element sets — a spacecraft and whatever you want it
-            screened against. The same two independent paths run on those
-            orbits instead of a generated fixture.
+            screened against. The same two independent paths run on those orbits
+            instead of a generated fixture.
           </p>
 
           <div className="elements-panel">
@@ -1237,7 +1240,9 @@ export default function App() {
                           {optionName(o)}
                           {/* This table is titled "every manoeuvre", so it has
                               to say which ones were never on the menu. */}
-                          {o.designed && <em className="designed-tag">designed</em>}
+                          {o.designed && (
+                            <em className="designed-tag">designed</em>
+                          )}
                           <small>{o.candidate_id}</small>
                         </td>
                         <td>{o.delta_v_mps.toFixed(3)} m/s</td>
@@ -1273,368 +1278,417 @@ export default function App() {
 
       {panel === "evidence" && (
         <Dialog
-          title="Evidence, with a paper trail."
-          onClose={() => setPanel(null)}
+          title={
+            priorCase
+              ? "Earlier case evidence"
+              : "Evidence, with a paper trail."
+          }
+          onClose={() => {
+            setPriorCase(null);
+            setPanel(null);
+          }}
         >
-          <div className="evidence-summary">
-            <div>
-              <span>Case</span>
-              <strong>{snapshot?.case_id ?? "—"}</strong>
-            </div>
-            <div>
-              <span>Policy</span>
-              <strong>v{snapshot?.policy_version ?? "—"}</strong>
-            </div>
-            <div>
-              <span>Numerical outcome</span>
-              <strong>
-                {analysis?.recommended_id ?? "No verified option"}
-              </strong>
-            </div>
-          </div>
-          <h3>What the independent check found</h3>
-          {comparison
-            .filter((o) => o.validation)
-            .map((o) => (
-              <article className="evidence-item" key={o.candidate_id}>
-                <Status tone={optionStatus(o).tone}>
-                  {o.candidate_id} · {optionStatus(o).label}
-                </Status>
-                <p>
-                  {o
-                    .validation!.encounters.map(
-                      (e) =>
-                        `${e.object_id}: ${e.min_separation_m.toFixed(1)} m at T+${clockText(e.tca_s)}`,
-                    )
-                    .join(" · ")}
-                </p>
-              </article>
-            ))}
-          <p className="caption">
-            Numerical comparison only. A separate AI proposal and reviewer ALLOW
-            are required for simulated approval.
-          </p>
-          <h3>Agent & operator activity</h3>
-          {snapshot?.runs.map((run) => (
-            <article className="evidence-item" key={run.run_id}>
-              <Status
-                tone={
-                  run.status === "FAILED"
-                    ? "danger"
-                    : run.status === "DONE"
-                      ? "good"
-                      : "watch"
-                }
-              >
-                {run.kind} · {run.status}
-              </Status>
-              <p>
-                {run.result.status}{" "}
-                {run.result.elapsed_s !== undefined
-                  ? `· ${run.result.elapsed_s.toFixed(1)} s · ${run.result.model_calls} model calls`
-                  : ""}
+          {priorCase ? (
+            <PriorCaseEvidence
+              prior={priorCase}
+              onBack={() => setPriorCase(null)}
+            />
+          ) : (
+            <>
+              <div className="evidence-summary">
+                <div>
+                  <span>Case</span>
+                  <strong>{snapshot?.case_id ?? "—"}</strong>
+                </div>
+                <div>
+                  <span>Policy</span>
+                  <strong>v{snapshot?.policy_version ?? "—"}</strong>
+                </div>
+                <div>
+                  <span>Numerical outcome</span>
+                  <strong>
+                    {analysis?.recommended_id ?? "No verified option"}
+                  </strong>
+                </div>
+              </div>
+              <h3>What the independent check found</h3>
+              {comparison
+                .filter((o) => o.validation)
+                .map((o) => (
+                  <article className="evidence-item" key={o.candidate_id}>
+                    <Status tone={optionStatus(o).tone}>
+                      {o.candidate_id} · {optionStatus(o).label}
+                    </Status>
+                    <p>
+                      {o
+                        .validation!.encounters.map(
+                          (e) =>
+                            `${e.object_id}: ${e.min_separation_m.toFixed(1)} m at T+${clockText(e.tca_s)}`,
+                        )
+                        .join(" · ")}
+                    </p>
+                  </article>
+                ))}
+              <p className="caption">
+                Numerical comparison only. A separate AI proposal and reviewer
+                ALLOW are required for simulated approval.
               </p>
-              {run.error && <p>{run.error}</p>}
-              {!!run.result.flagged_numbers?.length && (
-                <p className="warning-text">
-                  Unsupported numbers detected in model prose:{" "}
-                  {run.result.flagged_numbers.join(", ")}. Use the computed
-                  evidence.
+              <h3>Agent & operator activity</h3>
+              {snapshot?.runs.map((run) => (
+                <article className="evidence-item" key={run.run_id}>
+                  <Status
+                    tone={
+                      run.status === "FAILED"
+                        ? "danger"
+                        : run.status === "DONE"
+                          ? "good"
+                          : "watch"
+                    }
+                  >
+                    {run.kind} · {run.status}
+                  </Status>
+                  <p>
+                    {run.result.status}{" "}
+                    {run.result.elapsed_s !== undefined
+                      ? `· ${run.result.elapsed_s.toFixed(1)} s · ${run.result.model_calls} model calls`
+                      : ""}
+                  </p>
+                  {run.error && <p>{run.error}</p>}
+                  {!!run.result.flagged_numbers?.length && (
+                    <p className="warning-text">
+                      Unsupported numbers detected in model prose:{" "}
+                      {run.result.flagged_numbers.join(", ")}. Use the computed
+                      evidence.
+                    </p>
+                  )}
+                </article>
+              ))}
+              {!!snapshot?.prior_cases?.length && (
+                <div className="prior-cases">
+                  <h4>
+                    Earlier cases on this scenario{" "}
+                    <span className="caption">
+                      advisory — nothing here changed this case
+                    </span>
+                  </h4>
+                  <ul>
+                    {snapshot.prior_cases.map((prior) => (
+                      <li key={prior.memory_id}>
+                        <span className="prior-head">
+                          <button
+                            className="subtle-button"
+                            aria-label={`Inspect earlier case ${prior.case_id}`}
+                            onClick={() => setPriorCase(prior)}
+                          >
+                            <code>{prior.case_id}</code>
+                            <ArrowUpRight size={15} />
+                          </button>
+                          <span className="prior-outcome">
+                            {prior.outcome.replaceAll("_", " ")}
+                          </span>
+                        </span>
+                        <p>{prior.summary}</p>
+                        {prior.suggestion && <small>{prior.suggestion}</small>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {!snapshot?.events.length && (
+                <p className="empty-state">
+                  No AI run yet. The comparison above was computed by the
+                  numerical engine.
                 </p>
               )}
-            </article>
-          ))}
-          {!!snapshot?.prior_cases?.length && (
-            <div className="prior-cases">
-              <h4>
-                Earlier cases on this scenario{" "}
-                <span className="caption">advisory — nothing here changed this case</span>
-              </h4>
-              <ul>
-                {snapshot.prior_cases.map((prior) => (
-                  <li key={prior.memory_id}>
-                    <span className="prior-head">
-                      <code>{prior.case_id}</code>
-                      <span className="prior-outcome">{prior.outcome.replaceAll("_", " ")}</span>
-                    </span>
-                    <p>{prior.summary}</p>
-                    {prior.suggestion && <small>{prior.suggestion}</small>}
+              <ol className="event-list">
+                {snapshot?.events.map((event) => (
+                  <li key={event.event_id}>
+                    <span>{event.event_type.replaceAll("_", " ")}</span>
+                    <p>{event.summary}</p>
+                    <small>{event.duration_ms.toFixed(0)} ms</small>
                   </li>
                 ))}
-              </ul>
-            </div>
-          )}
-          {!snapshot?.events.length && (
-            <p className="empty-state">
-              No AI run yet. The comparison above was computed by the numerical
-              engine.
-            </p>
-          )}
-          <ol className="event-list">
-            {snapshot?.events.map((event) => (
-              <li key={event.event_id}>
-                <span>{event.event_type.replaceAll("_", " ")}</span>
-                <p>{event.summary}</p>
-                <small>{event.duration_ms.toFixed(0)} ms</small>
-              </li>
-            ))}
-          </ol>
-          <h3>
-            Exchange with another operator{" "}
-            <span className="caption">CCSDS-shaped record · recomputed, not trusted</span>
-          </h3>
-          <p className="caption">
-            A record that only states a conclusion has to be taken on trust. This
-            one carries the state vectors and the manoeuvre, so whoever receives
-            it can recompute every figure in it — and disagree.
-          </p>
+              </ol>
+              <h3>
+                Exchange with another operator{" "}
+                <span className="caption">
+                  CCSDS-shaped record · recomputed, not trusted
+                </span>
+              </h3>
+              <p className="caption">
+                A record that only states a conclusion has to be taken on trust.
+                This one carries the state vectors and the manoeuvre, so whoever
+                receives it can recompute every figure in it — and disagree.
+              </p>
 
-          <div className="exchange">
-            <div className="exchange-half">
-              <h4>Issue this decision</h4>
-              <button
-                className="subtle-button"
-                onClick={issueRecord}
-                disabled={!snapshot || !!exchangeBusy}
-              >
-                {exchangeBusy === "Issuing the record"
-                  ? "Issuing…"
-                  : "Issue record"}{" "}
-                <ArrowUpRight size={16} />
-              </button>
-              {issued && (
-                <>
-                  <p className="caption">
-                    {issued.length.toLocaleString()} bytes ·{" "}
-                    {issued.split("\n").filter((l) => l.startsWith("X_DOT")).length}{" "}
-                    state vectors · no covariance, so no probability
-                  </p>
-                  <pre className="record" aria-label="Issued conjunction record">
-                    {issued}
-                  </pre>
+              <div className="exchange">
+                <div className="exchange-half">
+                  <h4>Issue this decision</h4>
                   <button
                     className="subtle-button"
-                    onClick={() => {
-                      setReceived(issued);
+                    onClick={issueRecord}
+                    disabled={!snapshot || !!exchangeBusy}
+                  >
+                    {exchangeBusy === "Issuing the record"
+                      ? "Issuing…"
+                      : "Issue record"}{" "}
+                    <ArrowUpRight size={16} />
+                  </button>
+                  {issued && (
+                    <>
+                      <p className="caption">
+                        {issued.length.toLocaleString()} bytes ·{" "}
+                        {
+                          issued
+                            .split("\n")
+                            .filter((l) => l.startsWith("X_DOT")).length
+                        }{" "}
+                        state vectors · no covariance, so no probability
+                      </p>
+                      <pre
+                        className="record"
+                        aria-label="Issued conjunction record"
+                      >
+                        {issued}
+                      </pre>
+                      <button
+                        className="subtle-button"
+                        onClick={() => {
+                          setReceived(issued);
+                          setChecked(null);
+                        }}
+                      >
+                        Hand it to the other operator <ArrowRight size={16} />
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                <div className="exchange-half">
+                  <h4>Check a received record</h4>
+                  <label className="visually-hidden" htmlFor="received-record">
+                    Conjunction record received from another operator
+                  </label>
+                  <textarea
+                    id="received-record"
+                    className="record-input"
+                    rows={6}
+                    spellCheck={false}
+                    placeholder="Paste a CCSDS conjunction record here."
+                    value={received}
+                    onChange={(e) => {
+                      setReceived(e.target.value);
                       setChecked(null);
                     }}
+                  />
+                  <button
+                    className="primary-button"
+                    onClick={checkRecord}
+                    disabled={!received.trim() || !!exchangeBusy}
                   >
-                    Hand it to the other operator <ArrowRight size={16} />
+                    {exchangeBusy === "Recomputing the record"
+                      ? "Recomputing…"
+                      : "Recompute it"}{" "}
+                    <ArrowRight size={16} />
                   </button>
-                </>
-              )}
-            </div>
 
-            <div className="exchange-half">
-              <h4>Check a received record</h4>
-              <label className="visually-hidden" htmlFor="received-record">
-                Conjunction record received from another operator
-              </label>
-              <textarea
-                id="received-record"
-                className="record-input"
-                rows={6}
-                spellCheck={false}
-                placeholder="Paste a CCSDS conjunction record here."
-                value={received}
-                onChange={(e) => {
-                  setReceived(e.target.value);
-                  setChecked(null);
-                }}
-              />
-              <button
-                className="primary-button"
-                onClick={checkRecord}
-                disabled={!received.trim() || !!exchangeBusy}
-              >
-                {exchangeBusy === "Recomputing the record"
-                  ? "Recomputing…"
-                  : "Recompute it"}{" "}
-                <ArrowRight size={16} />
-              </button>
+                  {exchangeError && (
+                    <p className="exchange-error">
+                      <WarningCircle size={16} /> {exchangeError}
+                    </p>
+                  )}
 
-              {exchangeError && (
-                <p className="exchange-error">
-                  <WarningCircle size={16} /> {exchangeError}
-                </p>
-              )}
-
-              {checked && (
-                <div className={`exchange-result verdict-${checked.verdict.toLowerCase()}`}>
-                  <p className="exchange-verdict">
-                    {checked.verdict === "AGREES" && (
-                      <>
-                        <Check size={16} /> Its numbers hold
-                      </>
-                    )}
-                    {checked.verdict === "DISAGREES" && (
-                      <>
-                        <WarningCircle size={16} /> Its numbers do not hold
-                      </>
-                    )}
-                    {checked.verdict === "NO_CLAIMS" && (
-                      <>It claims nothing — so we screened it ourselves</>
-                    )}
-                    <span className="caption">
-                      from {checked.originator} · recomputed at{" "}
-                      {checked.independent_result.sample_step_s} s
-                    </span>
-                  </p>
-                  {/* With no claims there is nothing to compare against, so the
-                      table shows what we found rather than four empty columns. */}
-                  <div className="table-scroll">
-                    <table>
-                      <thead>
-                        {checked.verdict === "NO_CLAIMS" ? (
-                          <tr>
-                            <th>Object</th>
-                            <th>Closest approach</th>
-                            <th>At</th>
-                            <th>Relative speed</th>
-                          </tr>
-                        ) : (
-                          <tr>
-                            <th>Object</th>
-                            <th>Claimed</th>
-                            <th>Recomputed</th>
-                            <th>Difference</th>
-                          </tr>
+                  {checked && (
+                    <div
+                      className={`exchange-result verdict-${checked.verdict.toLowerCase()}`}
+                    >
+                      <p className="exchange-verdict">
+                        {checked.verdict === "AGREES" && (
+                          <>
+                            <Check size={16} /> Its numbers hold
+                          </>
                         )}
-                      </thead>
-                      <tbody>
-                        {checked.verdict === "NO_CLAIMS" &&
-                          checked.independent_result.encounters.map((e) => (
-                            <tr key={e.object_id}>
-                              <td>{e.object_id}</td>
-                              <td>
-                                {e.min_separation_m.toLocaleString(undefined, {
-                                  maximumFractionDigits: 1,
-                                })}{" "}
-                                m
-                              </td>
-                              <td>T+{clockText(e.tca_s)}</td>
-                              <td>
-                                {e.relative_speed_mps.toLocaleString(undefined, {
-                                  maximumFractionDigits: 0,
-                                })}{" "}
-                                m/s
-                              </td>
-                            </tr>
-                          ))}
-                        {checked.checks.map((check) => (
-                          <tr
-                            key={check.object_id}
-                            className={check.agrees ? "" : "row-disagrees"}
-                          >
-                            <td>{check.object_id}</td>
-                            <td>
-                              {check.claimed_miss_distance_m.toLocaleString(
-                                undefined,
-                                { maximumFractionDigits: 1 },
-                              )}{" "}
-                              m
-                            </td>
-                            <td>
-                              {check.recomputed_miss_distance_m === null
-                                ? "—"
-                                : `${check.recomputed_miss_distance_m.toLocaleString(
+                        {checked.verdict === "DISAGREES" && (
+                          <>
+                            <WarningCircle size={16} /> Its numbers do not hold
+                          </>
+                        )}
+                        {checked.verdict === "NO_CLAIMS" && (
+                          <>It claims nothing — so we screened it ourselves</>
+                        )}
+                        <span className="caption">
+                          from {checked.originator} · recomputed at{" "}
+                          {checked.independent_result.sample_step_s} s
+                        </span>
+                      </p>
+                      {/* With no claims there is nothing to compare against, so the
+                      table shows what we found rather than four empty columns. */}
+                      <div className="table-scroll">
+                        <table>
+                          <thead>
+                            {checked.verdict === "NO_CLAIMS" ? (
+                              <tr>
+                                <th>Object</th>
+                                <th>Closest approach</th>
+                                <th>At</th>
+                                <th>Relative speed</th>
+                              </tr>
+                            ) : (
+                              <tr>
+                                <th>Object</th>
+                                <th>Claimed</th>
+                                <th>Recomputed</th>
+                                <th>Difference</th>
+                              </tr>
+                            )}
+                          </thead>
+                          <tbody>
+                            {checked.verdict === "NO_CLAIMS" &&
+                              checked.independent_result.encounters.map((e) => (
+                                <tr key={e.object_id}>
+                                  <td>{e.object_id}</td>
+                                  <td>
+                                    {e.min_separation_m.toLocaleString(
+                                      undefined,
+                                      {
+                                        maximumFractionDigits: 1,
+                                      },
+                                    )}{" "}
+                                    m
+                                  </td>
+                                  <td>T+{clockText(e.tca_s)}</td>
+                                  <td>
+                                    {e.relative_speed_mps.toLocaleString(
+                                      undefined,
+                                      {
+                                        maximumFractionDigits: 0,
+                                      },
+                                    )}{" "}
+                                    m/s
+                                  </td>
+                                </tr>
+                              ))}
+                            {checked.checks.map((check) => (
+                              <tr
+                                key={check.object_id}
+                                className={check.agrees ? "" : "row-disagrees"}
+                              >
+                                <td>{check.object_id}</td>
+                                <td>
+                                  {check.claimed_miss_distance_m.toLocaleString(
                                     undefined,
                                     { maximumFractionDigits: 1 },
-                                  )} m`}
-                            </td>
-                            <td>
-                              {check.distance_delta_m === undefined
-                                ? "—"
-                                : `${check.distance_delta_m.toExponential(2)} m`}
-                            </td>
+                                  )}{" "}
+                                  m
+                                </td>
+                                <td>
+                                  {check.recomputed_miss_distance_m === null
+                                    ? "—"
+                                    : `${check.recomputed_miss_distance_m.toLocaleString(
+                                        undefined,
+                                        { maximumFractionDigits: 1 },
+                                      )} m`}
+                                </td>
+                                <td>
+                                  {check.distance_delta_m === undefined
+                                    ? "—"
+                                    : `${check.distance_delta_m.toExponential(2)} m`}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {checked.checks
+                        .filter((c) => !c.agrees)
+                        .map((c) => (
+                          <p className="exchange-error" key={c.object_id}>
+                            {c.reason}
+                          </p>
+                        ))}
+                      <p className="caption">{checked.note}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <h3>
+                Real-world context{" "}
+                <span className="caption">
+                  Frozen SOCRATES snapshot · display only
+                </span>
+              </h3>
+              {desk.context ? (
+                <>
+                  <p className="caption">
+                    Retrieved {desk.context.retrieved_at_utc}. These records do
+                    not drive this simulation.
+                  </p>
+                  <p className="caption">
+                    Most of these involve a communications satellite —{" "}
+                    {
+                      desk.context.rows.filter((row) =>
+                        /STARLINK|ONEWEB|IRIDIUM|GLOBALSTAR|INTELSAT|KUIPER|KINEIS/i.test(
+                          `${row.OBJECT_NAME_1} ${row.OBJECT_NAME_2}`,
+                        ),
+                      ).length
+                    }{" "}
+                    of {desk.context.rows.length} shown, against debris from the
+                    Fengyun 1C and Cosmos break-ups. The constellations that
+                    carry global connectivity share these shells with the
+                    debris, which is what makes one operator&rsquo;s manoeuvre
+                    everyone&rsquo;s problem.
+                  </p>
+                  {/* These two features are one story, and a reader who does not
+                  connect them sees a table that does nothing. */}
+                  <p className="caption">
+                    Every row names both objects by catalogue number. Fetch
+                    those two element sets from{" "}
+                    <span className="mono">celestrak.org/NORAD/elements/</span>{" "}
+                    and paste them into <em>Use real elements</em> to screen
+                    that approach here — real orbits, the same two independent
+                    paths. Nothing is fetched at runtime: this snapshot is
+                    committed, and CelesTrak asks automated clients not to poll
+                    those pages.
+                  </p>
+                  <div className="table-scroll context-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          {Object.keys(desk.context.rows[0] ?? {}).map(
+                            (key) => (
+                              <th key={key}>{key.replaceAll("_", " ")}</th>
+                            ),
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {desk.context.rows.map((row, i) => (
+                          <tr key={i}>
+                            {Object.values(row).map((value, j) => (
+                              <td key={j}>{value}</td>
+                            ))}
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                  {checked.checks
-                    .filter((c) => !c.agrees)
-                    .map((c) => (
-                      <p className="exchange-error" key={c.object_id}>
-                        {c.reason}
-                      </p>
-                    ))}
-                  <p className="caption">{checked.note}</p>
-                </div>
+                </>
+              ) : (
+                <p className="caption">Context snapshot unavailable.</p>
               )}
-            </div>
-          </div>
-
-          <h3>
-            Real-world context{" "}
-            <span className="caption">
-              Frozen SOCRATES snapshot · display only
-            </span>
-          </h3>
-          {desk.context ? (
-            <>
-              <p className="caption">
-                Retrieved {desk.context.retrieved_at_utc}. These records do not
-                drive this simulation.
-              </p>
-              <p className="caption">
-                Most of these involve a communications satellite —{" "}
-                {
-                  desk.context.rows.filter((row) =>
-                    /STARLINK|ONEWEB|IRIDIUM|GLOBALSTAR|INTELSAT|KUIPER|KINEIS/i.test(
-                      `${row.OBJECT_NAME_1} ${row.OBJECT_NAME_2}`,
-                    ),
-                  ).length
-                }{" "}
-                of {desk.context.rows.length} shown, against debris from the
-                Fengyun 1C and Cosmos break-ups. The constellations that carry
-                global connectivity share these shells with the debris, which is
-                what makes one operator&rsquo;s manoeuvre everyone&rsquo;s
-                problem.
-              </p>
-              {/* These two features are one story, and a reader who does not
-                  connect them sees a table that does nothing. */}
-              <p className="caption">
-                Every row names both objects by catalogue number. Fetch those
-                two element sets from{" "}
-                <span className="mono">celestrak.org/NORAD/elements/</span> and
-                paste them into <em>Use real elements</em> to screen that
-                approach here — real orbits, the same two independent paths.
-                Nothing is fetched at runtime: this snapshot is committed, and
-                CelesTrak asks automated clients not to poll those pages.
-              </p>
-              <div className="table-scroll context-table">
-                <table>
-                  <thead>
-                    <tr>
-                      {Object.keys(desk.context.rows[0] ?? {}).map((key) => (
-                        <th key={key}>{key.replaceAll("_", " ")}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {desk.context.rows.map((row, i) => (
-                      <tr key={i}>
-                        {Object.values(row).map((value, j) => (
-                          <td key={j}>{value}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
             </>
-          ) : (
-            <p className="caption">Context snapshot unavailable.</p>
           )}
-          <button
-            className="primary-button"
-            onClick={desk.exportEvidence}
-            disabled={!bundle || !!busy}
-          >
-            <DownloadSimple />
-            Export this evidence
-          </button>
+          {!priorCase && (
+            <button
+              className="primary-button"
+              onClick={desk.exportEvidence}
+              disabled={!bundle || !!busy}
+            >
+              <DownloadSimple />
+              Export this evidence
+            </button>
+          )}
         </Dialog>
       )}
 
@@ -1644,8 +1698,8 @@ export default function App() {
           onClose={() => setPanel(null)}
         >
           <p className="dialog-intro">
-            Orion West is a working name. One spacecraft, two
-            synthetic debris objects, six simulated hours.
+            Orion West is a working name. One spacecraft, two synthetic debris
+            objects, six simulated hours.
           </p>
           <dl className="provenance-list">
             <dt>Catalog seed</dt>

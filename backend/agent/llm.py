@@ -202,6 +202,7 @@ class GeminiProvider:
         return random.uniform(0.5 * ceiling, ceiling)
 
     def call(self, system: str, messages: list[Message], tools: list[dict]) -> LLMResponse:
+        started = time.perf_counter()
         body: dict = {
             "contents": self._to_contents(messages),
             "generationConfig": {"temperature": self.temperature},
@@ -234,7 +235,9 @@ class GeminiProvider:
                         raise LLMError(
                             f"{self.model} returned non-JSON: {response.text[:300]}"
                         ) from exc
-                    return self._parse(payload, response.elapsed.total_seconds() * 1000.0)
+                    # requests.Response.elapsed covers only the final HTTP
+                    # attempt, excluding backoff and earlier failed attempts.
+                    return self._parse(payload, (time.perf_counter() - started) * 1000.0)
 
                 # The 400 you get for an unsupported schema construct is opaque,
                 # so surface the body rather than just the status.

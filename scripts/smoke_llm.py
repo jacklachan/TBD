@@ -1,6 +1,6 @@
 """Prove a real model round trip with a real tool call. Builder C's first task.
 
-    export GEMINI_API_KEY=...
+    export HF_TOKEN=...
     python scripts/smoke_llm.py
     python scripts/smoke_llm.py --model some-other-model
 
@@ -25,7 +25,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from backend.agent.llm import GeminiProvider, LLMError, Message  # noqa: E402
+from backend.agent.llm import LLMError, Message  # noqa: E402
+from backend.agent.huggingface import HuggingFaceProvider  # noqa: E402
 from backend.config import planner_model  # noqa: E402
 from backend.agent.tools import DECLARATIONS, TOOL_BRIEFING  # noqa: E402
 
@@ -36,6 +37,9 @@ SYSTEM = (
 
 
 def main() -> int:
+    # Provider prose can contain Unicode on Windows terminals using cp1252.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--model",
@@ -47,7 +51,7 @@ def main() -> int:
     model = args.model or planner_model()
 
     try:
-        provider = GeminiProvider(model=model, temperature=args.temperature)
+        provider = HuggingFaceProvider(model=model, temperature=args.temperature)
     except LLMError as exc:
         print(f"FAIL  {exc}")
         return 2

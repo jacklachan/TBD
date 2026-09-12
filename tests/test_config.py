@@ -32,9 +32,8 @@ def test_an_exported_line_is_read_as_the_bare_key(env_file, monkeypatch):
     loaded = load_env(env_file("export GEMINI_API_KEY=abc123\n"), override=True)
     assert loaded == {"GEMINI_API_KEY": "abc123"}
 
-    from backend.config import gemini_api_key, has_model_access
+    from backend.config import gemini_api_key
     assert gemini_api_key() == "abc123"
-    assert has_model_access()
 
 
 @pytest.mark.parametrize(

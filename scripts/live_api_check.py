@@ -26,6 +26,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from backend.config import load_env  # noqa: E402
+
+load_env()  # Read the local operator token too; never print it.
+
 TRAP = "t30_ret_100"
 RESCUE = "t30_ret_200"
 
@@ -69,6 +73,8 @@ def versions(snapshot: dict) -> dict:
 
 
 def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default="http://127.0.0.1:8000")
     args = parser.parse_args()

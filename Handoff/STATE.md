@@ -1,17 +1,27 @@
 # Satellite Demo — current state and decisions
 
-Revision 5, 12 September 2026. **Current summary:** `claude/focused-brown-5r09go` was merged and security fixes pushed to main as `1e1b2cf` under Auenchanters. The complete React/Three.js frontend now exists and is integrated with the Python API. Final backend verification: **191 passed, 91% coverage**. Frontend: **7 unit tests**, four browser workflows plus one separate scripted-agent browser workflow. See [REVIEW.md](REVIEW.md) and [FRONTEND.md](FRONTEND.md). No public deployment or fresh live Gemini run was performed. The production frontend is tested locally through FastAPI. Docker image execution is unverified because the local daemon is unavailable. Earlier dated sections are historical evidence, not instructions to recreate completed work.
+Revision 6, 12 September 2026. **Current summary:** continued from teammate commit
+`11b4cff18d8ac08ba587fc679e24c405b1d43f8e` in the isolated `TBD-refinements`
+checkout. The runtime now uses the user's chosen **GLM-5.3-Flash through Hugging
+Face / Baseten**, with no Gemini fallback. Earlier-case evidence is inspectable
+without changing the active case. Incomplete investigations cannot claim grid
+infeasibility; elapsed timings include final review and transport retries.
+Deployment target: **Auenchanters/TBH**, Docker, CPU Upgrade (8 vCPU / 32 GB).
+Deployment verification is in progress. Current evidence and failed attempts:
+[refinement session](handoffs/2026-09-12-hf-refinements.md).
+
+Earlier dated sections are historical. Follow the current explicit user request.
 
 ## Current state
 
 | Item | State |
 |---|---|
 | Team and duration | Confirmed: three builders, twenty hours |
-| Placeholder name | Satellite Demo; repository name remains TBD |
+| Display name | Teammate commit uses Orion West; repository name remains TBD |
 | Current package | Complete. Entry files, plan, engineering spec, contracts, updated data and dashboard specs, and all three role handoffs are written. Nothing further is required before implementation begins |
-| Application source, dependencies, deployment | Python backend plus `frontend/src/` React/Three.js app. Production UI served by FastAPI after `npm --prefix frontend run build`. Typed contracts live in owning Python modules and `frontend/src/contracts.ts`; there is no `domain/models.py`. Nothing publicly deployed |
-| Numerical tests and generated scenarios | Gate 1 and Gate 2 pass. Search, independent verifier, 25-option comparison and four fixtures exist. API approval requires stored matching PASS evidence and reviewer ALLOW |
-| Gemini key, model availability, tool call | Historical live tests recorded below. No key in the current checkout, so current frontend shows AI offline; numeric exploration works. Scripted browser tests verify integration, not live model behavior |
+| Application source, dependencies, deployment | Python backend plus `frontend/src/` React/Three.js app. Production UI served by FastAPI after `npm --prefix frontend run build`. Typed contracts live in owning Python modules and `frontend/src/contracts.ts`; there is no `domain/models.py`. Deployment target Auenchanters/TBH; verification pending |
+| Numerical tests and generated scenarios | Gate 1 and Gate 2 pass. Search, independent verifier, 25-option comparison and five fixtures exist. API approval requires stored matching PASS evidence and reviewer ALLOW |
+| Model access | HF_TOKEN server secret; GLM-5.3-Flash tool-call round trip verified locally in 4.040 s. See current session for full workflow/deployment results |
 | TLE and SOCRATES data snapshots | Both downloaded and committed. Seed: NOAA 20 (JPSS-1), NORAD 43013, epoch 2026-09-11T21:51:16Z. Context: 25 real conjunctions from SOCRATES Plus |
 | Numerical accuracy and runtime latency | Measured. Gate 1 to 1.155e-06 m; verifier agrees with the search to 3.6e-08 m. Live loop 16.6 s of which ~15.4 s is model time and ~1.2 s compute. **The 10 s target is not met** |
 | 3D model and animation | Built and browser-tested: globe, procedural spacecraft, both debris, shared samples, distance line, playback, exact encounter focus, camera reset, light/dark, WebGL fallback |
@@ -26,7 +36,7 @@ The three supplied specifications and earlier plan/research are preserved under 
 | Optional or removed 3D | Required synchronized moving 3D scene; chart ships first; 3D never blocks physics gates |
 | Blender versus web rendering | Three.js with React Three Fiber; procedural satellite first; optional licensed GLB later |
 | Existing OrbitGuard / Conjunction Decision Desk name | Our placeholder is Satellite Demo; preserve external repository names in research |
-| Mixed model providers and model names | Gemini runtime behind one adapter; exact available model selected by a real early tool-call test |
+| Mixed model providers and model names | Hugging Face chat completions; GLM-5.3-Flash via Baseten, per current user selection |
 | 25 burns versus the supplied 24-burn grid | 25 initial options means 24 burns plus do nothing; UI must count honestly |
 | 36-hour scope or 20-hour optional cuts | Latest user schedule and gates are authoritative; physics target hour seven |
 | Search verifier reusing the same evaluation | Separate reconstruction and encounter screening; shared tested propagation is disclosed |

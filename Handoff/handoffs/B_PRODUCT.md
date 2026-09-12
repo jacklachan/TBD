@@ -1,5 +1,7 @@
 # Builder B — product, chart and moving 3D scene
 
+Latest refinement: [2026-09-12 HF migration and evidence review](2026-09-12-hf-refinements.md). This current session supersedes the older status below.
+
 **Current status, 12 September 2026:** the requested React/Three.js workspace is implemented. Read [FRONTEND.md](../FRONTEND.md) for actual files, contracts, commands, tests, screenshots and remaining limits. This file preserves the earlier ownership plan below; planned names such as Workbench.tsx were realized as App.tsx/useWorkspace.ts. Do not recreate the application from this older checklist.
 
 ## You own

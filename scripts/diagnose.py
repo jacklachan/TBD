@@ -277,7 +277,7 @@ try:
         "model access",
         f"key present, planner {planner_model()}"
         if has_model_access()
-        else "no GEMINI_API_KEY - numerical controls still work, AI planner will not",
+        else "no HF_TOKEN - numerical controls still work, AI planner will not",
     )
 except Exception as exc:  # noqa: BLE001
     record(FAIL, "model access", str(exc))

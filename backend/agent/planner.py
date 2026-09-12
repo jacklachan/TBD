@@ -44,7 +44,7 @@ from backend.agent.tools import (
     declarations_for_phase,
     dispatch,
 )
-from backend.planning.verifier import STATUS_PASS
+from backend.planning.verifier import STATUS_BLOCK, STATUS_PASS
 
 # Tools whose result is an independent validation. Kept as a set because two
 # different tools now produce one, and a hardcoded name in either the limit
@@ -531,18 +531,21 @@ def plan_case(
         )
 
     if not passed:
-        # Either nothing qualified, or the model stopped without validating
-        # anything. These are different situations and are reported differently.
+        # A veto only rules out that candidate. A model that stops before
+        # checking the remaining primary-qualified options has not established
+        # infeasibility. ERROR evidence also cannot prove an option is blocked.
         exhausted = (
             session.search_result is not None
-            and not [
-                e for e in session.search_result.qualified if not e.candidate.is_baseline
-            ]
+            and all(
+                (validation := session.validations.get(e.candidate.candidate_id))
+                is not None and validation.status == STATUS_BLOCK
+                for e in session.search_result.qualified
+            )
         )
-        if exhausted or session.rejected_candidate_ids:
+        if exhausted:
             recorder.add(
                 "no_option",
-                "No option passed full validation in the supported search set.",
+                "No option in the evaluated grid passed full validation.",
                 0.0,
                 rejected=session.rejected_candidate_ids,
             )
@@ -664,7 +667,8 @@ def plan_case(
         model_calls=model_calls,
         tool_calls=tool_calls,
         validations_run=validations_run,
-        elapsed_s=elapsed,
+        # Include any remaining reviewer wait and final proposal assembly.
+        elapsed_s=time.perf_counter() - started,
         flagged_numbers=tuple(flagged),
     )
 

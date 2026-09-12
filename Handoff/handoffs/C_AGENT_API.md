@@ -1,5 +1,7 @@
 # Builder C — agent, API, storage and integration
 
+Latest refinement: [2026-09-12 HF migration and evidence review](2026-09-12-hf-refinements.md). This current session supersedes the older status below.
+
 **Current status, 12 September 2026:** the agent/API is implemented, merged and hardened. Read [REVIEW.md](../REVIEW.md) for security changes and [FRONTEND.md](../FRONTEND.md) for the two new numerical workspace endpoints, browser transport and integration tests. Older dated sections below are historical evidence. The current checkout has no live model key; scripted provider tests are not live-model proof.
 
 ## You own

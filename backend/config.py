@@ -15,8 +15,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ENV_PATH = REPO_ROOT / ".env"
 
-DEFAULT_PLANNER_MODEL = "gemini-3.6-flash"
-DEFAULT_REVIEWER_MODEL = "gemini-3.6-flash"
+DEFAULT_PLANNER_MODEL = "zai-org/GLM-5.3-Flash:baseten"
+DEFAULT_REVIEWER_MODEL = DEFAULT_PLANNER_MODEL
 
 # Vite and Next defaults, on both spellings of loopback. Enough for a dev server
 # and nothing else -- a deployment either serves the frontend from the same
@@ -72,6 +72,14 @@ def gemini_api_key() -> str:
     return os.environ.get("GEMINI_API_KEY", "").strip()
 
 
+def hf_api_token() -> str:
+    return os.environ.get("HF_TOKEN", "").strip()
+
+
+def hf_base_url() -> str:
+    return os.environ.get("HF_BASE_URL", "https://router.huggingface.co/v1").strip()
+
+
 def planner_model() -> str:
     return os.environ.get("PLANNER_MODEL", DEFAULT_PLANNER_MODEL).strip()
 
@@ -105,4 +113,4 @@ def database_path() -> str:
 
 
 def has_model_access() -> bool:
-    return bool(gemini_api_key())
+    return bool(hf_api_token())

@@ -23,6 +23,7 @@ import logging
 import os
 import re
 import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
@@ -39,7 +40,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend import store as store_module
-from backend.agent.llm import GeminiProvider, LLMError, Provider
+from backend.agent.llm import LLMError, Provider
+from backend.agent.huggingface import HuggingFaceProvider
 from backend.agent.memory import (
     TAG_BUDGET_REDUCED,
     TAG_NO_FEASIBLE_OPTION,
@@ -50,6 +52,9 @@ from backend.agent.memory import (
 )
 from backend.agent.planner import (
     STATUS_NO_APPROVABLE_OPTION,
+    STATUS_UNRESOLVED,
+    UNRESOLVED_NO_CONCLUSION,
+    CaseEvent,
     PlannerLimits,
     interpret_instruction,
     plan_case,
@@ -272,7 +277,7 @@ class AppState:
 
 
 def _default_provider_factory() -> Provider:
-    return GeminiProvider()
+    return HuggingFaceProvider()
 
 
 def _state(request: Request) -> AppState:
@@ -390,10 +395,14 @@ def _record_memory(state: AppState, case_row, session: CaseSession, outcome) -> 
         suggestion = f"{candidate_id} cleared this geometry before."
     elif outcome.status == STATUS_NO_APPROVABLE_OPTION:
         summary = (
-            f"No option in the supported set cleared the {case_row.policy.min_separation_m:,.0f} m "
+            f"No option in the evaluated grid cleared the {case_row.policy.min_separation_m:,.0f} m "
             f"floor under a {case_row.policy.max_delta_v_mps} m/s budget."
         )
-        suggestion = "Widening the grid did not help here; the budget was the binding constraint."
+        suggestion = (
+            "The expanded grid was checked. Re-evaluate against the current policy."
+            if session.widen_used else
+            "Only the current grid was exhausted; other supported search options may remain."
+        )
     else:
         summary = f"Run ended {outcome.status}" + (
             f" ({outcome.unresolved_reason})" if outcome.unresolved_reason else ""
@@ -634,6 +643,40 @@ def create_app(
                     instruction=payload.instruction,
                     on_event=note,
                 )
+                if (outcome.status == STATUS_UNRESOLVED
+                        and outcome.unresolved_reason == UNRESOLVED_NO_CONCLUSION
+                        and outcome.validations_run >= state.limits.max_validations):
+                    # Model tool calls stay bounded. Finish the finite grid's
+                    # numerical check separately, using the same independent
+                    # verifier as the workspace. This can prove infeasibility,
+                    # but can never invent a planner proposal or reviewer ALLOW.
+                    from backend.analysis import analyze
+                    audit_started = time.perf_counter()
+                    checked_before = set(session.validations)
+                    run.step = "Completing the independent grid check after the model validation limit."
+                    audit = analyze(session)
+                    ruled_out = all(
+                        o["validation"] is not None and o["validation"]["status"] == "BLOCK"
+                        for o in audit["options"] if o["primary_qualified"]
+                    )
+                    audit_seconds = time.perf_counter() - audit_started
+                    outcome.elapsed_s += audit_seconds
+                    event = CaseEvent(
+                        sequence=len(outcome.events) + 1,
+                        event_type="grid_audit",
+                        summary=("The independent completion check ruled out every option in this grid."
+                                 if ruled_out else
+                                 "The independent completion check did not establish infeasibility; a reviewed proposal is still required."),
+                        duration_ms=audit_seconds * 1000,
+                        details={"model_outcome": outcome.status, "candidate_count": audit["candidate_count"],
+                                 "additional_validations": len(set(session.validations) - checked_before),
+                                 "recommended_id": audit["recommended_id"], "all_options_ruled_out": ruled_out},
+                    )
+                    outcome.events.append(event)
+                    note(event)
+                    if ruled_out:
+                        outcome.status = STATUS_NO_APPROVABLE_OPTION
+                        outcome.unresolved_reason = ""
                 _persist_run(state, case_row, session, outcome, run.run_id)
                 run.result = {
                     "status": outcome.status,
@@ -1233,9 +1276,9 @@ def _default_app() -> FastAPI:
 
     return create_app(
         store=Store(database_path()),
-        provider_factory=lambda: GeminiProvider(model=planner_model()),
+        provider_factory=lambda: HuggingFaceProvider(model=planner_model()),
         reviewer_factory=(
-            (lambda: GeminiProvider(model=reviewer_model())) if has_model_access() else None
+            (lambda: HuggingFaceProvider(model=reviewer_model())) if has_model_access() else None
         ),
         memory=CaseMemory(database_path()) if database_path() != ":memory:" else CaseMemory(),
         require_remote_token=True,

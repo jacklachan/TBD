@@ -1,6 +1,32 @@
 # Satellite Demo — shared contracts
 
-**Contract revision:** 1, proposed for the team's hour-zero agreement. These definitions specify future interfaces; no `models.py` exists yet.
+**Contract revision:** 2, updated 12 September 2026. The design below is retained
+for units and semantics. Implemented domain types live under `backend/core` and
+`backend/planning`, HTTP snapshots in `backend/api.py`, and browser types in
+`frontend/src/contracts.ts`. There is no `backend/domain/models.py`.
+
+Current additions and clarified behavior:
+
+- Runtime inference uses `backend/agent/huggingface.py`: HTTPS chat completions,
+  HF bearer token, one tool per model turn. Both agents default to the user's
+  selected `zai-org/GLM-5.3-Flash:baseten`. Multiple calls despite the serial
+  request, malformed output and incomplete completions produce `LLMError`.
+- `CaseSnapshot.prior_cases` contains advisory memory hits. Earlier cases are
+  fetched using the existing GET endpoint without mutating either case. The UI
+  distinguishes the latest stored snapshot from the recalled run and labels
+  validation versions. Expired cases return 404 with a recoverable history view.
+- `NO_APPROVABLE_OPTION` requires independent BLOCK evidence for every
+  primary-qualified option in the evaluated grid, or none qualifying. Missing
+  or ERROR evidence means `UNRESOLVED`. A finite grid does not rule out every
+  possible designed burn.
+- Run `elapsed_s` includes the final safety-review wait. Provider `latency_ms`
+  includes retries/backoff. Neither is a guaranteed latency target.
+- On NO_CONCLUSION after the model's validation cap, a separate numerical
+  grid audit can establish that every primary-qualified option is blocked.
+  It cannot create a proposal or reviewer ALLOW. Its `grid_audit` event records
+  additional checks separately from model-requested `validations_run`.
+- No HTTP response shape changed. Existing designed-burn tools, pasted-element
+  ingest and CCSDS-shaped exchange remain supported.
 
 All three builders agree on changes here before implementing their own modules. Once code exists, `backend/domain/models.py` defines serialization; this document explains its semantics. B and C keep `frontend/src/contracts.ts` aligned. One field name per concept, explicit units, no independently invented frontend physics types.
 

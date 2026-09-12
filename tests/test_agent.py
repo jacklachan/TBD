@@ -310,7 +310,9 @@ def test_a_blocked_option_cannot_become_the_proposal(session):
         ]
     )
     outcome = plan_case(provider, session)
-    assert outcome.status == STATUS_NO_APPROVABLE_OPTION
+    # The rescue has not been checked. One veto is not proof of infeasibility.
+    assert outcome.status == STATUS_UNRESOLVED
+    assert outcome.unresolved_reason == UNRESOLVED_NO_CONCLUSION
     assert outcome.proposal is None
 
 

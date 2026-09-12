@@ -2476,6 +2476,14 @@ td .subtle-button {
   font-size: 11px;
   color: var(--text);
 }
+.prior-detail h3,
+.prior-detail p,
+.prior-detail strong {
+  overflow-wrap: anywhere;
+}
+.prior-detail > .subtle-button {
+  margin-bottom: 12px;
+}
 .prior-outcome {
   font-size: 10px;
   letter-spacing: 0.04em;

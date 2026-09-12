@@ -9,6 +9,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from backend.agent.llm import ScriptedProvider, text_reply, tool_call
+from backend.agent.memory import CaseMemory
 from backend.agent.tools import TOOL_PROPOSE_POLICY
 from backend.api import create_app
 from backend.store import Store
@@ -32,6 +33,7 @@ class BrowserProvider:
 
 app = create_app(
     store=Store(), provider_factory=BrowserProvider,
+    memory=CaseMemory(),
     reviewer_factory=lambda: ScriptedProvider([text_reply('{"decision":"ALLOW","reason_codes":["OK"],"rationale":"Independent evidence passes."}')]),
 )
 

@@ -1,8 +1,8 @@
 # Satellite Demo — start here
 
-**Temporary project name:** Satellite Demo. Rename the display name later; keep module and file names descriptive.
+**Temporary display name:** Orion West, carried forward from the teammate's build. Keep module and file names descriptive when renaming it.
 
-**Package revision:** 5 — 12 September 2026. **Status:** backend merged and reviewed; interactive 3D frontend implemented and verified. Start with STATE.md, REVIEW.md and FRONTEND.md. Older dated entries are historical evidence.
+**Package revision:** 6 — 13 September 2026. **Status:** HF/GLM runtime, decision-evidence refinements and interactive 3D frontend implemented. Start with STATE.md and [the current refinement session](handoffs/2026-09-12-hf-refinements.md) for verification and deployment results. Older dated entries are historical evidence.
 
 **Repository:** [jacklachan/TBD](https://github.com/jacklachan/TBD). Three builders, twenty hours, one satellite, two synthetic debris objects, six simulated hours.
 
@@ -48,7 +48,7 @@ Handoff/
     DASHBOARD.md            Original supplied spec, preserved
 ```
 
-The future application tree is in [IMPLEMENTATION.md](IMPLEMENTATION.md). Those source paths are planned; their appearance in a document does not mean they exist.
+The implemented source is in `backend/` and `frontend/src/`. [IMPLEMENTATION.md](IMPLEMENTATION.md) retains the original build plan; current contracts and the refinement session identify the implemented paths.
 
 ## Share and resume
 

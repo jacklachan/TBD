@@ -58,8 +58,8 @@ No collision probability is computed anywhere. Separations are deterministic val
 
 ```bash
 pip install -r requirements-dev.txt  # Python 3.12+
-cp .env.example .env          # then put your GEMINI_API_KEY in it
-python -m pytest tests/ -q    # 270 tests
+cp .env.example .env          # then put your HF_TOKEN in it
+python -m pytest tests/ -q
 ```
 
 ```bash
@@ -68,6 +68,14 @@ uvicorn backend.api:app --port 8000   # the API
 python scripts/live_api_check.py      # 20 checks end to end against the live model
 python scripts/diagnose.py            # pre-demo gate: data, numerics, build, tests
 ```
+
+The active planner and reviewer use **GLM-5.3-Flash through Hugging Face**:
+`zai-org/GLM-5.3-Flash:baseten` at `https://router.huggingface.co/v1`.
+`HF_BASE_URL` also accepts a dedicated endpoint's HTTPS `/v1` URL. No server GPU
+or model download is needed. Configure `HF_TOKEN`, `PLANNER_MODEL` and
+`REVIEWER_MODEL`, then run `python scripts/smoke_llm.py`. A token being present
+does not prove available credits or successful inference. There is no automatic
+Gemini fallback. See [DEPLOY.md](DEPLOY.md) for the Docker Space and its secrets.
 
 Two narrated terminal walkthroughs, for showing the argument without the UI:
 
