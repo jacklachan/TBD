@@ -14,6 +14,8 @@
  */
 
 import type {
+  Analysis,
+  Health,
   CaseSnapshot,
   PolicyDiff,
   RunRecord,
@@ -23,8 +25,13 @@ import type {
 } from "./contracts";
 
 export const API_BASE =
-  (import.meta as { env?: Record<string, string> }).env?.VITE_API_BASE ??
-  "http://127.0.0.1:8000";
+  (import.meta as { env?: Record<string, string> }).env?.VITE_API_BASE ?? "";
+
+// Operator credential lives in memory only. The model key never enters this client.
+let accessToken = "";
+export function setAccessToken(token: string) {
+  accessToken = token.trim();
+}
 
 export class ApiError extends Error {
   readonly status: number;
@@ -33,7 +40,9 @@ export class ApiError extends Error {
 
   constructor(status: number, detail: unknown) {
     const record =
-      detail && typeof detail === "object" ? (detail as Record<string, unknown>) : {};
+      detail && typeof detail === "object"
+        ? (detail as Record<string, unknown>)
+        : {};
     super(
       typeof record.message === "string"
         ? record.message
@@ -43,7 +52,8 @@ export class ApiError extends Error {
     );
     this.name = "ApiError";
     this.status = status;
-    this.code = typeof record.error === "string" ? record.error : `HTTP_${status}`;
+    this.code =
+      typeof record.error === "string" ? record.error : `HTTP_${status}`;
     this.detail = detail;
   }
 
@@ -60,7 +70,10 @@ export class ApiError extends Error {
 
 /** Thrown when a response is older than what the caller already has. */
 export class StaleResponse extends Error {
-  constructor(readonly received: VersionStamp, readonly current: VersionStamp) {
+  constructor(
+    readonly received: VersionStamp,
+    readonly current: VersionStamp,
+  ) {
     super("Discarded a response from a superseded version of the case");
     this.name = "StaleResponse";
   }
@@ -74,7 +87,11 @@ async function request<T>(
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     signal,
-    headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...(init.headers ?? {}),
+    },
   });
 
   if (!response.ok) {
@@ -99,10 +116,9 @@ async function request<T>(
  *
  * Call this on anything that will be written into state after an await.
  */
-export function guard<T extends { scenario_version: number; policy_version: number }>(
-  payload: T,
-  current: VersionStamp,
-): T {
+export function guard<
+  T extends { scenario_version: number; policy_version: number },
+>(payload: T, current: VersionStamp): T {
   const received = {
     expected_scenario_version: payload.scenario_version,
     expected_policy_version: payload.policy_version,
@@ -119,6 +135,23 @@ export function guard<T extends { scenario_version: number; policy_version: numb
 // --------------------------------------------------------------------------
 
 export const api = {
+  analysis(caseId: string, versions: VersionStamp): Promise<Analysis> {
+    return request(`/cases/${caseId}/analysis`, {
+      method: "POST",
+      body: JSON.stringify(versions),
+    });
+  },
+
+  manualPolicy(
+    caseId: string,
+    versions: VersionStamp,
+    maxDeltaV: number,
+  ): Promise<CaseSnapshot> {
+    return request(`/cases/${caseId}/policy-manual`, {
+      method: "POST",
+      body: JSON.stringify({ ...versions, max_delta_v_mps: maxDeltaV }),
+    });
+  },
   createCase(scenarioId = "primary"): Promise<CaseSnapshot> {
     return request("/cases", {
       method: "POST",
@@ -183,7 +216,8 @@ export const api = {
       expected_scenario_version: String(versions.expected_scenario_version),
       expected_policy_version: String(versions.expected_policy_version),
     });
-    if (sampleStepS !== undefined) params.set("sample_step_s", String(sampleStepS));
+    if (sampleStepS !== undefined)
+      params.set("sample_step_s", String(sampleStepS));
     return request(`/cases/${caseId}/visualization?${params}`, {}, signal);
   },
 
@@ -227,7 +261,7 @@ export const api = {
     return request("/context/socrates", {}, signal);
   },
 
-  health(): Promise<{ status: string; model_version: string }> {
+  health(): Promise<Health> {
     return request("/health");
   },
 };
@@ -240,7 +274,11 @@ export const api = {
  */
 export async function waitForRun(
   runId: string,
-  options: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal } = {},
+  options: {
+    intervalMs?: number;
+    timeoutMs?: number;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<RunRecord> {
   const { intervalMs = 400, timeoutMs = 120_000, signal } = options;
   const deadline = Date.now() + timeoutMs;

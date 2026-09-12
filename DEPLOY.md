@@ -50,7 +50,7 @@ Check it landed: `GET /health` reports `"model_access": true` when a key is visi
 
 ## 4. Frontend
 
-If `frontend/dist/` exists in the image, the API serves it from the same origin — one container is the whole app, and CORS stops mattering. Build it before pushing, or add a build stage to the `Dockerfile`.
+The Dockerfile builds `frontend/dist/` with Node 24 and `npm ci`, then copies it into the Python image. The API serves it from the same origin. `.dockerignore` excludes credentials, local environments, databases, dependencies, test output and the handoff packet. The final container needs only Python at runtime.
 
 `/assets` is mounted for the built bundle and every unmatched path returns `index.html`, so a client-side router works. The catch-all is registered after the API routes, so it cannot shadow them.
 
@@ -70,6 +70,8 @@ python scripts/live_api_check.py --base https://<user>-<space-name>.hf.space
 ```
 
 Twenty checks covering create, plan, visualization, a plain-English constraint change, confirm, replan, approve twice, export and context. It exercises the live model, so expect it to take a minute or two.
+
+For protected deployments, set `DESK_ACCESS_TOKEN` in the checker's environment too. It is sent in the Authorization header and is not printed or added to the URL. This session verified the built frontend served by FastAPI locally; a Docker image build was not run because the local Docker daemon was unavailable.
 
 ## Before this is public
 

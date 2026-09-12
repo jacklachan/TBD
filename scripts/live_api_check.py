@@ -15,6 +15,7 @@ including serialization, the background run pool and the live model.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from pathlib import Path
@@ -33,6 +34,8 @@ class Checker:
     def __init__(self, base: str) -> None:
         self.base = base.rstrip("/")
         self.failures: list[str] = []
+        token = os.environ.get("DESK_ACCESS_TOKEN", "").strip()
+        self.headers = {"Authorization": f"Bearer {token}"} if token else {}
 
     def ok(self, label: str, condition: bool, detail: str = "") -> bool:
         mark = "PASS" if condition else "FAIL"
@@ -42,11 +45,11 @@ class Checker:
         return condition
 
     def get(self, path: str, **params):
-        response = requests.get(f"{self.base}{path}", params=params or None, timeout=120)
+        response = requests.get(f"{self.base}{path}", params=params or None, headers=self.headers, timeout=120)
         return response
 
     def post(self, path: str, payload: dict):
-        return requests.post(f"{self.base}{path}", json=payload, timeout=120)
+        return requests.post(f"{self.base}{path}", json=payload, headers=self.headers, timeout=120)
 
     def wait(self, run_id: str, timeout_s: float = 180.0) -> dict:
         deadline = time.time() + timeout_s

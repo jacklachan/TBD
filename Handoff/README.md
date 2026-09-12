@@ -2,7 +2,7 @@
 
 **Temporary project name:** Satellite Demo. Rename the display name later; keep module and file names descriptive.
 
-**Package revision:** 4 — 12 September 2026. **Status:** backend implemented, branch merged, security fixes verified. Frontend implementation is next. Start with the current summary at the top of STATE.md; older entries are historical evidence.
+**Package revision:** 5 — 12 September 2026. **Status:** backend merged and reviewed; interactive 3D frontend implemented and verified. Start with STATE.md, REVIEW.md and FRONTEND.md. Older dated entries are historical evidence.
 
 **Repository:** [jacklachan/TBD](https://github.com/jacklachan/TBD). Three builders, twenty hours, one satellite, two synthetic debris objects, six simulated hours.
 
@@ -53,6 +53,8 @@ The future application tree is in [IMPLEMENTATION.md](IMPLEMENTATION.md). Those 
 ## Share and resume
 
 Send this entire `Handoff` directory, or zip it. Its active links are relative and work after moving it to another machine. Nothing needed to understand the plan lives outside this directory.
+
+The implementation transfer is in [updates/README.md](updates/README.md): a portable archive of changed source files, assets and dependency locks, plus its base commit, source commit and hashes. This avoids sending dependency folders or the entire repository. Screenshots and the supplied design are included separately in this packet.
 
 Give a teammate's AI this message, replacing the role:
 

@@ -1,6 +1,6 @@
 # Satellite Demo — current state and decisions
 
-Revision 4, 12 September 2026. **Current summary:** the branch `claude/focused-brown-5r09go` is merged locally into main. Physics, verifier, agent, API and storage exist. The browser currently has contract/client files only; the requested 3D frontend is next. The security/reliability pass has 186 passing tests and 91% coverage. See [REVIEW.md](REVIEW.md) for fixes, commands and limitations. Earlier entries below preserve historical measurements and are superseded where they describe missing files. No deployment or fresh live-model run was performed in this review.
+Revision 5, 12 September 2026. **Current summary:** `claude/focused-brown-5r09go` was merged and security fixes pushed to main as `1e1b2cf` under Auenchanters. The complete React/Three.js frontend now exists and is integrated with the Python API. Final backend verification: **191 passed, 91% coverage**. Frontend: **7 unit tests**, four browser workflows plus one separate scripted-agent browser workflow. See [REVIEW.md](REVIEW.md) and [FRONTEND.md](FRONTEND.md). No public deployment or fresh live Gemini run was performed. The production frontend is tested locally through FastAPI. Docker image execution is unverified because the local daemon is unavailable. Earlier dated sections are historical evidence, not instructions to recreate completed work.
 
 ## Current state
 
@@ -9,12 +9,12 @@ Revision 4, 12 September 2026. **Current summary:** the branch `claude/focused-b
 | Team and duration | Confirmed: three builders, twenty hours |
 | Placeholder name | Satellite Demo; repository name remains TBD |
 | Current package | Complete. Entry files, plan, engineering spec, contracts, updated data and dashboard specs, and all three role handoffs are written. Nothing further is required before implementation begins |
-| Application source, dependencies, deployment | `backend/core/`, `backend/planning/`, `backend/agent/`, `backend/api.py`, `backend/store.py`, `backend/visualization.py`, `scenarios/`, `scripts/`. Serves with `uvicorn backend.api:app`. `domain/models.py` and `frontend/` do not exist. Nothing is deployed |
-| Numerical tests and generated scenarios | Gate 1 and Gate 2 passing. Candidate grid, primary search and four fixtures exist and are tested from disk. **Verifier not written** -- nothing is approvable yet |
-| Gemini key, model availability, tool call | **Verified.** `gemini-3.6-flash` over the generateContent REST endpoint. Full tool round trip passes; live planner reaches PROPOSAL_READY in 5 model calls, 16.6 s |
+| Application source, dependencies, deployment | Python backend plus `frontend/src/` React/Three.js app. Production UI served by FastAPI after `npm --prefix frontend run build`. Typed contracts live in owning Python modules and `frontend/src/contracts.ts`; there is no `domain/models.py`. Nothing publicly deployed |
+| Numerical tests and generated scenarios | Gate 1 and Gate 2 pass. Search, independent verifier, 25-option comparison and four fixtures exist. API approval requires stored matching PASS evidence and reviewer ALLOW |
+| Gemini key, model availability, tool call | Historical live tests recorded below. No key in the current checkout, so current frontend shows AI offline; numeric exploration works. Scripted browser tests verify integration, not live model behavior |
 | TLE and SOCRATES data snapshots | Both downloaded and committed. Seed: NOAA 20 (JPSS-1), NORAD 43013, epoch 2026-09-11T21:51:16Z. Context: 25 real conjunctions from SOCRATES Plus |
 | Numerical accuracy and runtime latency | Measured. Gate 1 to 1.155e-06 m; verifier agrees with the search to 3.6e-08 m. Live loop 16.6 s of which ~15.4 s is model time and ~1.2 s compute. **The 10 s target is not met** |
-| 3D model and animation | Specified, not built |
+| 3D model and animation | Built and browser-tested: globe, procedural spacecraft, both debris, shared samples, distance line, playback, exact encounter focus, camera reset, light/dark, WebGL fallback |
 | GitHub destination | jacklachan/TBD; documentation commit requested under Auenchanters |
 
 The three supplied specifications and earlier plan/research are preserved under `reference/`. Current files in this folder supersede their build instructions.

@@ -1,0 +1,416 @@
+{
+  "version": "3.0.0",
+  "status": "Live implementation; author-created paired theme from separate source families",
+  "precedence": "Approved v2 mockups + design.md supersede v1. Screenshot-derived alpha or exact font sizes are not claimed.",
+  "unitConventions": {
+    "dimensions": "CSS px",
+    "colors": "sRGB CSS color with alpha ratio 0–1",
+    "time": "ms",
+    "sceneCoordinates": "normalized image UV, origin top left",
+    "fontWeight": "numeric real font weights"
+  },
+  "sourceFamilies": {
+    "default": "Vexto dark telemetry D1–D27",
+    "lightAdaptation": "Dentale spatial glass L3–L22 with user-requested dark ink",
+    "excluded": "Travel assistant L1–L2"
+  },
+  "shared": {
+    "font-body": {
+      "value": 14,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "font-meta": {
+      "value": 12,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "font-title": {
+      "value": 28,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "font-card": {
+      "value": 17,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "font-metric": {
+      "value": 54,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "font-reading": {
+      "value": 48,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "radius-card": {
+      "value": 22,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "radius-large": {
+      "value": 30,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "radius-media": {
+      "value": 20,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "radius-control": {
+      "value": 18,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "radius-pill": {
+      "value": 999,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "space-small": {
+      "value": 8,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "space-inset": {
+      "value": 12,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "space-card": {
+      "value": 20,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "space-section": {
+      "value": 24,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "border-width": {
+      "value": 1,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "glass-blur": {
+      "value": 26,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "control-size": {
+      "value": 52,
+      "unit": "px",
+      "valueBasis": "proposed reconstruction; not a source pixel measurement"
+    },
+    "font-family": {
+      "value": "\"Inter\", sans-serif",
+      "unit": "font-family"
+    },
+    "weight-display": {
+      "value": 300,
+      "unit": "font-weight"
+    },
+    "weight-body": {
+      "value": 400,
+      "unit": "font-weight"
+    },
+    "weight-selected": {
+      "value": 500,
+      "unit": "font-weight"
+    },
+    "transition-theme": {
+      "value": 360,
+      "unit": "ms"
+    }
+  },
+  "themes": {
+    "dark": {
+      "canvas": {
+        "value": "#030606",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "text": {
+        "value": "#FEFEFF",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "text-secondary": {
+        "value": "#B4B7B0",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "text-muted": {
+        "value": "#A0A6A4",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "surface": {
+        "value": "rgba(9,12,13,0.82)",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "surface-raised": {
+        "value": "rgba(29,34,36,0.70)",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "surface-solid": {
+        "value": "#101415",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "rim": {
+        "value": "rgba(220,232,237,0.16)",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "rim-light": {
+        "value": "rgba(238,248,251,0.53)",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "divider": {
+        "value": "rgba(212,227,231,0.15)",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "reflection": {
+        "value": "linear-gradient(135deg, rgba(208,227,237,.20) 0%, rgba(137,170,180,.035) 26%, transparent 48%)",
+        "unit": "CSS image",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "shadow": {
+        "value": "0 10px 32px rgba(0,0,0,.12), inset 0 1px 0 rgba(231,245,251,.07)",
+        "unit": "CSS shadow",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "trace": {
+        "value": "#D6DBD9",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "watch": {
+        "value": "#EBA640",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "healthy": {
+        "value": "#83BA7E",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "attention": {
+        "value": "#EC8880",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "focus": {
+        "value": "#C2D9E4",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "terrain-filter": {
+        "value": "brightness(.25) saturate(.55) contrast(1.13)",
+        "unit": "CSS filter",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "media-filter": {
+        "value": "brightness(.48) saturate(.64)",
+        "unit": "CSS filter",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "terrain-wash": {
+        "value": "radial-gradient(ellipse at 60% 49%, transparent 24%, rgba(0,4,6,.20) 82%)",
+        "unit": "CSS image",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "pin": {
+        "value": "rgba(17,24,25,.76)",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "selection": {
+        "value": "rgba(178,198,208,.12)",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      }
+    },
+    "light": {
+      "canvas": {
+        "value": "#B6CBD9",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "text": {
+        "value": "#222323",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "text-secondary": {
+        "value": "#2D4252",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "text-muted": {
+        "value": "#415665",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "surface": {
+        "value": "rgba(202,219,233,0.72)",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "surface-raised": {
+        "value": "rgba(215,229,241,0.64)",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "surface-solid": {
+        "value": "#CBDCE8",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "rim": {
+        "value": "rgba(249,253,255,0.68)",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "rim-light": {
+        "value": "rgba(255,255,255,0.95)",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "divider": {
+        "value": "rgba(63,90,111,0.24)",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "reflection": {
+        "value": "linear-gradient(135deg, rgba(255,255,255,.46) 0%, rgba(244,250,255,.11) 35%, transparent 60%)",
+        "unit": "CSS image",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "shadow": {
+        "value": "0 8px 28px rgba(40,73,94,.10), inset 0 1px 0 rgba(255,255,255,.35)",
+        "unit": "CSS shadow",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "trace": {
+        "value": "#2D4252",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "watch": {
+        "value": "#956000",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "healthy": {
+        "value": "#356B40",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "attention": {
+        "value": "#A13B34",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "focus": {
+        "value": "#244E6B",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "terrain-filter": {
+        "value": "saturate(.65) brightness(1.10)",
+        "unit": "CSS filter",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "media-filter": {
+        "value": "contrast(.82) saturate(.72) brightness(1.10)",
+        "unit": "CSS filter",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "terrain-wash": {
+        "value": "linear-gradient(rgba(186,215,237,.55),rgba(172,205,228,.45))",
+        "unit": "CSS image",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "pin": {
+        "value": "rgba(210,232,245,.79)",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      },
+      "selection": {
+        "value": "rgba(247,252,255,.27)",
+        "unit": "CSS color",
+        "valueBasis": "proposed semantic mapping; see design.md evidence ledger"
+      }
+    }
+  },
+  "scene": {
+    "texture": "/assets/basin-terrain.png",
+    "width": {
+      "value": 3.197580645,
+      "unit": "scene units"
+    },
+    "height": {
+      "value": 2,
+      "unit": "scene units"
+    },
+    "segments": {
+      "x": 160,
+      "y": 100,
+      "unit": "segments"
+    },
+    "relief": {
+      "value": 0.1,
+      "unit": "scene units",
+      "basis": "image-derived depth illusion, not elevation"
+    },
+    "overscan": {
+      "value": 1.04,
+      "unit": "ratio"
+    },
+    "zoom": {
+      "min": 1,
+      "max": 1.35,
+      "step": 0.1,
+      "unit": "ratio"
+    },
+    "cameraPointer": {
+      "x": 0.1,
+      "y": 0.065,
+      "unit": "scene units"
+    },
+    "pixelRatioCap": {
+      "value": 1.75,
+      "unit": "ratio"
+    },
+    "motion": {
+      "duration": 700,
+      "unit": "ms",
+      "reducedMotion": "No automatic camera movement; explicit zoom is instant"
+    },
+    "responsiveCamera": {
+      "mobile": {
+        "maxWidth": 600,
+        "unit": "CSS px",
+        "centerY": -0.4,
+        "centerUnit": "scene units",
+        "baseZoom": 1.65
+      },
+      "tablet": {
+        "maxWidth": 900,
+        "unit": "CSS px",
+        "centerY": -0.48,
+        "centerUnit": "scene units",
+        "baseZoom": 2
+      }
+    }
+  }
+}

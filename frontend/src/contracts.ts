@@ -20,9 +20,7 @@ export type BurnDirection = "PROGRADE" | "RETROGRADE";
 
 /** Planner outcomes. NO_APPROVABLE_OPTION is a real answer, not an error. */
 export type PlannerStatus =
-  | "PROPOSAL_READY"
-  | "NO_APPROVABLE_OPTION"
-  | "UNRESOLVED";
+  "PROPOSAL_READY" | "NO_APPROVABLE_OPTION" | "UNRESOLVED";
 
 export interface BurnWindow {
   window_id: string;
@@ -75,6 +73,8 @@ export interface Encounter {
 }
 
 export interface Validation {
+  scenario_version: number;
+  policy_version: number;
   validation_id: string;
   candidate_id: string;
   status: ValidationStatus;
@@ -208,7 +208,9 @@ export interface VisualizationVariant {
   pair_separations_m: Record<string, number[]>;
   /** Closest approach to ANY object at each sample. The chart's headline series. */
   min_to_any_m: number[];
-  encounters: (Encounter & { below_floor: boolean })[];
+  encounters: (Omit<Encounter, "relative_speed_mps"> & {
+    below_floor: boolean;
+  })[];
 }
 
 export interface VisualizationBundle {
@@ -255,11 +257,75 @@ export function versionsOf(snapshot: CaseSnapshot): VersionStamp {
 /** True when this option can actually be approved. */
 export function isApprovable(snapshot: CaseSnapshot): boolean {
   const proposal = snapshot.proposal;
-  if (!proposal || proposal.status !== "READY") return false;
+  if (!proposal || proposal.status !== "READY" || snapshot.execution)
+    return false;
+  if (
+    proposal.case_id !== snapshot.case_id ||
+    proposal.scenario_version !== snapshot.scenario_version ||
+    proposal.policy_version !== snapshot.policy_version
+  )
+    return false;
   const validation = snapshot.validations.find(
     (v) => v.validation_id === proposal.validation_id,
   );
-  if (!validation || validation.status !== "PASS") return false;
+  if (
+    !validation ||
+    validation.status !== "PASS" ||
+    validation.candidate_id !== proposal.candidate_id ||
+    validation.scenario_version !== snapshot.scenario_version ||
+    validation.policy_version !== snapshot.policy_version
+  )
+    return false;
   const verdict = proposal.reviewer_verdict;
-  return verdict === null || verdict.decision === "ALLOW";
+  return verdict?.decision === "ALLOW";
+}
+
+export interface OptionRow {
+  candidate_id: string;
+  kind: CandidateKind;
+  delta_v_mps: number;
+  burn_t_s: number | null;
+  direction: BurnDirection | null;
+  primary_qualified: boolean;
+  primary_encounter: { min_separation_m: number; tca_s: number } | null;
+  reason_codes: string[];
+  rank: number | null;
+  validation: {
+    status: ValidationStatus;
+    validation_id: string;
+    reason_codes: string[];
+    encounters: {
+      object_id: string;
+      min_separation_m: number;
+      tca_s: number;
+    }[];
+    blocked_by: {
+      object_id: string;
+      min_separation_m: number;
+      shortfall_m: number;
+      tca_s: number;
+    }[];
+  } | null;
+}
+
+export interface Analysis {
+  case_id: string;
+  scenario_version: number;
+  policy_version: number;
+  mode: "NUMERICAL_ANALYSIS";
+  status: "VERIFIED_OPTION" | "NO_VERIFIED_OPTION";
+  candidate_count: number;
+  qualified_count: number;
+  recommended_id: string | null;
+  options: OptionRow[];
+  elapsed_s: number;
+  note: string;
+}
+
+export interface Health {
+  status: string;
+  model_version: string;
+  planner_model: string;
+  model_access: boolean;
+  access_token_required: boolean;
 }

@@ -1,6 +1,6 @@
 # Builder C — agent, API, storage and integration
 
-Read [README.md](../README.md), [AGENTS.md](../AGENTS.md), [STATE.md](../STATE.md), [CONTRACTS.md](../CONTRACTS.md) and [IMPLEMENTATION.md](../IMPLEMENTATION.md) first. This file is your scope, sequence and acceptance checks. Nothing here is implemented yet.
+**Current status, 12 September 2026:** the agent/API is implemented, merged and hardened. Read [REVIEW.md](../REVIEW.md) for security changes and [FRONTEND.md](../FRONTEND.md) for the two new numerical workspace endpoints, browser transport and integration tests. Older dated sections below are historical evidence. The current checkout has no live model key; scripted provider tests are not live-model proof.
 
 ## You own
 

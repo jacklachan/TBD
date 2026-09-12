@@ -33,7 +33,7 @@ No collision probability is computed anywhere. Separations are deterministic val
 ```bash
 pip install -r requirements-dev.txt  # Python 3.12+
 cp .env.example .env          # then put your GEMINI_API_KEY in it
-python -m pytest tests/ -q    # 186 tests at the backend review checkpoint
+python -m pytest tests/ -q    # 191 tests after frontend integration
 ```
 
 ```bash
@@ -43,6 +43,28 @@ python scripts/live_api_check.py      # 20 checks end to end against the live mo
 ```
 
 Deployment to Hugging Face Spaces: [DEPLOY.md](DEPLOY.md).
+
+## The interactive workspace
+
+Use Node.js 24 and Python 3.12+. Build the frontend before starting the server:
+
+```bash
+npm --prefix frontend ci
+npm --prefix frontend run build
+python -m uvicorn backend.api:app --host 127.0.0.1 --port 8000
+```
+
+Open **http://127.0.0.1:8000**. The server serves both the API and the production frontend. For frontend development, keep the API on port 8000 and run `npm --prefix frontend run dev`; Vite opens port 5173 and proxies API requests.
+
+The workspace includes a rotatable 3D globe, an inspectable procedural spacecraft, exact encounter jumps, shared-clock playback, a separation chart, a 25-option comparison table, manual budget changes, AI restriction preview/confirmation, reviewed simulated approval, reset and evidence export. The numerical comparison works without an API key and is labeled separately from AI runs. Set `GEMINI_API_KEY` on the backend to use the real planner. Remote access also requires `DESK_ACCESS_TOKEN`; the browser asks for the operator token and keeps it in memory only.
+
+```bash
+python -m pytest tests -q                    # 191 tests
+npm --prefix frontend test                  # 7 unit tests
+npm --prefix frontend run test:browser      # running API + Vite; Chrome installed
+```
+
+The browser suite includes four real numerical-workflow checks and an optional scripted-agent fixture. [Frontend verification and handoff](Handoff/FRONTEND.md) records how to run that fixture, screenshots, and the limits of the checks. [Asset attribution](frontend/ASSETS.md) records the supplied design, NASA imagery and library licenses.
 
 ## Verified
 

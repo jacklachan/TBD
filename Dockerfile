@@ -1,3 +1,11 @@
+# Build the complete frontend from the lockfile, then serve it with the API.
+FROM node:24-slim AS frontend-build
+WORKDIR /build/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
 # Hugging Face Spaces, Docker SDK. Spaces expects the app on port 7860.
 FROM python:3.12-slim
 
@@ -16,6 +24,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=user . .
+COPY --from=frontend-build --chown=user /build/frontend/dist ./frontend/dist
 
 EXPOSE 7860
 

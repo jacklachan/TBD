@@ -25,7 +25,8 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
+from types import SimpleNamespace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -112,6 +113,10 @@ class ApproveRequest(VersionedRequest):
 
 class ResetRequest(VersionedRequest):
     pass
+
+
+class ManualPolicyRequest(VersionedRequest):
+    max_delta_v_mps: float = Field(..., ge=0, le=1, allow_inf_nan=False)
 
 
 # --------------------------------------------------------------------------
@@ -467,6 +472,40 @@ def create_app(
         return run.as_dict()
 
     # --------------------------------------------------------------- policy
+
+    @app.post("/cases/{case_id}/analysis")
+    def numerical_analysis(case_id: str, payload: VersionedRequest, request: Request) -> dict:
+        from backend.analysis import analyze
+
+        state = _state(request)
+        case_row = _case_or_404(state, case_id)
+        _check_versions(case_row, payload.expected_scenario_version, payload.expected_policy_version)
+        if not state.model_slots.acquire(blocking=False):
+            raise HTTPException(429, {"error": "CAPACITY", "message": "The analysis engine is busy. Try again shortly."})
+        try:
+            result = analyze(_session_for(case_row))
+            _check_versions(_case_or_404(state, case_id), payload.expected_scenario_version, payload.expected_policy_version)
+            return result
+        finally:
+            state.model_slots.release()
+
+    @app.post("/cases/{case_id}/policy-manual")
+    def manual_policy(case_id: str, payload: ManualPolicyRequest, request: Request) -> dict:
+        state = _state(request)
+        case_row = _case_or_404(state, case_id)
+        _check_versions(case_row, payload.expected_scenario_version, payload.expected_policy_version)
+        if state.store.execution_for_case(case_id) is not None:
+            raise HTTPException(409, {"error": "CASE_EXECUTED", "message": "Reset before changing the executed case."})
+        policy = replace(case_row.policy, policy_version=case_row.policy_version + 1, max_delta_v_mps=payload.max_delta_v_mps)
+        try:
+            state.store.update_policy(case_id, policy, expected_policy_version=case_row.policy_version)
+        except StoreError as exc:
+            raise HTTPException(409, {"error": "STALE_VERSION", "message": str(exc)}) from exc
+        state.store.append_events(case_id, None, [SimpleNamespace(
+            event_type="OPERATOR_POLICY_CHANGE", summary="Operator set the delta-v budget directly.",
+            details={"before_mps": case_row.policy.max_delta_v_mps, "after_mps": policy.max_delta_v_mps, "policy_version": policy.policy_version},
+        )])
+        return _snapshot(state, case_id)
 
     @app.post("/cases/{case_id}/policy-preview")
     def policy_preview(case_id: str, payload: PolicyPreviewRequest, request: Request) -> dict:

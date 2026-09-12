@@ -1,6 +1,6 @@
 # Builder B — product, chart and moving 3D scene
 
-Read [README.md](../README.md), [AGENTS.md](../AGENTS.md), [STATE.md](../STATE.md), [CONTRACTS.md](../CONTRACTS.md) and [DASHBOARD.md](../DASHBOARD.md) first. This file is your scope, sequence and acceptance checks. Nothing here is implemented yet.
+**Current status, 12 September 2026:** the requested React/Three.js workspace is implemented. Read [FRONTEND.md](../FRONTEND.md) for actual files, contracts, commands, tests, screenshots and remaining limits. This file preserves the earlier ownership plan below; planned names such as Workbench.tsx were realized as App.tsx/useWorkspace.ts. Do not recreate the application from this older checklist.
 
 ## You own
 
