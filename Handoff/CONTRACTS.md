@@ -21,14 +21,14 @@ Current additions and clarified behavior:
   possible designed burn.
 - Run `elapsed_s` includes the final safety-review wait. Provider `latency_ms`
   includes retries/backoff. Neither is a guaranteed latency target.
-- On NO_CONCLUSION after the model's validation cap, a separate numerical
+- On NO_CONCLUSION after an incomplete model investigation, a separate numerical
   grid audit can establish that every primary-qualified option is blocked.
   It cannot create a proposal or reviewer ALLOW. Its `grid_audit` event records
   additional checks separately from model-requested `validations_run`.
 - No HTTP response shape changed. Existing designed-burn tools, pasted-element
   ingest and CCSDS-shaped exchange remain supported.
 
-All three builders agree on changes here before implementing their own modules. Once code exists, `backend/domain/models.py` defines serialization; this document explains its semantics. B and C keep `frontend/src/contracts.ts` aligned. One field name per concept, explicit units, no independently invented frontend physics types.
+Keep the owning backend modules and `frontend/src/contracts.ts` aligned when changing contracts. The domain tables below retain the original design vocabulary; use the implemented types for exact serialization. One field name per concept, explicit units, no independently invented frontend physics types.
 
 ## Units, frame, time, identity
 

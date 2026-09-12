@@ -1,13 +1,13 @@
 # Satellite Demo — current state and decisions
 
-Revision 6, 12 September 2026. **Current summary:** continued from teammate commit
+Revision 6, 13 September 2026. **Current summary:** continued from teammate commit
 `11b4cff18d8ac08ba587fc679e24c405b1d43f8e` in the isolated `TBD-refinements`
 checkout. The runtime now uses the user's chosen **GLM-5.3-Flash through Hugging
 Face / Baseten**, with no Gemini fallback. Earlier-case evidence is inspectable
 without changing the active case. Incomplete investigations cannot claim grid
 infeasibility; elapsed timings include final review and transport retries.
 Deployment target: **Auenchanters/TBH**, Docker, CPU Upgrade (8 vCPU / 32 GB).
-Deployment verification is in progress. Current evidence and failed attempts:
+Docker build and hosted browser verification passed. Current live-model results and failed attempts:
 [refinement session](handoffs/2026-09-12-hf-refinements.md).
 
 Earlier dated sections are historical. Follow the current explicit user request.
@@ -18,12 +18,12 @@ Earlier dated sections are historical. Follow the current explicit user request.
 |---|---|
 | Team and duration | Confirmed: three builders, twenty hours |
 | Display name | Teammate commit uses Orion West; repository name remains TBD |
-| Current package | Complete. Entry files, plan, engineering spec, contracts, updated data and dashboard specs, and all three role handoffs are written. Nothing further is required before implementation begins |
-| Application source, dependencies, deployment | Python backend plus `frontend/src/` React/Three.js app. Production UI served by FastAPI after `npm --prefix frontend run build`. Typed contracts live in owning Python modules and `frontend/src/contracts.ts`; there is no `domain/models.py`. Deployment target Auenchanters/TBH; verification pending |
+| Current package | Implemented application, current handoff, screenshots and portable source update; follow the latest session record |
+| Application source, dependencies, deployment | Python backend plus `frontend/src/` React/Three.js app. Typed contracts live in owning Python modules and `frontend/src/contracts.ts`; there is no `domain/models.py`. Docker build and hosted 3D/browser checks passed at https://auenchanters-tbh.hf.space |
 | Numerical tests and generated scenarios | Gate 1 and Gate 2 pass. Search, independent verifier, 25-option comparison and five fixtures exist. API approval requires stored matching PASS evidence and reviewer ALLOW |
 | Model access | HF_TOKEN server secret; GLM-5.3-Flash tool-call round trip verified locally in 4.040 s. See current session for full workflow/deployment results |
 | TLE and SOCRATES data snapshots | Both downloaded and committed. Seed: NOAA 20 (JPSS-1), NORAD 43013, epoch 2026-09-11T21:51:16Z. Context: 25 real conjunctions from SOCRATES Plus |
-| Numerical accuracy and runtime latency | Measured. Gate 1 to 1.155e-06 m; verifier agrees with the search to 3.6e-08 m. Live loop 16.6 s of which ~15.4 s is model time and ~1.2 s compute. **The 10 s target is not met** |
+| Numerical accuracy and runtime latency | Gate 1 to 1.155e-06 m; verifier agrees with the search to 3.6e-08 m. Final backend suite: 322 passed, 93% coverage. See latest session for GLM timings; **the 10 s target is not established** |
 | 3D model and animation | Built and browser-tested: globe, procedural spacecraft, both debris, shared samples, distance line, playback, exact encounter focus, camera reset, light/dark, WebGL fallback |
 | GitHub destination | jacklachan/TBD; documentation commit requested under Auenchanters |
 
@@ -35,7 +35,7 @@ The three supplied specifications and earlier plan/research are preserved under 
 |---|---|
 | Optional or removed 3D | Required synchronized moving 3D scene; chart ships first; 3D never blocks physics gates |
 | Blender versus web rendering | Three.js with React Three Fiber; procedural satellite first; optional licensed GLB later |
-| Existing OrbitGuard / Conjunction Decision Desk name | Our placeholder is Satellite Demo; preserve external repository names in research |
+| Existing OrbitGuard / Conjunction Decision Desk name | Current temporary display name is Orion West, inherited from the teammate; preserve external repository names in research |
 | Mixed model providers and model names | Hugging Face chat completions; GLM-5.3-Flash via Baseten, per current user selection |
 | 25 burns versus the supplied 24-burn grid | 25 initial options means 24 burns plus do nothing; UI must count honestly |
 | 36-hour scope or 20-hour optional cuts | Latest user schedule and gates are authoritative; physics target hour seven |

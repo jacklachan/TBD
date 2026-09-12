@@ -645,7 +645,8 @@ def create_app(
                 )
                 if (outcome.status == STATUS_UNRESOLVED
                         and outcome.unresolved_reason == UNRESOLVED_NO_CONCLUSION
-                        and outcome.validations_run >= state.limits.max_validations):
+                        and session.search_result is not None):
+                    # The model may stop before its allowance is exhausted.
                     # Model tool calls stay bounded. Finish the finite grid's
                     # numerical check separately, using the same independent
                     # verifier as the workspace. This can prove infeasibility,
@@ -653,7 +654,7 @@ def create_app(
                     from backend.analysis import analyze
                     audit_started = time.perf_counter()
                     checked_before = set(session.validations)
-                    run.step = "Completing the independent grid check after the model validation limit."
+                    run.step = "Completing the independent grid check after an incomplete model investigation."
                     audit = analyze(session)
                     ruled_out = all(
                         o["validation"] is not None and o["validation"]["status"] == "BLOCK"

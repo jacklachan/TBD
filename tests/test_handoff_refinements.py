@@ -96,17 +96,18 @@ def test_memory_does_not_invent_a_widened_search_or_binding_constraint(session):
 
 
 @pytest.mark.parametrize("scenario,expected", [("primary", "UNRESOLVED"), ("no_feasible", "NO_APPROVABLE_OPTION")])
-def test_grid_completion_cannot_mint_a_proposal(scenario, expected):
+@pytest.mark.parametrize("validation_limit", [1, 6])
+def test_grid_completion_cannot_mint_a_proposal(scenario, expected, validation_limit):
     from fastapi.testclient import TestClient
     from backend.api import create_app
     from backend.agent.planner import PlannerLimits
     import time
     provider = lambda: ScriptedProvider([
         tool_call("validate_proposal", candidate_id="t30_ret_100"),
-        text_reply("I have reached the validation limit."),
+        text_reply("No maneuver is possible."),
     ])
     with TestClient(create_app(store=Store(), provider_factory=provider,
-                              limits=PlannerLimits(max_validations=1))) as client:
+                              limits=PlannerLimits(max_validations=validation_limit))) as client:
         case = client.post("/cases", json={"scenario_id": "primary"}).json()
         if scenario == "no_feasible":
             case = client.post(f"/cases/{case['case_id']}/policy-manual", json={
@@ -130,3 +131,11 @@ def test_grid_completion_cannot_mint_a_proposal(scenario, expected):
         audits = [e for e in snapshot["events"] if e["event_type"] == "grid_audit"]
         assert len(audits) == 1
         assert audits[0]["details"]["model_outcome"] == "UNRESOLVED"
+
+
+def test_guard_accepts_computed_margin_but_flags_invented_distance(session):
+    outcome = plan_case(ScriptedProvider([
+        tool_call("validate_proposal", candidate_id="t30_ret_200"),
+        text_reply("The 1250 m comfortable threshold is passed. An invented 98765 m distance."),
+    ]), session)
+    assert outcome.flagged_numbers == (98765.0,)

@@ -44,8 +44,12 @@ Optional public **variables**:
 | PLANNER_MODEL | zai-org/GLM-5.3-Flash:baseten |
 | REVIEWER_MODEL | zai-org/GLM-5.3-Flash:baseten |
 | HF_BASE_URL | https://router.huggingface.co/v1 |
-| ALLOWED_ORIGINS | none |
+| ALLOWED_ORIGINS | https://auenchanters-tbh.hf.space |
 | DESK_DB | :memory: |
+
+The explicit application origin is required behind the Space's HTTPS proxy.
+Using `none` rejected browser requests even though direct API calls succeeded.
+The deployment helper reads the exact application host from the Hub API.
 
 A dedicated HF Inference Endpoint is a separate product. If used instead, set
 HF_BASE_URL to its HTTPS /v1 base and both model variables to its served model ID.
@@ -67,6 +71,16 @@ Do not upload the working folder wholesale. .dockerignore excludes secrets from
 the image, but does not exclude them from a Hub upload. Exclude .env, databases,
 Handoff archives, dependency folders, test output and Git metadata from uploads.
 The deployment script prepares tracked inputs explicitly and checks for secrets.
+
+After committing the verified source, publish with:
+
+```bash
+uv run --no-project --python 3.12 --with huggingface_hub python scripts/deploy_space.py --space Auenchanters/TBH
+```
+
+The helper uses the existing CLI login for upload, copies HF_TOKEN into a Space
+secret, and generates DESK_ACCESS_TOKEN in the ignored local `.env` if needed.
+Use the latter value at the website's Operator access prompt.
 
 Local model proof: python scripts/smoke_llm.py must request a real function and
 consume its result. With the API running, use:

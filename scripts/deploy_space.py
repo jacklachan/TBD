@@ -14,6 +14,7 @@ from pathlib import Path
 import secrets
 import subprocess
 import sys
+from urllib.parse import urlsplit
 
 from huggingface_hub import CommitOperationAdd, HfApi, get_token
 
@@ -51,6 +52,10 @@ def main() -> None:
     info = api.space_info(args.space)
     if info.sdk != "docker":
         raise ValueError("Target must be an existing Docker Space")
+    origin = urlsplit(info.host or "")
+    if origin.scheme != "https" or not origin.hostname:
+        raise ValueError("Target Space has no HTTPS application host")
+    space_origin = f"https://{origin.netloc}"
     sys.path.insert(0, str(ROOT))
     from backend.config import hf_api_token, hf_base_url, planner_model, reviewer_model
     if not hf_api_token():
@@ -67,7 +72,7 @@ def main() -> None:
     api.add_space_secret(args.space, "HF_TOKEN", hf_api_token())
     api.add_space_secret(args.space, "DESK_ACCESS_TOKEN", access)
     for key, value in {"PLANNER_MODEL": planner_model(), "REVIEWER_MODEL": reviewer_model(),
-                       "HF_BASE_URL": hf_base_url(), "ALLOWED_ORIGINS": "none"}.items():
+                       "HF_BASE_URL": hf_base_url(), "ALLOWED_ORIGINS": space_origin}.items():
         api.add_space_variable(args.space, key, value)
     result = api.create_commit(
         repo_id=args.space, repo_type="space",

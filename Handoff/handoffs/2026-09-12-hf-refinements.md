@@ -1,4 +1,4 @@
-# HF deployment and continuation of the audit — 12 September 2026
+# HF deployment and continuation of the audit — 12–13 September 2026
 
 Started at teammate commit `11b4cff18d8ac08ba587fc679e24c405b1d43f8e`.
 The original checkout has unrelated uncommitted documentation edits; those were
@@ -15,18 +15,22 @@ preserved. Work is in `C:/Users/Utkarsh/Desktop/Project/TBD-refinements`, branch
 - `backend/agent/planner.py`: an early model conclusion after some vetoes is
   unresolved unless every primary-qualified grid option has independent BLOCK
   evidence. Final elapsed time includes safety review.
-- `backend/api.py`: if a model exhausts its validation allowance and concludes
-  without an answer, the existing numerical comparison completes the finite grid.
+- `backend/api.py`: if a model concludes without an answer after a partial
+  investigation, the existing numerical comparison completes the finite grid.
   It can establish NO_APPROVABLE_OPTION, but never creates a proposal or reviewer
   ALLOW. A `grid_audit` event preserves the unresolved model outcome, actual
   additional checks and the audit verdict. `validations_run` remains the count
   of model-requested checks; audit checks are named separately in the trace.
 - `backend/api.py`: memory no longer invents a widened search or a binding
   constraint. `backend/agent/llm.py`: legacy transport timing includes retries.
+- The rationale guard recognizes the exact comfortable-clearance threshold
+  already reported by the validation tool. Invented distances remain flagged.
 - `frontend/src/components/PriorCaseEvidence.tsx`, `frontend/src/App.tsx`,
   `frontend/src/styles.css`: read-only earlier-case inspection with policy,
   proposal, reviewer, execution and versioned numerical evidence. Missing cases
   are recoverable; latest snapshot is distinguished from the recalled run.
+  Active-case export is hidden during history inspection to avoid exporting a
+  different case from the one displayed. Regression and screenshot verified.
 - `scripts/smoke_llm.py`, `scripts/live_api_check.py`, `scripts/diagnose.py`:
   active HF adapter/config, UTF-8 console output, local operator-token loading.
 - `scripts/deploy_space.py`: deploy only allowlisted committed Git blobs to an
@@ -40,11 +44,12 @@ preserved. Work is in `C:/Users/Utkarsh/Desktop/Project/TBD-refinements`, branch
 
 ## Verification so far
 
-- Final backend suite: **319 tests passed, 93% coverage, 89.68 s**, including
-  the grid-audit regressions. Two upstream Starlette/anyio deprecation warnings.
+- Final backend suite: **322 tests passed, 93% coverage, 131.94 s**, including
+  the hosted-workflow regressions. Two upstream Starlette/anyio deprecation warnings.
 - Frontend: 7 unit tests and strict TypeScript / production build passed.
 - 10 browser workflows passed against built FastAPI, 52.5 s; two scripted history
-  workflows passed, 22.1 s; scripted planning/approval/reset/constraint workflow
+  workflows passed, 22.1 s, and passed again after the history-export fix;
+  scripted planning/approval/reset/constraint workflow
   passed, 8.1 s. Scripted tests make no external model call.
 - `pip check`: no broken requirements. `npm audit`: no known vulnerabilities.
 - Bandit reports one medium B608 warning at `backend/store.py:272`. Reviewed:
@@ -72,6 +77,19 @@ preserved. Work is in `C:/Users/Utkarsh/Desktop/Project/TBD-refinements`, branch
    validations (58.0 s). The checker correctly failed its infeasibility check.
    This led to the separately logged bounded grid-completion audit, not relaxed
    approval criteria. Approval/idempotency/export/reset passed in that attempt.
+7. First hosted workflow on `6d4134b`: initial reviewed plan **5.3 s**, preview
+   2.0 s, replan 21.5 s. Two checks failed: the guard flagged the tool-provided
+   1,250 m comfort threshold, and the model stopped before reaching its validation
+   allowance. Added regressions and corrected both paths. The audit now handles
+   early NO_CONCLUSION as well as NO_CONCLUSION after the validation cap.
+8. Hosted Docker build succeeded. Browser-origin create initially returned 403
+   behind the HF proxy; explicitly allowing only the application HTTPS origin
+   fixed it (201). The deployment helper now reads that host from the Hub API.
+   Hosted Chrome checks passed: operator login, 3D playback, close-approach line
+   at 523.2 m, clear alternative at 2.492 km, dark/light themes, mobile width,
+   and no page errors. Screenshots: `Handoff/evidence/hf-deployed-*.png`.
+   Hosted boundary checks also passed: missing/wrong token 401, untrusted Origin
+   403, oversized request 413, and no configured secret exposed at `/.env`.
 
 The ten-second complete-agent target is not established. No provider ranking or
 quality comparison was measured. Docker/HF build and deployed runtime checks

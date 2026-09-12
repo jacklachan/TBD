@@ -593,6 +593,10 @@ def plan_case(
     # supporting evidence -- otherwise the guard punishes exactly the behaviour
     # we want.
     allowed_values = guards.values_from_policy(session.policy)
+    # validate_proposal explicitly reports this derived clearance threshold.
+    allowed_values |= guards.supported_values([
+        session.policy.min_separation_m * MARGINAL_CLEARANCE_RATIO,
+    ])
     for other_id, other_validation in session.validations.items():
         allowed_values |= guards.values_from_validation(other_validation)
         allowed_values |= guards.values_from_shortfalls(other_validation, session.policy)
