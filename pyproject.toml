@@ -1,0 +1,18 @@
+[project]
+name = "satellite-demo"
+version = "0.1.0"
+description = "Satellite close-approach maneuver decision demo"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=2.0",
+    "scipy>=1.13",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

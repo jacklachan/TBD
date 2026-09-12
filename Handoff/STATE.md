@@ -1,6 +1,6 @@
 # Satellite Demo — current state and decisions
 
-Revision 2, 12 September 2026. This records documentation decisions, not measured application performance.
+Revision 3, 12 September 2026. Revisions 1-2 recorded documentation decisions only. This revision adds the first measured numerical results.
 
 ## Current state
 
@@ -9,8 +9,8 @@ Revision 2, 12 September 2026. This records documentation decisions, not measure
 | Team and duration | Confirmed: three builders, twenty hours |
 | Placeholder name | Satellite Demo; repository name remains TBD |
 | Current package | Complete. Entry files, plan, engineering spec, contracts, updated data and dashboard specs, and all three role handoffs are written. Nothing further is required before implementation begins |
-| Application source, dependencies, deployment | Not created or installed |
-| Numerical tests and generated scenarios | Not implemented or run |
+| Application source, dependencies, deployment | `backend/core/` and `pyproject.toml` exist. `planning/`, `agent/`, `api.py`, `store.py`, `scenarios/` and `frontend/` do not. Nothing is deployed |
+| Numerical tests and generated scenarios | Gate 1 implemented and passing with recorded values; encounter detection tested. No scenario generator, candidate grid, search or verifier yet |
 | Gemini key, model availability, tool call | Not verified in this project |
 | TLE and SOCRATES data snapshots | Not downloaded; acquisition is a future build task |
 | Numerical accuracy and runtime latency | Acceptance targets only |
@@ -60,9 +60,34 @@ All three builders agree on CONTRACTS.md and create `backend/domain/models.py` t
 
 ## Evidence to add during the build
 
-- Gate 1: command, reference method/tolerances, actual maximum position error, test result.
+- ~~Gate 1: command, reference method/tolerances, actual maximum position error, test result.~~ **Recorded below.**
 - Gate 2: scenario seed/hash, actual candidate count, original threat result, secondary veto, verified alternative.
 - Gate 3: original policy, judge sentence, confirmed diff, changed policy version, new result, measured latency.
 - Final: five-scenario results, stale/injection/idempotency checks, second-machine result, demo URL, repository commit.
 
-No entries above are evidence of passing gates yet. Use [handoffs/TEMPLATE.md](handoffs/TEMPLATE.md) for factual updates.
+Use [handoffs/TEMPLATE.md](handoffs/TEMPLATE.md) for factual updates.
+
+## Gate 1 — passed 12 September 2026
+
+```
+$ python -m pytest tests/ -q
+29 passed in 1.43s
+```
+
+Threshold 0.001 m. Reference is DOP853 on the Cartesian two-body ODE at `rtol=1e-13`, `atol=1e-9`, 400 samples over one period; the looser `rtol=1e-12` reference differs from it by more than the propagator does, so the tight reference is what the comparison is against.
+
+| Check | Observed |
+|---|---|
+| Reference, circular / eccentric e=0.01 | 1.155e-06 m / 1.474e-06 m |
+| Reference convergence spread, rtol 1e-12 vs 1e-13 | 1.361e-05 m / 1.751e-05 m |
+| Backward 6 h then forward | 8.158e-07 m |
+| Circular closure after one period | 6.975e-09 m |
+| Energy drift over 6 h, relative | 4.080e-14 / 3.776e-14 |
+| Angular-momentum drift over 6 h, relative | 2.011e-14 / 1.879e-14 |
+| Zero impulse vs baseline | 3.084e-07 m |
+| Non-zero impulse, position jump at burn | exactly 0.0 m |
+| Non-zero impulse, applied delta-v error | 3.918e-13 m/s |
+
+Encounter detection: constructed encounters recovered to ≤ 3.5e-10 s and ≤ 4.3e-08 m; the 5 s search grid matches a 0.5 s grid to printed precision at relative speeds 90 / 400 / 1500 m/s **on this scenario family**, which is a validated sampling choice and not a general completeness claim; horizon and burn-epoch boundaries classified correctly; a burn was shown to create a 300 m encounter where the baseline is 10114.3 m.
+
+Gates 2 and 3 remain unmet. Detail and the untested surface are in [handoffs/A_PHYSICS.md](handoffs/A_PHYSICS.md).

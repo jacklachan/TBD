@@ -129,3 +129,66 @@ Physics stabilizes at hour seven. Hand over to C with the CLI transcript, then j
 ## Update duties
 
 After each work block, append to this file using [TEMPLATE.md](TEMPLATE.md): changed paths, commands run and their real output, checks that failed or were not run, contract changes, next concrete action. Put gate evidence in STATE.md — actual numbers, not "passed".
+
+---
+
+## [2026-09-12] — Builder A — numerical core and Gate 1
+
+**Changed paths**
+
+- `pyproject.toml` — numpy/scipy deps, pytest `pythonpath`/`testpaths`
+- `backend/core/kepler.py` — Stumpff, universal-variable `propagate`, energy/angular-momentum/period helpers, `PropagationError`
+- `backend/core/trajectory.py` — `Arc`, `Impulse`, `Trajectory`, `direction_unit_vector`, `impulse_vector`
+- `backend/core/encounters.py` — segmented scan, brentq refinement on range rate, `Encounter`, `min_separation_series`
+- `tests/test_kepler.py` — Gate 1, 18 tests
+- `tests/test_encounters.py` — 11 tests
+
+**Commands run**
+
+```
+$ python -m pytest tests/ -q
+29 passed in 1.43s
+```
+
+**Gate 1 — measured, threshold 0.001 m**
+
+| Check | Observed |
+|---|---|
+| DOP853 reference, circular, one period | 1.155e-06 m |
+| DOP853 reference, eccentric e=0.01, one period | 1.474e-06 m |
+| Reference convergence, rtol 1e-12 vs 1e-13 | 1.361e-05 m / 1.751e-05 m |
+| Backward 6 h then forward | 8.158e-07 m |
+| Circular closure after one period | 6.975e-09 m position, 5.349e-12 m/s velocity |
+| Energy drift over 6 h (circular / eccentric) | 4.080e-14 / 3.776e-14 relative |
+| Angular-momentum drift over 6 h | 2.011e-14 / 1.879e-14 relative |
+| Zero impulse vs baseline | 3.084e-07 m |
+| Non-zero impulse, position jump at burn | exactly 0.0 m |
+| Non-zero impulse, applied delta-v error | 3.918e-13 m/s |
+
+Reference settings: DOP853, `rtol=1e-13`, `atol=1e-9`, 400 samples over one period. The looser `rtol=1e-12` reference differs from it by more than the propagator does, so the tight reference is what the comparison is against.
+
+**Encounter detection — measured**
+
+- Constructed encounters recovered at three times and miss distances (120 m, 2500 m, 45 m): time error ≤ 3.5e-10 s, distance error ≤ 4.3e-08 m.
+- 5 s search grid vs 0.5 s grid, relative speeds 90 / 400 / 1500 m/s: identical to printed precision. This validates the grid **on this scenario family only** and is not a general completeness claim.
+- Horizon-edge minimum → `HORIZON`. Minimum at a burn epoch → `BURN`, recovered to 1.0 m. Burn epoch not double-reported.
+- Burn-creates-new-encounter mechanism exercised directly: burned trajectory 300.0 m at 19800 s where the baseline is 10114.3 m.
+
+**Not verified / not run**
+
+- No scenario generator, candidate grid, search, or verifier yet. Gate 2 is untouched.
+- No seed TLE fetched; `scenarios/` does not exist. `core/` currently has no real-catalogue input.
+- `backend/domain/models.py` deliberately not written — it is the hour-0 three-builder agreement. `core/` stays pure and returns a frozen `Encounter` dataclass whose field names match CONTRACTS.md exactly, so the Pydantic model maps one-to-one.
+- Only the elliptic branch of `propagate` is exercised. Unbound states raise; the hyperbolic Stumpff branch is implemented but untested.
+
+**Contract changes**
+
+None. `find_encounters` gained a `debris_object_id` argument so it can populate `Encounter.other_object_id`, and a `start_s` default — both additive to the CONTRACTS.md signature.
+
+**Performance note for search.py**
+
+A 25-option sweep against both debris objects takes 0.816 s today because `find_encounters` re-samples the debris trajectory for every candidate. Precompute the two unmodified debris sample sets once per scenario version, as the role brief says; only the manoeuvred satellite needs recomputing.
+
+**Next concrete action**
+
+Fetch the seed TLE per DATA.md, write `scenarios/gen.py` backward construction with its assertions, and target the primary encounter at 16200 s.
