@@ -201,10 +201,25 @@ export function useWorkspace() {
         await refresh(await api.ingestTle(text, satelliteIndex));
         setTime(0);
       }),
+    // Retry has to be able to recover, not just repeat. The store is in memory,
+    // so a restarted server -- which is what an idle Hugging Face Space does --
+    // has no record of the case this tab is holding, and re-fetching it would
+    // 404 forever with no way out but a browser reload. A case that is gone is
+    // reopened on the same scenario instead.
     retry: () =>
       snapshot
         ? action("Refreshing case", async () => {
-            await refresh(await api.getCase(snapshot.case_id), true);
+            try {
+              await refresh(await api.getCase(snapshot.case_id), true);
+            } catch (reason) {
+              if (!(reason instanceof ApiError) || reason.status !== 404) throw reason;
+              await refresh(await api.createCase(snapshot.scenario_id));
+              setTime(0);
+              setNotice(
+                "That case was no longer on the server, so this is a fresh one " +
+                  "on the same scenario.",
+              );
+            }
           })
         : connect(),
     setBudget: (value: number) =>

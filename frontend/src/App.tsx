@@ -359,7 +359,10 @@ export default function App() {
         </div>
       </header>
 
-      <main>
+      {/* The case this view is showing. Exposed so a browser test can name it
+          and so anyone inspecting the page can match what is on screen to a
+          row in the store without opening the network panel. */}
+      <main data-case-id={snapshot?.case_id ?? ""}>
         <div className="page-heading">
           <div>
             <div className="eyebrow">MISSION CONTROL / SIMULATION</div>

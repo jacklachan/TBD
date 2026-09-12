@@ -148,3 +148,50 @@ test("elements that cannot be read are refused before a case is created", async 
     page.getByRole("button", { name: /Screen these objects/ }),
   ).toBeDisabled();
 });
+
+test("a case the server has forgotten is reopened, not retried forever", async ({
+  page,
+}) => {
+  // What an idle Hugging Face Space does to an open tab: the store is in
+  // memory, so a restart leaves this tab holding a case that no longer exists.
+  // Retrying it used to 404 forever, with no way out but a browser reload.
+  await ready(page);
+
+  const stale = await page.evaluate(() =>
+    (document.querySelector("[data-case-id]") as HTMLElement | null)?.dataset
+      .caseId ?? "",
+  );
+  expect(stale).toMatch(/^case_/);
+
+  // Everything about the stale case is gone; a case opened afterwards is fine.
+  let failedOnce = false;
+  await page.route(
+    (url) => url.pathname.startsWith(`/cases/${stale}`),
+    async (route) => {
+      failedOnce = true;
+      await route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({
+          detail: { error: "NOT_FOUND", message: "gone" },
+        }),
+      });
+    },
+  );
+
+  // Any action against it now fails, which is what the operator sees first.
+  // Reset is used because it always reaches the server for this case, where
+  // selecting an option can be answered from the bundle already loaded.
+  await page.getByRole("button", { name: "Reset case", exact: true }).click();
+  const banner = page.locator(".notice.danger");
+  await expect(banner).toBeVisible();
+  expect(failedOnce).toBe(true);
+
+  await banner.getByRole("button", { name: "Retry", exact: true }).click();
+
+  // Recovered on a fresh case rather than stuck on the missing one.
+  await expect(page.locator(".notice.danger")).toHaveCount(0, { timeout: 25_000 });
+  await expect(page.getByRole("button", { name: /Do nothing/ })).toBeEnabled();
+  await expect(page.locator(".notice")).toContainText(/no longer on the server/i);
+  await expect(page.locator(".metric-card .metric")).toContainText("133.7");
+});

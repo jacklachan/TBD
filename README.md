@@ -123,7 +123,7 @@ Every figure below is printed by a test or a script in this repository, not quot
 | Whole decision chain, no model | 1.24 s for 25 options, five validations and a verified answer |
 | Ten people opening the workspace at once | every request served, nothing refused |
 
-264 Python tests, 9 browser tests, 7 frontend unit tests. `python scripts/diagnose.py` runs the pre-demo gate and exits non-zero if anything is broken.
+264 Python tests, 10 browser tests, 7 frontend unit tests. `python scripts/diagnose.py` runs the pre-demo gate and exits non-zero if anything is broken.
 
 Full evidence, including what is still unverified, is in [Handoff/STATE.md](Handoff/STATE.md).
 
