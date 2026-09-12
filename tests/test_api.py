@@ -1002,3 +1002,29 @@ def test_a_memory_failure_never_fails_a_completed_run():
     run = run_plan(client, case)
     assert run["status"] == "DONE", run
     assert run["result"]["status"] == "PROPOSAL_READY"
+
+
+def test_the_memory_hit_reaches_the_operator_trace():
+    """The prior case has to be visible, not merely stored.
+
+    The planner emits a `memory` event when retrieval returns hits, and the
+    workspace renders every event's type and summary. Before a run filed
+    anything there were never any hits, so that event could never fire and the
+    trace never mentioned a prior case. This asserts the whole path: record,
+    retrieve, event, persisted snapshot.
+    """
+    from backend.agent.memory import CaseMemory
+
+    client = make_client(memory=CaseMemory())
+
+    first = new_case(client)
+    run_plan(client, first)
+
+    second = new_case(client)
+    run_plan(client, second)
+
+    events = client.get(f"/cases/{second['case_id']}").json()["events"]
+    memory_events = [e for e in events if e["event_type"] == "memory"]
+    assert memory_events, "the second run's trace never mentioned the earlier case"
+    assert first["case_id"] in memory_events[0]["summary"]
+    assert memory_events[0]["details"]["memory_ids"]

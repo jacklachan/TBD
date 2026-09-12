@@ -405,6 +405,30 @@ listener, and the context-lost handler all released on unmount); the one broad
 arguments, no TODO/FIXME markers, and no unreferenced TypeScript exports anywhere
 in `frontend/src`.
 
-**Still open:** no live Gemini run in this checkout; `frontend/dist` is unbuilt
-here, which is the single failure `scripts/diagnose.py` reports; the memory hit is
-recorded and retrieved but never shown in the UI.
+**Frontend built and exercised, same day.** `npm ci && npm run build` succeeds;
+7 frontend unit tests pass; the built bundle was driven in Chromium against
+`uvicorn backend.api:app` at 1440x960 and 390x844 — two canvases, real figures,
+**no console errors and no horizontal overflow at either width**. `frontend/dist`
+is a build artefact and stays gitignored; `diagnose.py` asking for it in a fresh
+checkout is correct behaviour, not a defect. With it built:
+
+```
+$ python scripts/diagnose.py
+No failures. Demo is safe to show.
+2 warning(s) - things you can demo without:
+  - model access: no GEMINI_API_KEY
+  - server on :8000: not running
+```
+
+Three.js is already code-split into its own lazily-loaded chunk: initial load is
+~105 KB gzipped (98 KB JS + 8 KB CSS), with the 143 KB scene chunk fetched only
+when the 3D view mounts. Vite's 500 KB warning names that chunk and is expected.
+
+**Correction:** an earlier line here said the memory hit is never shown in the
+UI. That was wrong — the workspace renders every event, including the planner's
+`memory` event. The gap was that retrieval had nothing to report, which the fix
+above resolves, and a test now asserts the prior case's ID reaches the trace.
+
+**Still open:** no live Gemini run in this checkout, so the AI planner is
+unexercised here and the workspace shows it offline; `relevant_prior_cases` is
+structured for the model but reaches the operator only as the event sentence.

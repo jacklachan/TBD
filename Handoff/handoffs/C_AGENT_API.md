@@ -522,8 +522,20 @@ and is **not** dead — it is a registered `@app.middleware("http")`. Left alone
 - None. No endpoint, payload, tool declaration or stored schema changed. The
   `case_memory` table gains rows it was always shaped to hold.
 
+**Correction to the line above, same day**
+
+That next action was written from a wrong reading and is withdrawn. The
+workspace *does* show it: `App.tsx` renders every event's type and summary, and
+the planner emits a `memory` event naming the prior cases. What was missing was
+not the display — it was that retrieval never returned anything for the event to
+report, so the row could never appear.
+
+`test_the_memory_hit_reaches_the_operator_trace` now asserts the whole path on a
+second run: record, retrieve, event, persisted snapshot, with the first case's
+ID in the summary the UI prints.
+
 **Next concrete action**
 
-Surface the memory hit in the UI. The briefing carries `relevant_prior_cases`
-and the planner records the ID, but the workspace never shows the operator that
-a previous case informed this one.
+`relevant_prior_cases` reaches the model in the briefing but is not rendered as
+structured data anywhere — only as the event sentence. If an operator should be
+able to open the prior case, that needs a field in the snapshot, not a string.
