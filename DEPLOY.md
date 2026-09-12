@@ -44,6 +44,8 @@ Check it landed: `GET /health` reports `"model_access": true` when a key is visi
 
 **The filesystem is ephemeral.** Anything written outside persistent storage disappears on restart or rebuild. `DESK_DB` therefore defaults to `:memory:`, which is honest about what you get. If you attach persistent storage, set `DESK_DB=/data/desk.sqlite`. Do not point it at a path in the image — it will look like it works until the first restart.
 
+**The case store is bounded and self-clearing.** Every page load opens a case, so the store would otherwise grow without limit or stop accepting new ones. At its cap it retires the oldest cases nobody acted on; a case with an execution is the record of a simulated decision and is kept regardless of age. Nothing here is a durable record, so this costs nothing and stops the workspace dying after a few hundred visits.
+
 **One worker, deliberately.** Run state lives in memory in `AppState.runs`. A second worker would answer `GET /runs/{id}` for runs it has never seen, and the UI would poll forever. The `Dockerfile` pins `--workers 1`. If you ever need more, make runs durable first; do not just raise the number.
 
 **Free CPU Spaces sleep** after inactivity and take some seconds to wake. The first request after a sleep is slow through no fault of the app. If you are demoing live, wake it a minute beforehand.

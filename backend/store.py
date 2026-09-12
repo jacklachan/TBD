@@ -245,6 +245,34 @@ class Store:
     # ----------------------------------------------------------------- cases
 
     @_synchronized
+    def _evict_oldest(self, wanted: int) -> int:
+        """Retire up to ``wanted`` of the oldest cases nobody acted on.
+
+        A case with an execution is the record of a simulated decision somebody
+        made and may still be reading, so it is never retired by age. Everything
+        else is a page that was opened once.
+
+        Returns how many were actually removed, which can be fewer than asked
+        for and can be zero.
+        """
+        rows = self._connection.execute(
+            "SELECT case_id FROM cases WHERE case_id NOT IN"
+            " (SELECT case_id FROM executions)"
+            " ORDER BY created_at_utc ASC, rowid ASC LIMIT ?",
+            (int(wanted),),
+        ).fetchall()
+        doomed = [row[0] for row in rows]
+        if not doomed:
+            return 0
+
+        marks = ",".join("?" * len(doomed))
+        with self._connection:
+            for table in ("events", "validations", "proposals", "cases"):
+                self._connection.execute(
+                    f"DELETE FROM {table} WHERE case_id IN ({marks})", doomed
+                )
+        return len(doomed)
+
     def create_case(
         self,
         document: dict,
@@ -256,7 +284,18 @@ class Store:
         if max_cases is not None:
             count = self._connection.execute("SELECT COUNT(*) FROM cases").fetchone()[0]
             if count >= max_cases:
-                raise CapacityError("The demo has reached its case limit. Archive the store before starting another session.")
+                # Every page load opens a case, so a fixed wall meant the
+                # workspace stopped working for everyone after a few hundred
+                # visits and stayed broken until someone restarted the process.
+                # Dropping the oldest untouched cases is the right trade for
+                # demo state: nothing here is a record of anything, and a case
+                # somebody acted on is kept regardless of age.
+                count -= self._evict_oldest(max_cases // 4)
+            if count >= max_cases:
+                raise CapacityError(
+                    "Every case in the store has been acted on, so none can be "
+                    "retired. Reset one before opening another."
+                )
         row_id = case_id or f"case_{uuid.uuid4().hex[:10]}"
         created = _now()
         self._connection.execute(

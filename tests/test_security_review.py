@@ -169,12 +169,44 @@ def test_a_completed_simulation_requires_reset_before_planning_again():
     assert response.status_code == 409
 
 
-def test_case_creation_is_bounded(monkeypatch):
-    monkeypatch.setattr("backend.api.MAX_CASES", 2, raising=False)
+def test_the_store_retires_old_cases_rather_than_shutting_the_door(monkeypatch):
+    """Every page load opens a case, so a fixed wall breaks the demo for good.
+
+    The store is bounded, but reaching the bound retires the oldest pages nobody
+    acted on instead of refusing everyone from then on.
+    """
+    monkeypatch.setattr("backend.api.MAX_CASES", 8, raising=False)
     client = make_client()
-    new_case(client)
-    new_case(client)
-    assert client.post("/cases", json={"scenario_id": "primary"}).status_code == 429
+    opened = [new_case(client)["case_id"] for _ in range(8)]
+
+    fresh = client.post("/cases", json={"scenario_id": "primary"})
+    assert fresh.status_code == 201, fresh.text
+
+    # The oldest went; the newest are still readable.
+    assert client.get(f"/cases/{opened[0]}").status_code == 404
+    assert client.get(f"/cases/{opened[-1]}").status_code == 200
+    assert client.get(f"/cases/{fresh.json()['case_id']}").status_code == 200
+
+
+def test_a_case_someone_acted_on_is_never_retired_by_age(monkeypatch):
+    """An executed case is the record of a decision and may still be open."""
+    monkeypatch.setattr("backend.api.MAX_CASES", 4, raising=False)
+    client = make_client()
+
+    case = new_case(client)
+    executed = case["case_id"]
+    run_plan(client, case)
+    snapshot = client.get(f"/cases/{executed}").json()
+    approved = approve(client, executed, snapshot, key="retention-test")
+    assert approved.status_code in (200, 201), approved.text
+
+    # Open enough pages to push well past the bound several times over.
+    for _ in range(12):
+        assert client.post("/cases", json={"scenario_id": "primary"}).status_code == 201
+
+    snapshot = client.get(f"/cases/{executed}")
+    assert snapshot.status_code == 200, "the executed case was retired"
+    assert snapshot.json()["execution"] is not None
 
 
 def test_every_endpoint_that_costs_something_is_behind_the_guard():
