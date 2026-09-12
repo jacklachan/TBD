@@ -8,7 +8,7 @@ Spaces reads configuration from YAML frontmatter at the very top of `README.md`.
 
 ```yaml
 ---
-title: Satellite Demo
+title: Orion West
 emoji: 🛰️
 colorFrom: indigo
 colorTo: blue

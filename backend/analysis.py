@@ -11,7 +11,14 @@ def analyze(session: CaseSession) -> dict:
     started = perf_counter()
     evaluate_all(session)
     search = session.search_result
-    assert search is not None
+    if search is None:
+        # An assert here would vanish under `python -O` and the next line would
+        # fail as an AttributeError on None, which says nothing about what went
+        # wrong. evaluate_all setting no result is a bug, so name it as one.
+        raise RuntimeError(
+            "evaluate_all returned without setting a search result; there is "
+            "nothing to compare"
+        )
     checks = {}
     recommended = None
     # Verify the baseline too: it is the right answer for a clear scenario.

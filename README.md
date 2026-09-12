@@ -66,6 +66,15 @@ python -m pytest tests/ -q    # 254 tests
 python scripts/demo_pipeline.py       # the whole decision chain, no UI, no model
 uvicorn backend.api:app --port 8000   # the API
 python scripts/live_api_check.py      # 20 checks end to end against the live model
+python scripts/diagnose.py            # pre-demo gate: data, numerics, build, tests
+```
+
+Two narrated terminal walkthroughs, for showing the argument without the UI:
+
+```bash
+python scripts/collision_demo.py --offline   # a strike, and the grid's poor answer
+python scripts/collision_demo.py             # + the burn the agent designs instead
+python scripts/interop_demo.py               # a record issued, checked, and tampered with
 ```
 
 Export a decision as JSON, Markdown or a CCSDS-shaped CDM:
