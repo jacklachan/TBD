@@ -352,7 +352,7 @@ def create_app(
         state.executor.shutdown(wait=True, cancel_futures=True)
         state.store.close()
 
-    app = FastAPI(title="Satellite Demo", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Orion West", version="0.1.0", lifespan=lifespan)
 
     @app.exception_handler(CapacityError)
     async def capacity_error(request, exc):

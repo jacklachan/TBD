@@ -1,5 +1,5 @@
 ---
-title: Satellite Demo
+title: Orion West
 emoji: 🛰️
 colorFrom: indigo
 colorTo: blue
@@ -8,7 +8,7 @@ app_port: 7860
 pinned: false
 ---
 
-# Satellite Demo
+# Orion West
 
 A satellite is predicted to pass too close to a piece of debris. This decides what to do about it, and shows its working.
 

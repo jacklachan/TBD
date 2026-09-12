@@ -215,7 +215,7 @@ export default function App() {
             e.preventDefault();
             setPanel(null);
           }}
-          aria-label="Satellite Demo workspace"
+          aria-label="Orion West workspace"
         >
           <span className="brand-mark">
             <span />
@@ -223,7 +223,7 @@ export default function App() {
             <span />
           </span>
           <span>
-            Satellite Demo<small>ORBITAL DECISION WORKSPACE</small>
+            Orion West<small>ORBITAL DECISION WORKSPACE</small>
           </span>
         </a>
         <nav aria-label="Workspace">
@@ -1136,7 +1136,7 @@ export default function App() {
           onClose={() => setPanel(null)}
         >
           <p className="dialog-intro">
-            Satellite Demo is a temporary project name. One spacecraft, two
+            Orion West is a working name. One spacecraft, two
             synthetic debris objects, six simulated hours.
           </p>
           <dl className="provenance-list">

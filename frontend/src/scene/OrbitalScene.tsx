@@ -52,9 +52,9 @@ export function OrbitalScene(props: Props) {
     controls.dampingFactor = 0.1;
     controls.enablePan = false;
     controls.rotateSpeed = 0.6;
-    const ambient = new THREE.HemisphereLight("#bedcf1", "#101822", 1.35);
+    const ambient = new THREE.HemisphereLight("#f3d6a8", "#1a1009", 1.2);
     scene.add(ambient);
-    const sunlight = new THREE.DirectionalLight("#fff4db", 3.8);
+    const sunlight = new THREE.DirectionalLight("#ffe6bb", 3.9);
     sunlight.position.set(-3, 5, 4);
     scene.add(sunlight);
     let disposed = false;
@@ -63,13 +63,30 @@ export function OrbitalScene(props: Props) {
     });
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    const earthMaterial = new THREE.MeshStandardMaterial({
+      map: texture,
+      roughness: 1,
+      metalness: 0,
+    });
+    // Duotone the globe rather than tinting it. A colour multiply leaves the
+    // oceans muddy blue, which fights the amber palette; mapping luminance
+    // through a warm ramp gives a true sepia, so the planet belongs to the same
+    // image as the panels. Appearance only -- geometry is untouched.
+    earthMaterial.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>
+         float lum = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+         diffuseColor.rgb = mix(
+           vec3(0.085, 0.055, 0.042),
+           vec3(1.0, 0.80, 0.52),
+           pow(clamp(lum, 0.0, 1.0), 0.82)
+         );`,
+      );
+    };
     const earth = new THREE.Mesh(
       new THREE.SphereGeometry(1, 96, 64),
-      new THREE.MeshStandardMaterial({
-        map: texture,
-        roughness: 1,
-        metalness: 0,
-      }),
+      earthMaterial,
     );
     earth.rotation.y = 1.25; // Illustrative orientation, no geographic ground-track claim.
     scene.add(earth);
@@ -80,7 +97,7 @@ export function OrbitalScene(props: Props) {
         transparent: true,
         depthWrite: false,
         side: THREE.BackSide,
-        uniforms: { tint: { value: new THREE.Color("#62a4c9") } },
+        uniforms: { tint: { value: new THREE.Color("#f0a93b") } },
         vertexShader:
           "varying vec3 n; varying vec3 v; void main(){vec4 p=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);v=normalize(-p.xyz);gl_Position=projectionMatrix*p;}",
         fragmentShader:
