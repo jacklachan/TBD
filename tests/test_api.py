@@ -578,3 +578,108 @@ def test_health_reports_whether_a_key_is_visible():
     payload = make_client().get("/health").json()
     assert "model_access" in payload
     assert payload["planner_model"]
+
+
+# --------------------------------------------------------------------------
+# A scenario ID is a filesystem path component
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "scenario_id",
+    [
+        "../data/anything",
+        "../../etc/hostname",
+        "variants/../../README",
+        "primary/../primary",
+        "/etc/hostname",
+        "primary.json",
+        "",
+        "PRIMARY",
+    ],
+)
+def test_a_scenario_id_that_is_not_a_fixture_name_is_refused(scenario_id, tmp_path):
+    """The ID is interpolated into a path, so anything but a fixture name is a 404.
+
+    Without this a request could name a traversal sequence and have any JSON
+    file on disk loaded and served as a scenario.
+    """
+    planted = tmp_path / "data"
+    planted.mkdir()
+    (planted / "anything.json").write_text(
+        PRIMARY_PATH.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+
+    client = make_client()
+    response = client.post("/cases", json={"scenario_id": scenario_id})
+    assert response.status_code == 404, response.text
+
+
+def test_the_real_fixture_names_still_resolve():
+    client = make_client()
+    for scenario_id in ("primary", "no_encounter", "simple_conflict", "no_feasible"):
+        assert new_case(client, scenario_id)["scenario_id"] == scenario_id
+
+
+# --------------------------------------------------------------------------
+# Concurrency on the shared store
+# --------------------------------------------------------------------------
+
+
+def test_concurrent_event_appends_do_not_lose_a_trace():
+    """Runs execute on a worker pool and share one connection.
+
+    ``append_events`` reads the last sequence number and then inserts. Without
+    serialisation two runs on one case read the same number, and the loser's
+    whole trace is rejected by the UNIQUE constraint -- the events vanish and
+    the run is reported FAILED for a reason that has nothing to do with it.
+    """
+    import threading
+
+    from backend.agent.planner import CaseEvent
+    from backend.planning.policy import policy_from_document
+
+    document = json.loads(PRIMARY_PATH.read_text(encoding="utf-8"))
+    store = Store(":memory:")
+    case = store.create_case(document, policy_from_document(document))
+
+    writers, failures = 8, []
+    per_writer = 20
+
+    def append(index: int) -> None:
+        try:
+            store.append_events(
+                case.case_id,
+                f"run_{index}",
+                [
+                    CaseEvent(sequence=n, event_type="t", summary="s", duration_ms=0.0)
+                    for n in range(per_writer)
+                ],
+            )
+        except Exception as exc:  # noqa: BLE001
+            failures.append(f"{type(exc).__name__}: {exc}")
+
+    threads = [threading.Thread(target=append, args=(i,)) for i in range(writers)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert not failures, failures
+    sequences = [event["sequence"] for event in store.events(case.case_id)]
+    assert len(sequences) == writers * per_writer
+    assert sequences == list(range(1, writers * per_writer + 1))
+
+
+def test_the_run_reason_is_readable_the_moment_the_run_reads_failed():
+    """A poller that sees FAILED must see why in the same response."""
+    def exploding():
+        raise RuntimeError("provider construction blew up")
+
+    app = create_app(store=Store(":memory:"), provider_factory=exploding)
+    client = TestClient(app)
+    case = new_case(client)
+    run = run_plan(client, case)
+
+    assert run["status"] == "FAILED"
+    assert "provider construction blew up" in run["error"]

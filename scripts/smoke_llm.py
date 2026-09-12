@@ -2,15 +2,16 @@
 
     export GEMINI_API_KEY=...
     python scripts/smoke_llm.py
-    python scripts/smoke_llm.py --model gemini-2.5-pro
+    python scripts/smoke_llm.py --model some-other-model
 
 A text-only reply does NOT pass. The point is to prove the model returns
 structured function-call arguments and then continues sensibly after being given
 a result -- that is the mechanism the whole planner depends on.
 
 Record the model ID that worked, the latency, and every attempt that failed in
-Handoff/handoffs/C_AGENT_API.md. Until this passes, every agent test in the
-suite runs against ScriptedProvider and proves only that the loop is correct.
+Handoff/handoffs/C_AGENT_API.md. Model IDs go stale -- a retired one answers 404
+-- so rerun this rather than trusting the default. Every agent test in the suite
+runs against ScriptedProvider and proves only that the loop is correct.
 """
 
 from __future__ import annotations
@@ -36,7 +37,11 @@ SYSTEM = (
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", default=None, help="defaults to PLANNER_MODEL or gemini-2.5-flash")
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="defaults to PLANNER_MODEL, then the built-in default in backend/config.py",
+    )
     parser.add_argument("--temperature", type=float, default=0.0)
     args = parser.parse_args()
     model = args.model or planner_model()

@@ -205,3 +205,82 @@ The model validated three options from the same 0.10 m/s tier and exhausted its 
 Backend ~1.2 s, model ~15.4 s, full loop **~16.6 s**. Repeat backend runs are 0.155 s with the warm search cache. The infeasible path explores more and takes ~30 s.
 
 **The ten-second target is not met and will not be with five sequential turns on this model.** Report the measured number and stream events so the screen is never dead, or merge the briefing into the first evaluate for about 2 s. Do not put ten seconds on a slide.
+
+
+## Hardening and performance pass — 12 September 2026
+
+```
+$ python -m pytest tests/ -q
+168 passed, 2 warnings in 75.97s
+
+$ python scenarios/gen.py --check
+--check: all fixtures built and verified; nothing written.
+
+$ python scripts/demo_pipeline.py
+OUTCOME    verified option t30_ret_200
+           rejected on the way: t30_ret_100, t15_ret_100, t45_ret_100, t60_ret_100
+           1.28 s total
+```
+
+No gate status changes. No contract changes. Every committed fixture rebuilds to
+the same numbers, so nothing recorded above this section is superseded.
+
+### Three defects found and fixed, each reproduced first
+
+| Defect | Evidence before the fix |
+|---|---|
+| `scenario_id` was interpolated into a filesystem path unchecked | `POST /cases {"scenario_id": "../data/evil"}` returned **201** and served an arbitrary JSON file from disk as a scenario |
+| `Store.append_events` read the sequence number and then inserted, on a connection shared by four worker threads | eight concurrent writers of 20 events: **9 of 160 events survived**, the rest lost to `UNIQUE constraint failed`, and each losing run reported `FAILED` for an unrelated reason |
+| The Gemini API key travelled in the query string | a key in a URL is a key in proxy logs, browser history and error reports |
+
+Also fixed: the search cache evicted without synchronisation; a `FAILED` run was
+observable before its error message was written; the run registry grew without
+bound; the verifier partitioned only on the satellite's burn epochs while
+documenting that it partitioned on every one; the planner proposed whichever
+option was validated last rather than the best one.
+
+### Performance, measured
+
+`scripts/demo_pipeline.py --json`, best of three runs, before and after on the
+same machine:
+
+| | Before | After |
+|---|---|---|
+| 25-option search | 1.109 s | **0.595 s** |
+| Full Gate 2 chain | 1.885 s | **1.239 s** |
+| Test suite, the same 145 tests | 115.6 s | **74.1 s** |
+
+Two changes account for it. Per-root `brentq` refinement in the search became one
+batched safeguarded Newton solve on the range rate, which converges seven
+brackets in six evaluations; and the verifier's 21,601-sample scan stopped
+stepping through Python. Detail and the accuracy comparison are in
+[handoffs/A_PHYSICS.md](handoffs/A_PHYSICS.md).
+
+Accuracy did not regress: constructed-encounter time error improved from 3.5e-10
+to 2.5e-10 s, verifier-versus-search distance agreement from 3.559e-08 to
+3.376e-08 m, and the signature case still reports 133.698 m, 2016.926 m and
+523.170 m exactly as recorded above.
+
+### Latency: predicted, not measured
+
+The briefing and the screening are now computed before the first model call
+instead of being fetched as two sequential round trips. A test shows the same
+case reaching the same proposal in **2 model calls instead of 5**.
+
+At the ~3 s per call measured for Gate 3, that predicts roughly 6 s off the
+~16.6 s loop. **That is arithmetic on an earlier measurement, not a new
+measurement** — there is no key in this environment and no live run was made.
+The ten-second target is still not verified as met, and the earlier instruction
+stands: report the measured number, not a predicted one.
+
+### Still open
+
+- **No frontend.** `frontend/src/contracts.ts` and `api.ts` exist; there is no
+  React application, no chart and no 3D scene. This is the largest gap between
+  the plan and the repository.
+- `backend/domain/models.py` still does not exist. The types live in the modules
+  that own them and agree with CONTRACTS.md by review, not by a shared import.
+- No live model call in this session, so Gate 3 evidence is unchanged from the
+  entry above.
+- No authentication and no rate limiting on the API. Known and recorded in
+  DEPLOY.md; fine for a judged demo, not for a public URL.

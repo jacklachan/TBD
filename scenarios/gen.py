@@ -39,7 +39,6 @@ from backend.core.kepler import (  # noqa: E402
     propagate,
 )
 from backend.core.trajectory import Trajectory  # noqa: E402
-from backend.planning.candidates import BASELINE_ID  # noqa: E402
 from backend.planning.search import (  # noqa: E402
     BurnWindow,
     Policy,

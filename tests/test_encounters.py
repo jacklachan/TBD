@@ -245,3 +245,61 @@ def test_min_to_any_envelope_matches_the_per_pair_series():
     assert all(series.shape == times.shape for series in pair.values())
     assert np.allclose(envelope, np.minimum(pair["DEB-1"], pair["DEB-2"]))
     assert float(np.min(envelope)) < 5000.0
+
+
+# --------------------------------------------------------------------------
+# Batched refinement
+# --------------------------------------------------------------------------
+
+
+def test_a_refined_time_does_not_depend_on_the_rest_of_its_batch():
+    """Every bracket in a segment is solved together, and that has to be invisible.
+
+    Solving them as a batch is what makes refinement cheap, but a shared
+    iteration count would make one option's reported encounter time depend on
+    how many other minima happened to sit in the same segment. Each root is
+    frozen when it converges, so the batched answer is bit-for-bit the answer
+    the bracket would have got on its own.
+    """
+    from backend.core.encounters import _refine_minima
+
+    sat = satellite()
+    deb = debris_passing_at(sat, 16200.0, 120.0, 150.0)
+
+    lo = np.array([16190.0, 16150.0, 16100.0, 16000.0])
+    hi = np.array([16210.0, 16250.0, 16300.0, 16400.0])
+
+    together, converged_together = _refine_minima(sat, deb, lo, hi)
+    assert converged_together.all()
+
+    for index in range(lo.size):
+        alone, converged_alone = _refine_minima(
+            sat, deb, lo[index : index + 1], hi[index : index + 1]
+        )
+        assert converged_alone.all()
+        assert alone[0] == together[index], (
+            f"bracket {index} moved by {abs(alone[0] - together[index]):.3e} s "
+            "depending on its batch"
+        )
+
+
+def test_refinement_lands_on_a_stationary_point_of_the_separation():
+    """The refined time is where the range rate is zero, not near it."""
+    from backend.core.encounters import _range_rate_and_slope, _refine_minima
+
+    sat = satellite()
+    deb = debris_passing_at(sat, 16200.0, 120.0, 150.0)
+
+    times, converged = _refine_minima(
+        sat, deb, np.array([16195.0]), np.array([16205.0])
+    )
+    assert converged.all()
+
+    range_rate, slope = _range_rate_and_slope(sat, deb, times)
+    print(
+        f"\n[stationary] t={times[0]:.9f} s, range rate {range_rate[0]:.3e} m^2/s, "
+        f"slope {slope[0]:.3e} m^2/s^2"
+    )
+    # Scaled by |dv|^2, which is what the range rate is measured against.
+    assert abs(range_rate[0]) < 1e-6 * slope[0]
+    assert slope[0] > 0.0, "a minimum has positive curvature"

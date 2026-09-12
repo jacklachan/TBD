@@ -348,3 +348,96 @@ Two consequences:
 **Next concrete action**
 
 `scripts/demo_pipeline.py`: scenario → 25 options → top-ranked provisional pick → verifier veto → verified alternative, printed on stdout as the Gate 2 artifact.
+
+---
+
+## [2026-09-12] — Builder A — batched encounter refinement, same answers, roughly twice the speed
+
+**Changed paths**
+
+- `backend/core/encounters.py` — local minima located with one vectorised comparison per segment; per-root `scipy.optimize.brentq` replaced by a batched safeguarded Newton solve on the range rate.
+- `backend/core/kepler.py` — `stumpff` takes a branch-free path when every psi is positive, which is every trajectory grid.
+- `backend/planning/verifier.py` — the 21,601-sample scan no longer steps through Python; segment edges now come from both trajectories, not only the satellite's.
+- `tests/test_encounters.py`, `tests/test_verifier.py` — three tests added for the properties the rewrite has to keep.
+
+**Why the solver changed**
+
+Profiling the 25-option search: 1.03 s of 1.51 s was inside `brentq`. Each of its
+~5 iterations per root evaluated the range rate at a single instant, and a
+single-element `propagate` is almost entirely NumPy call overhead. The work is
+the same for one root or forty, so all the brackets in a segment are now solved
+together — one propagation call per iteration for the whole batch.
+
+Newton rather than bisection because the derivative is available in closed form:
+`g(t) = dr·dv`, so `g' = |dv|² + dr·(a_sat − a_deb)` and both accelerations are
+the two-body term. It falls back to bisection whenever the Newton step would
+leave the live bracket, so the bracket still guarantees convergence. Seven
+brackets over six hours converge in **6 batched evaluations**.
+
+**Commands run**
+
+```
+$ python -m pytest tests/ -q
+168 passed, 2 warnings in 75.97s
+
+$ python scenarios/gen.py --check
+primary  (seed 1001, 57 attempt(s))
+  baseline_vs_primary_m            133.698
+  trap_candidate_id                t30_ret_100
+  trap_vs_primary_m                2,016.926
+  trap_vs_secondary_m              523.170
+  rescue_candidate_id              t30_ret_200
+--check: all fixtures built and verified; nothing written.
+```
+
+**Verified — the numbers did not move**
+
+Every committed fixture rebuilds to the same values, so the change is a speed
+change and not a physics change.
+
+| Check | Before | After |
+|---|---|---|
+| Constructed encounter, worst time error | 3.5e-10 s | **2.5e-10 s** |
+| Constructed encounter, worst distance error | 4.3e-08 m | **4.2e-08 m** |
+| Verifier vs search, worst distance | 3.559e-08 m | **3.376e-08 m** |
+| Verifier vs search, worst time | 1.328e-08 s | 1.370e-08 s |
+| 5 s grid vs 0.5 s grid, 90/400/1500 m/s | identical to printed precision | identical |
+| Gate 1 vs DOP853, circular / eccentric | 1.155e-06 / 1.474e-06 m | 1.132e-06 / 1.449e-06 m |
+
+Speed, `scripts/demo_pipeline.py --json`, best of three:
+
+| | Before | After |
+|---|---|---|
+| 25-option search | 1.109 s | **0.595 s** |
+| Full Gate 2 chain | 1.885 s | **1.239 s** |
+| Whole suite (the same 145 tests) | 115.6 s | **74.1 s** |
+
+`test_a_refined_time_does_not_depend_on_the_rest_of_its_batch` is the one that
+matters for trusting the batch: each root is frozen the moment it meets
+tolerance, so solving four brackets together gives bit-identical times to
+solving each alone. Without that, a candidate's reported encounter time would
+depend on how many other minima shared its segment.
+
+**Not verified / not run**
+
+- The 1e-9 s refinement tolerance is three orders tighter than anything
+  downstream compares against. It is not a claim about physical accuracy; the
+  model is still two-body with instantaneous impulses.
+- Coverage is unchanged and so is its caveat: a 5 s scan finding every minimum
+  is validated on this scenario family, not proved in general.
+- The debris-burn segment edge is a latent path. Debris is ballistic in every
+  current fixture, so the new test exercises `_segment_edges` and one screen
+  directly rather than through a scenario.
+- Still no `backend/domain/models.py`.
+
+**Contract changes**
+
+- None. `Encounter.method` now reads `safeguarded_newton_range_rate` instead of
+  `brentq_range_rate` for refined interior minima. It is a free-text provenance
+  label, not a typed field anything branches on; nothing reads it but the trace.
+
+**Next concrete action**
+
+If the search ever becomes hot again, the remaining duplication is that all 25
+candidates re-propagate the same debris object over the same 5 s grid; evaluate
+it once per scenario and slice per segment.

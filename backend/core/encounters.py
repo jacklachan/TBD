@@ -19,21 +19,26 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.optimize import brentq
 
-from backend.core.kepler import PropagationError
+from backend.core.kepler import MU_M3_S2, PropagationError
 from backend.core.trajectory import Trajectory
 
 BOUNDARY_INTERIOR = "INTERIOR"
 BOUNDARY_HORIZON = "HORIZON"
 BOUNDARY_BURN = "BURN"
 
-METHOD_REFINED = "brentq_range_rate"
+METHOD_REFINED = "safeguarded_newton_range_rate"
 METHOD_BOUNDARY = "segment_boundary"
 METHOD_UNREFINED = "grid_sample_unrefined"
 
 _TIME_DEDUPE_S = 1e-6
-_BRENTQ_XTOL_S = 1e-6
+
+# Refinement tolerance on the time of closest approach. Every bracket is
+# reduced to this width, which is three orders tighter than the 1e-3 s that
+# anything downstream compares against, and cheap here because all brackets are
+# solved together rather than one scalar solve at a time.
+_REFINE_XTOL_S = 1e-9
+_MAX_REFINE_ITER = 60
 
 
 @dataclass(frozen=True)
@@ -75,23 +80,91 @@ def _segment_samples(a: float, b: float, step_s: float) -> np.ndarray:
     return np.linspace(a, b, count, dtype=np.float64)
 
 
-def _range_rate(sat: Trajectory, deb: Trajectory, t: float) -> float:
-    """d/dt of half the squared separation: dr . dv. Zero at a stationary point."""
-    times = np.array([t], dtype=np.float64)
-    r_s, v_s = sat.states_at(times)
-    r_d, v_d = deb.states_at(times)
-    return float((r_s[0] - r_d[0]) @ (v_s[0] - v_d[0]))
-
-
-def _separation(sat: Trajectory, deb: Trajectory, t: float) -> tuple[float, float]:
-    """(separation, relative speed) at one time."""
-    times = np.array([t], dtype=np.float64)
+def _separations(
+    sat: Trajectory, deb: Trajectory, times: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """(separations, relative speeds) at many times, shape (N,) each."""
     r_s, v_s = sat.states_at(times)
     r_d, v_d = deb.states_at(times)
     return (
-        float(np.linalg.norm(r_s[0] - r_d[0])),
-        float(np.linalg.norm(v_s[0] - v_d[0])),
+        np.linalg.norm(r_s - r_d, axis=1),
+        np.linalg.norm(v_s - v_d, axis=1),
     )
+
+
+def _range_rate_and_slope(
+    sat: Trajectory, deb: Trajectory, times: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """g(t) = dr . dv and its exact derivative, elementwise.
+
+    g' = |dv|^2 + dr . (a_sat - a_deb), where each acceleration is the two-body
+    term the propagator itself integrates. Having the derivative in closed form
+    is what lets the refinement below converge quadratically instead of
+    bisecting, so a minimum costs a handful of batched evaluations.
+    """
+    r_s, v_s = sat.states_at(times)
+    r_d, v_d = deb.states_at(times)
+    dr = r_s - r_d
+    dv = v_s - v_d
+
+    a_s = -MU_M3_S2 * r_s / (np.linalg.norm(r_s, axis=1) ** 3)[:, None]
+    a_d = -MU_M3_S2 * r_d / (np.linalg.norm(r_d, axis=1) ** 3)[:, None]
+
+    return (
+        np.sum(dr * dv, axis=1),
+        np.sum(dv * dv, axis=1) + np.sum(dr * (a_s - a_d), axis=1),
+    )
+
+
+def _refine_minima(
+    sat: Trajectory, deb: Trajectory, t_lo: np.ndarray, t_hi: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Solve g(t) = 0 inside every bracket at once. Returns (times, converged).
+
+    Each bracket must satisfy g(t_lo) < 0 < g(t_hi), which is exactly the
+    condition the caller screens for. A Newton step is taken when it lands
+    strictly inside the live bracket and bisection otherwise, so convergence is
+    guaranteed by the bracket and fast in the ordinary case.
+
+    A root is frozen the moment it meets the tolerance and is dropped from the
+    batch. That matters for reproducibility: a candidate's reported time must
+    not depend on how many other minima happened to be solved alongside it.
+    """
+    lo = np.array(t_lo, dtype=np.float64, copy=True)
+    hi = np.array(t_hi, dtype=np.float64, copy=True)
+    t = 0.5 * (lo + hi)
+    active = np.ones(t.shape, dtype=bool)
+
+    for _ in range(_MAX_REFINE_ITER):
+        index = np.flatnonzero(active)
+        if index.size == 0:
+            break
+
+        current = t[index]
+        g, slope = _range_rate_and_slope(sat, deb, current)
+
+        # Keep the sign convention g(lo) < 0 < g(hi) as the bracket shrinks.
+        negative = g < 0.0
+        lo[index[negative]] = current[negative]
+        hi[index[~negative]] = current[~negative]
+
+        with np.errstate(divide="ignore", invalid="ignore"):
+            newton = current - g / slope
+        inside = (
+            np.isfinite(newton)
+            & (slope > 0.0)
+            & (newton > lo[index])
+            & (newton < hi[index])
+        )
+        step_to = np.where(inside, newton, 0.5 * (lo[index] + hi[index]))
+
+        converged = ((hi[index] - lo[index]) <= _REFINE_XTOL_S) | (
+            np.abs(step_to - current) <= _REFINE_XTOL_S
+        )
+        t[index] = step_to
+        active[index] = ~converged
+
+    return t, ~active
 
 
 def find_encounters(
@@ -132,61 +205,69 @@ def find_encounters(
         dr = r_s - r_d
         dv = v_s - v_d
         d2 = np.sum(dr * dr, axis=1)
+        g = np.sum(dr * dv, axis=1)
 
         n = times.size
 
-        # Interior local minima, refined on the range-rate sign change.
-        for i in range(1, n - 1):
-            if not (d2[i] <= d2[i - 1] and d2[i] <= d2[i + 1]):
-                continue
+        # Interior local minima, located across the whole segment at once and
+        # then refined in a single batch. Walking the samples one at a time and
+        # running a scalar root solve per minimum costs one propagation call per
+        # solver iteration; doing it this way costs one call per iteration for
+        # every minimum in the segment together.
+        interior = (
+            np.flatnonzero((d2[1:-1] <= d2[:-2]) & (d2[1:-1] <= d2[2:])) + 1
+            if n > 2
+            else np.empty(0, dtype=np.intp)
+        )
 
-            t_lo, t_hi = float(times[i - 1]), float(times[i + 1])
-            g_lo = float(dr[i - 1] @ dv[i - 1])
-            g_hi = float(dr[i + 1] @ dv[i + 1])
+        if interior.size:
+            tca = times[interior].astype(np.float64)
+            separation = np.sqrt(d2[interior])
+            speed = np.linalg.norm(dv[interior], axis=1)
+            refined = np.zeros(interior.shape, dtype=bool)
 
-            if g_lo < 0.0 < g_hi:
-                t_min = float(
-                    brentq(
-                        lambda t: _range_rate(
-                            satellite_trajectory, debris_trajectory, t
-                        ),
-                        t_lo,
-                        t_hi,
-                        xtol=_BRENTQ_XTOL_S,
+            bracketed = (g[interior - 1] < 0.0) & (g[interior + 1] > 0.0)
+            refine_at = interior[bracketed]
+
+            if refine_at.size:
+                root_t, converged = _refine_minima(
+                    satellite_trajectory,
+                    debris_trajectory,
+                    times[refine_at - 1],
+                    times[refine_at + 1],
+                )
+                root_sep, root_speed = _separations(
+                    satellite_trajectory, debris_trajectory, root_t
+                )
+                # A refined minimum must sit below the bracket it came from. If
+                # it does not, the bracket held something other than a simple
+                # minimum and the time is not trustworthy.
+                accepted = (
+                    converged
+                    & (root_sep <= np.sqrt(d2[refine_at - 1]))
+                    & (root_sep <= np.sqrt(d2[refine_at + 1]))
+                )
+                slot = np.flatnonzero(bracketed)[accepted]
+                tca[slot] = root_t[accepted]
+                separation[slot] = root_sep[accepted]
+                speed[slot] = root_speed[accepted]
+                refined[slot] = True
+
+            for position in range(interior.size):
+                # Flat, degenerate or non-convergent: report the sample and flag
+                # the time as unreliable rather than quoting a made-up instant.
+                is_refined = bool(refined[position])
+                found.append(
+                    Encounter(
+                        other_object_id=debris_object_id,
+                        tca_s=float(tca[position]),
+                        min_separation_m=float(separation[position]),
+                        relative_speed_mps=float(speed[position]),
+                        method=METHOD_REFINED if is_refined else METHOD_UNREFINED,
+                        boundary_kind=BOUNDARY_INTERIOR,
+                        ambiguous_time=not is_refined,
                     )
                 )
-                sep, rel_speed = _separation(
-                    satellite_trajectory, debris_trajectory, t_min
-                )
-                # A refined minimum must sit below the bracket it came from.
-                # If it does not, the bracket held something other than a
-                # simple minimum and the time is not trustworthy.
-                if sep <= np.sqrt(d2[i - 1]) and sep <= np.sqrt(d2[i + 1]):
-                    found.append(
-                        Encounter(
-                            other_object_id=debris_object_id,
-                            tca_s=t_min,
-                            min_separation_m=sep,
-                            relative_speed_mps=rel_speed,
-                            method=METHOD_REFINED,
-                            boundary_kind=BOUNDARY_INTERIOR,
-                            ambiguous_time=False,
-                        )
-                    )
-                    continue
-
-            # Flat or degenerate: report the sample, flag the time as unreliable.
-            found.append(
-                Encounter(
-                    other_object_id=debris_object_id,
-                    tca_s=float(times[i]),
-                    min_separation_m=float(np.sqrt(d2[i])),
-                    relative_speed_mps=float(np.linalg.norm(dv[i])),
-                    method=METHOD_UNREFINED,
-                    boundary_kind=BOUNDARY_INTERIOR,
-                    ambiguous_time=True,
-                )
-            )
 
         # Segment endpoints as one-sided minima.
         for edge_index, t_edge in ((0, seg_start), (n - 1, seg_end)):

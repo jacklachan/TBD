@@ -33,7 +33,7 @@ No collision probability is computed anywhere. Separations are deterministic val
 ```bash
 pip install -r requirements.txt
 cp .env.example .env          # then put your GEMINI_API_KEY in it
-python -m pytest tests/ -q    # 140 tests
+python -m pytest tests/ -q    # 168 tests
 ```
 
 ```bash
@@ -50,9 +50,10 @@ Deployment to Hugging Face Spaces: [DEPLOY.md](DEPLOY.md).
 |---|---|
 | Propagation vs an independent DOP853 reference | 1.155e-06 m over one orbit |
 | Energy and angular-momentum drift over six hours | below 4.1e-14 relative |
-| Independent verifier vs the search path | agree to 3.6e-08 m and 1.3e-08 s |
+| Independent verifier vs the search path | agree to 3.4e-08 m and 1.4e-08 s |
 | Live planner | `PROPOSAL_READY` in 5 model calls, 14.6 s through the API |
 | Live constraint change | "halve the fuel budget" → 0.2 to 0.1 m/s, computed by the backend |
+| Whole decision chain, no model | 1.24 s for 25 options, five validations and a verified answer |
 
 Full evidence, including what is still unverified, is in [Handoff/STATE.md](Handoff/STATE.md).
 

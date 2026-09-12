@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from backend.agent import guards
-from backend.agent.llm import LLMError, LLMResponse, Message, Provider, ToolCall
+from backend.agent.llm import LLMError, Message, Provider, ToolCall
 from backend.agent.memory import CaseMemory
 from backend.agent.reviewer import (
     DECISION_ALLOW,
@@ -32,6 +32,8 @@ from backend.agent.reviewer import (
 from backend.agent.tools import (
     PHASE_PLANNING,
     PHASE_POLICY,
+    TOOL_BRIEFING,
+    TOOL_EVALUATE,
     TOOL_PROPOSE_POLICY,
     CaseSession,
     ToolError,
@@ -70,6 +72,12 @@ When you are done, reply with two or three plain sentences: what you recommend,
 what you rejected and why. Plain prose only -- no headings, no bullet lists, no
 markdown. Refer to options by their ID. Do not state distances or times you were
 not given by a tool, and do not compute anything yourself."""
+
+PREFETCHED_NOTE = """The case briefing and the screening results are already below, computed by the
+backend before this turn. Do not call get_case_briefing or evaluate_candidates
+to fetch what you have already been given -- start by validating the option you
+want to recommend. Both tools remain available if you widen the search or need
+to re-read something."""
 
 POLICY_SYSTEM_PROMPT = """You turn an operator's instruction into a proposed constraint change.
 
@@ -154,12 +162,90 @@ class _Recorder:
         return event
 
 
+def _winning_validation(session: CaseSession, passed: list[tuple]) -> tuple:
+    """Pick among the options that passed, by the policy's own ranking.
+
+    Least fuel, then the most clearance, then the earliest burn, then the ID --
+    the order the search already ranks by. Taking whichever happened to be
+    validated last made the recommendation depend on the order the model
+    explored in: validate a good option, then validate another good one out of
+    curiosity, and the second silently became the proposal. Ranking is a rule
+    that can be stated to an operator; "the last one it looked at" is not.
+
+    This still reads nothing from the model's opinion. It reads typed
+    validation results and the candidate grid.
+    """
+
+    def rank_key(item: tuple) -> tuple:
+        candidate_id, validation = item
+        try:
+            candidate = session.candidate_by_id(candidate_id)
+        except ToolError:
+            return (float("inf"), 0.0, float("inf"), candidate_id)
+        closest = validation.closest()
+        return (
+            candidate.delta_v_mps,
+            -(closest.min_separation_m if closest is not None else 0.0),
+            candidate.burn_t_s if candidate.burn_t_s is not None else -1.0,
+            candidate_id,
+        )
+
+    return min(passed, key=rank_key)
+
+
 def _compact(payload: dict, limit: int = 4000) -> dict:
     """Tool results go back as summaries; guard against an oversized payload."""
     text = json.dumps(payload)
     if len(text) <= limit:
         return payload
     return {"truncated": True, "preview": text[:limit]}
+
+
+def _prefetch_context(session: CaseSession, recorder: "_Recorder") -> str:
+    """Run the two read-only tools up front and return them as prompt context.
+
+    Both are deterministic, neither takes an argument the model chooses, and
+    together they are always the first two turns of an investigation. Paying
+    for them as two sequential model round trips buys nothing: the model asks,
+    waits, reads, asks again. Computing them here removes two round trips from
+    every plan, which on a five-call loop is the largest single latency saving
+    available -- model time dominates, backend time does not.
+
+    This grants the model nothing. It is the same data the same tools would
+    have returned, and approvability still comes only from validation.
+    """
+    started = time.perf_counter()
+    try:
+        briefing = dispatch(session, TOOL_BRIEFING, {}, phase=PHASE_PLANNING)
+        screening = dispatch(session, TOOL_EVALUATE, {}, phase=PHASE_PLANNING)
+    except (ToolError, KeyError, ValueError) as exc:
+        # Degrade to the tool-driven path rather than failing the run: the model
+        # can still call both tools itself.
+        recorder.add(
+            "prefetch_skipped",
+            f"Could not precompute the briefing and screening: {exc}",
+            (time.perf_counter() - started) * 1000.0,
+            error=str(exc),
+        )
+        return ""
+
+    nothing = briefing.get("if_nothing_is_done", {})
+    recorder.add(
+        "prefetch",
+        f"Precomputed the briefing and screened {screening.get('candidate_count')} "
+        f"options before the first model call; doing nothing comes within "
+        f"{nothing.get('closest_approach_m')} m of {nothing.get('object_id')}.",
+        (time.perf_counter() - started) * 1000.0,
+        candidate_count=screening.get("candidate_count"),
+        qualified_count=screening.get("qualified_count"),
+        from_cache=screening.get("from_cache"),
+    )
+    return (
+        "\n\n"
+        f"{TOOL_BRIEFING} result:\n{json.dumps(_compact(briefing), indent=2)}"
+        "\n\n"
+        f"{TOOL_EVALUATE} result:\n{json.dumps(_compact(screening), indent=2)}"
+    )
 
 
 def plan_case(
@@ -169,8 +255,14 @@ def plan_case(
     memory: CaseMemory | None = None,
     reviewer_provider: Provider | None = None,
     instruction: str = "",
+    prefetch_context: bool = True,
 ) -> PlannerOutcome:
-    """Run the loop until the model concludes or a bound is reached."""
+    """Run the loop until the model concludes or a bound is reached.
+
+    ``prefetch_context`` computes the briefing and the screening before the
+    first model call and hands them over as context. Pass False to make the
+    model fetch both itself, which is the shape the scripted tests exercise.
+    """
     limits = limits or PlannerLimits()
     recorder = _Recorder()
     started = time.perf_counter()
@@ -193,7 +285,12 @@ def plan_case(
     task = instruction or (
         "A close approach has been predicted. Investigate and recommend what to do."
     )
-    messages: list[Message] = [Message(role="user", text=task)]
+    system_prompt = SYSTEM_PROMPT
+    context = _prefetch_context(session, recorder) if prefetch_context else ""
+    if context:
+        system_prompt = f"{SYSTEM_PROMPT}\n\n{PREFETCHED_NOTE}"
+
+    messages: list[Message] = [Message(role="user", text=task + context)]
     tools = declarations_for_phase(PHASE_PLANNING)
 
     model_calls = 0
@@ -219,7 +316,7 @@ def plan_case(
 
         call_started = time.perf_counter()
         try:
-            response = provider.call(SYSTEM_PROMPT, messages, tools)
+            response = provider.call(system_prompt, messages, tools)
         except LLMError as exc:
             recorder.add(
                 "model_error",
@@ -377,8 +474,23 @@ def plan_case(
             elapsed_s=elapsed,
         )
 
-    candidate_id, validation = passed[-1]
-    candidate = session.candidate_by_id(candidate_id)
+    candidate_id, validation = _winning_validation(session, passed)
+
+    # The proposal is chosen from typed results, so the prose can in principle
+    # recommend something else. Say so in the trace rather than letting the two
+    # disagree quietly on screen.
+    other_passing = [
+        other_id for other_id, _ in passed if other_id != candidate_id and other_id in final_text
+    ]
+    if other_passing and candidate_id not in final_text:
+        recorder.add(
+            "rationale_mismatch",
+            f"Rationale names {', '.join(other_passing)} but the ranked proposal "
+            f"is {candidate_id}; the proposal follows the validation results.",
+            0.0,
+            proposed=candidate_id,
+            named_in_rationale=other_passing,
+        )
 
     # The rationale may quote anything the tools computed during this run, not
     # only the option that won. Explaining why an option was rejected requires

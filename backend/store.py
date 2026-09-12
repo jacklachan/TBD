@@ -17,8 +17,10 @@ proposals but never rewrites a committed execution.
 
 from __future__ import annotations
 
+import functools
 import json
 import sqlite3
+import threading
 import uuid
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime, timezone
@@ -99,6 +101,25 @@ PROPOSAL_READY = "READY"
 PROPOSAL_BLOCKED = "BLOCKED"
 PROPOSAL_STALE = "STALE"
 PROPOSAL_EXECUTED = "EXECUTED"
+
+
+def _synchronized(method):
+    """Serialise one method against the single shared connection.
+
+    The API runs plans on a worker pool and every thread uses the same
+    connection. SQLite itself tolerates that; the read-modify-write inside
+    ``append_events`` does not. Two runs on one case read the same last
+    sequence number, and the loser's entire trace is then rejected by the
+    UNIQUE constraint -- the events are simply lost and the run is marked
+    FAILED. Making each method one atomic unit of work is what prevents that.
+    """
+
+    @functools.wraps(method)
+    def guarded(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return guarded
 
 
 class StoreError(RuntimeError):
@@ -205,16 +226,21 @@ class Store:
         self.path = str(path)
         if self.path != ":memory:":
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+        # Reentrant: create_case calls get_case, and record_execution reads
+        # back a row it may have just written.
+        self._lock = threading.RLock()
         self._connection = sqlite3.connect(self.path, check_same_thread=False)
         self._connection.row_factory = sqlite3.Row
         self._connection.executescript(SCHEMA)
         self._connection.commit()
 
+    @_synchronized
     def close(self) -> None:
         self._connection.close()
 
     # ----------------------------------------------------------------- cases
 
+    @_synchronized
     def create_case(
         self,
         document: dict,
@@ -244,6 +270,7 @@ class Store:
         self._connection.commit()
         return self.get_case(row_id)
 
+    @_synchronized
     def get_case(self, case_id: str) -> CaseRow:
         row = self._connection.execute(
             "SELECT * FROM cases WHERE case_id = ?", (case_id,)
@@ -265,6 +292,7 @@ class Store:
             created_at_utc=row["created_at_utc"],
         )
 
+    @_synchronized
     def case_exists(self, case_id: str) -> bool:
         return (
             self._connection.execute(
@@ -273,6 +301,7 @@ class Store:
             is not None
         )
 
+    @_synchronized
     def update_policy(self, case_id: str, policy: Policy) -> None:
         """Apply a confirmed policy and stand down everything computed under the old one.
 
@@ -291,6 +320,7 @@ class Store:
                 (PROPOSAL_STALE, case_id, PROPOSAL_READY, PROPOSAL_BLOCKED),
             )
 
+    @_synchronized
     def set_pending_diff(self, case_id: str, diff: dict | None) -> None:
         self._connection.execute(
             "UPDATE cases SET pending_diff_json = ? WHERE case_id = ?",
@@ -298,6 +328,7 @@ class Store:
         )
         self._connection.commit()
 
+    @_synchronized
     def set_grid_revision(self, case_id: str, grid_revision: int) -> None:
         self._connection.execute(
             "UPDATE cases SET grid_revision = ? WHERE case_id = ?",
@@ -307,6 +338,7 @@ class Store:
 
     # ---------------------------------------------------------------- events
 
+    @_synchronized
     def append_events(self, case_id: str, run_id: str | None, events: list) -> int:
         """Append with a monotonic per-case sequence. Returns how many landed."""
         cursor = self._connection.execute(
@@ -336,6 +368,7 @@ class Store:
                 )
         return len(events)
 
+    @_synchronized
     def events(self, case_id: str) -> list[dict]:
         rows = self._connection.execute(
             "SELECT * FROM events WHERE case_id = ? ORDER BY sequence", (case_id,)
@@ -356,6 +389,7 @@ class Store:
 
     # ----------------------------------------------------------- validations
 
+    @_synchronized
     def save_validation(self, case_id: str, validation: ValidationResult) -> None:
         self._connection.execute(
             "INSERT OR REPLACE INTO validations (validation_id, case_id, candidate_id,"
@@ -371,6 +405,7 @@ class Store:
         )
         self._connection.commit()
 
+    @_synchronized
     def get_validation(self, validation_id: str) -> ValidationResult:
         row = self._connection.execute(
             "SELECT payload_json FROM validations WHERE validation_id = ?",
@@ -380,6 +415,7 @@ class Store:
             raise StoreError(f"unknown validation {validation_id!r}")
         return validation_from_json(row["payload_json"])
 
+    @_synchronized
     def validations(self, case_id: str) -> list[ValidationResult]:
         rows = self._connection.execute(
             "SELECT payload_json FROM validations WHERE case_id = ? ORDER BY created_at_utc",
@@ -389,6 +425,7 @@ class Store:
 
     # ------------------------------------------------------------- proposals
 
+    @_synchronized
     def save_proposal(self, case_id: str, proposal) -> None:
         self._connection.execute(
             "INSERT OR REPLACE INTO proposals (proposal_id, case_id, scenario_version,"
@@ -408,6 +445,7 @@ class Store:
         )
         self._connection.commit()
 
+    @_synchronized
     def get_proposal(self, proposal_id: str) -> dict:
         row = self._connection.execute(
             "SELECT * FROM proposals WHERE proposal_id = ?", (proposal_id,)
@@ -418,6 +456,7 @@ class Store:
         payload["status"] = row["status"]
         return payload
 
+    @_synchronized
     def latest_proposal(self, case_id: str) -> dict | None:
         row = self._connection.execute(
             "SELECT * FROM proposals WHERE case_id = ? ORDER BY created_at_utc DESC,"
@@ -430,6 +469,7 @@ class Store:
         payload["status"] = row["status"]
         return payload
 
+    @_synchronized
     def mark_proposal(self, proposal_id: str, status: str) -> None:
         self._connection.execute(
             "UPDATE proposals SET status = ? WHERE proposal_id = ?", (status, proposal_id)
@@ -438,6 +478,7 @@ class Store:
 
     # ------------------------------------------------------------ executions
 
+    @_synchronized
     def record_execution(
         self,
         case_id: str,
@@ -512,6 +553,7 @@ class Store:
 
         return record, True
 
+    @_synchronized
     def execution_for_case(self, case_id: str) -> ExecutionRecord | None:
         row = self._connection.execute(
             "SELECT * FROM executions WHERE case_id = ? ORDER BY executed_at_utc LIMIT 1",

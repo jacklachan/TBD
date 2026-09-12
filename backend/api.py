@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -36,13 +37,8 @@ from pydantic import BaseModel, Field
 from backend import store as store_module
 from backend.agent.llm import GeminiProvider, LLMError, Provider
 from backend.agent.memory import CaseMemory
-from backend.agent.planner import (
-    STATUS_PROPOSAL_READY,
-    PlannerLimits,
-    interpret_instruction,
-    plan_case,
-)
-from backend.agent.tools import CaseSession, ToolError, apply_diff
+from backend.agent.planner import PlannerLimits, interpret_instruction, plan_case
+from backend.agent.tools import CaseSession
 from backend.planning.candidates import Candidate, generate_candidates
 from backend.planning.policy import STATUS_READY as DIFF_READY
 from backend.planning.policy import Policy, policy_from_document
@@ -56,6 +52,17 @@ SOCRATES_CSV = REPO_ROOT / "data" / "context" / "socrates_snapshot.csv"
 SOCRATES_PROVENANCE = REPO_ROOT / "data" / "context" / "socrates_provenance.json"
 
 SOCRATES_MAX_ROWS = 10
+
+# A scenario ID is interpolated into a filesystem path, so it is matched against
+# this rather than sanitised. Lowercase, digits, underscore and hyphen is every
+# fixture name the generator emits; anything else is not a scenario ID and is
+# refused before it reaches the disk.
+SCENARIO_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+
+# Completed runs are kept so a late poll still finds its result, but the
+# registry is in memory and a long-lived demo would otherwise grow without
+# bound. Oldest finished runs are dropped first; a running one is never evicted.
+MAX_TRACKED_RUNS = 200
 
 RUN_RUNNING = "RUNNING"
 RUN_DONE = "DONE"
@@ -142,13 +149,37 @@ class AppState:
         self.lock = threading.Lock()
 
     def scenario_path(self, scenario_id: str) -> Path:
-        direct = self.scenarios_dir / f"{scenario_id}.json"
-        variant = self.scenarios_dir / "variants" / f"{scenario_id}.json"
-        if direct.exists():
-            return direct
-        if variant.exists():
-            return variant
+        """Resolve a fixture name to a file inside ``scenarios_dir``.
+
+        Two checks, not one. The pattern rejects anything that is not a fixture
+        name, and the resolved path is then confirmed to sit under the fixtures
+        directory -- so neither a traversal sequence nor a symlink can turn this
+        into "load an arbitrary JSON file from disk and treat it as a scenario".
+        """
+        if not SCENARIO_ID_RE.match(scenario_id or ""):
+            raise HTTPException(404, f"unknown scenario {scenario_id!r}")
+
+        root = self.scenarios_dir.resolve()
+        for candidate in (
+            root / f"{scenario_id}.json",
+            root / "variants" / f"{scenario_id}.json",
+        ):
+            resolved = candidate.resolve()
+            if resolved.is_file() and root in resolved.parents:
+                return resolved
         raise HTTPException(404, f"unknown scenario {scenario_id!r}")
+
+    def register_run(self, run: "RunState") -> None:
+        with self.lock:
+            self.runs[run.run_id] = run
+            if len(self.runs) > MAX_TRACKED_RUNS:
+                finished = [
+                    run_id
+                    for run_id, tracked in self.runs.items()
+                    if tracked.status != RUN_RUNNING
+                ]
+                for run_id in finished[: len(self.runs) - MAX_TRACKED_RUNS]:
+                    del self.runs[run_id]
 
     def runs_for(self, case_id: str) -> list[dict]:
         with self.lock:
@@ -344,8 +375,7 @@ def create_app(
         _check_versions(case_row, payload.expected_scenario_version, payload.expected_policy_version)
 
         run = RunState(run_id=f"run_{uuid.uuid4().hex[:10]}", case_id=case_id, kind="plan")
-        with state.lock:
-            state.runs[run.run_id] = run
+        state.register_run(run)
 
         def work() -> None:
             try:
@@ -377,8 +407,11 @@ def create_app(
                 # exception would leave the run RUNNING forever, and the UI
                 # would poll a case that is never coming back. Every failure
                 # has to become a visible FAILED run.
-                run.status = RUN_FAILED
+                #
+                # The message is written before the status, because a poller
+                # that sees FAILED reads the reason in the same response.
                 run.error = f"{type(exc).__name__}: {exc}"
+                run.status = RUN_FAILED
             finally:
                 run.finished_at_utc = _now()
 

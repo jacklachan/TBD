@@ -188,11 +188,19 @@ def reconstruct(document: dict) -> ReconstructedScenario:
 # --------------------------------------------------------------------------
 
 
-def _segment_edges(trajectory: Trajectory, horizon_s: float) -> list[float]:
+def _segment_edges(trajectories: tuple[Trajectory, ...], horizon_s: float) -> list[float]:
+    """Segment edges: the horizon ends plus every impulse epoch inside them.
+
+    Every trajectory in the pair contributes, not just the manoeuvring one.
+    Debris is ballistic today, so only the satellite ever adds an edge; taking
+    both means a future manoeuvring second object cannot silently produce a
+    bracket that straddles its velocity discontinuity.
+    """
     edges = {0.0, float(horizon_s)}
-    for t_burn in trajectory.burn_times_s:
-        if 0.0 < t_burn < horizon_s:
-            edges.add(float(t_burn))
+    for trajectory in trajectories:
+        for t_burn in trajectory.burn_times_s:
+            if 0.0 < t_burn < horizon_s:
+                edges.add(float(t_burn))
     return sorted(edges)
 
 
@@ -212,7 +220,7 @@ def screen_pair(
     checks.
     """
     best: VerifiedEncounter | None = None
-    edges = _segment_edges(satellite, horizon_s)
+    edges = _segment_edges((satellite, debris), horizon_s)
 
     for seg_start, seg_end in zip(edges[:-1], edges[1:]):
         span = seg_end - seg_start
@@ -232,7 +240,25 @@ def screen_pair(
             return float(delta @ delta)
 
         n = times.size
-        for index in range(n):
+
+        # Only the segment ends and the interior local minima can be the closest
+        # approach, and they are identified in one comparison over the whole
+        # segment. The scan itself is 1 s over six hours, so stepping through it
+        # in Python was the dominant cost of this module and bought nothing.
+        interior = (
+            np.flatnonzero(
+                (separation[1:-1] <= separation[:-2])
+                & (separation[1:-1] <= separation[2:])
+            )
+            + 1
+            if n > 2
+            else np.empty(0, dtype=np.intp)
+        )
+        # Ascending index order, so a tie between a boundary and an interior
+        # minimum resolves exactly as it did when every sample was visited.
+        examined = np.unique(np.concatenate([np.array([0, n - 1]), interior]))
+
+        for index in (int(i) for i in examined):
             is_left_edge = index == 0
             is_right_edge = index == n - 1
 
@@ -254,12 +280,6 @@ def screen_pair(
                     ambiguous_time=False,
                 )
             else:
-                if not (
-                    separation[index] <= separation[index - 1]
-                    and separation[index] <= separation[index + 1]
-                ):
-                    continue
-
                 lo, hi = float(times[index - 1]), float(times[index + 1])
                 outcome = minimize_scalar(
                     squared_at,

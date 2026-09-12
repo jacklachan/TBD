@@ -46,12 +46,21 @@ def stumpff(psi: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     family, but the hyperbolic branch is correct and kept for generality.
     """
     psi = np.asarray(psi, dtype=np.float64)
-    c2 = np.empty_like(psi)
-    c3 = np.empty_like(psi)
 
     small = np.abs(psi) < _PSI_SERIES_LIMIT
     pos = (~small) & (psi > 0.0)
     neg = (~small) & (psi < 0.0)
+
+    # Bound prograde propagation keeps psi = chi^2 / a strictly positive and
+    # away from zero except at tiny offsets, so this branch carries the whole
+    # trajectory grid. Same expressions as below, evaluated without the masked
+    # scatter, which is what makes it worth writing twice.
+    if pos.all():
+        s = np.sqrt(psi)
+        return (1.0 - np.cos(s)) / psi, (s - np.sin(s)) / (s * s * s)
+
+    c2 = np.empty_like(psi)
+    c3 = np.empty_like(psi)
 
     if np.any(pos):
         s = np.sqrt(psi[pos])

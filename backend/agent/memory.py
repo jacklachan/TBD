@@ -11,8 +11,10 @@ never silently folded into the active policy.
 
 from __future__ import annotations
 
+import functools
 import json
 import sqlite3
+import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -39,6 +41,17 @@ TAG_WINDOW_BLOCKED = "WINDOW_BLOCKED"
 TAG_SECONDARY_CONFLICT = "SECONDARY_CONFLICT"
 TAG_NO_FEASIBLE_OPTION = "NO_FEASIBLE_OPTION"
 TAG_OPERATOR_REJECTED = "OPERATOR_REJECTED"
+
+
+def _synchronized(method):
+    """Serialise one method against the shared connection. See backend/store.py."""
+
+    @functools.wraps(method)
+    def guarded(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return guarded
 
 
 @dataclass(frozen=True)
@@ -74,15 +87,19 @@ class CaseMemory:
         if self.path != ":memory:":
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         # Runs are executed on a worker thread, so the connection must not be
-        # pinned to the creating thread.
+        # pinned to the creating thread -- and unpinning it is not on its own
+        # thread safety, so every method below takes this lock.
+        self._lock = threading.RLock()
         self._connection = sqlite3.connect(self.path, check_same_thread=False)
         self._connection.row_factory = sqlite3.Row
         self._connection.executescript(SCHEMA)
         self._connection.commit()
 
+    @_synchronized
     def close(self) -> None:
         self._connection.close()
 
+    @_synchronized
     def record(
         self,
         case_id: str,
@@ -126,6 +143,7 @@ class CaseMemory:
         self._connection.commit()
         return entry
 
+    @_synchronized
     def relevant(
         self,
         scenario_family: str,
@@ -154,6 +172,7 @@ class CaseMemory:
         )
         return records[:limit]
 
+    @_synchronized
     def all_records(self) -> list[MemoryRecord]:
         rows = self._connection.execute(
             "SELECT * FROM case_memory ORDER BY created_at_utc DESC, rowid DESC"

@@ -18,9 +18,9 @@ enough to decide and a handle to cite.
 
 from __future__ import annotations
 
+import threading
 import uuid
-from dataclasses import dataclass, field, replace
-from typing import Any, Callable
+from dataclasses import dataclass, field
 
 from backend.planning.candidates import (
     GRID_REVISION_BASE,
@@ -65,13 +65,24 @@ MAX_LISTED_OPTIONS = 8
 #
 # The verifier is deliberately NOT cached here. Its whole value is recomputing
 # independently, and serving it from the search's memo would defeat that.
+#
+# Runs execute on a worker pool, so the map and its eviction are guarded. An
+# unsynchronised `pop(next(iter(...)))` raises once two threads evict together.
 _SEARCH_CACHE: dict[tuple, SearchResult] = {}
 _SEARCH_CACHE_LIMIT = 32
+_SEARCH_CACHE_LOCK = threading.Lock()
 
 
 def _search_cache_key(session: "CaseSession") -> tuple:
+    """Everything a screening result depends on, and nothing else.
+
+    ``scenario_id`` is in the key alongside the content hash so that a document
+    reaching this without a hash cannot collide with a different scenario that
+    happens to share a policy.
+    """
     policy = session.policy
     return (
+        str(session.document.get("scenario_id", "")),
         session.document.get("input_hash", ""),
         session.scenario_version,
         policy.max_delta_v_mps,
@@ -79,6 +90,18 @@ def _search_cache_key(session: "CaseSession") -> tuple:
         tuple(sorted(w.window_id for w in policy.blocked_windows)),
         session.grid_revision,
     )
+
+
+def _cache_get(key: tuple) -> SearchResult | None:
+    with _SEARCH_CACHE_LOCK:
+        return _SEARCH_CACHE.get(key)
+
+
+def _cache_put(key: tuple, result: SearchResult) -> None:
+    with _SEARCH_CACHE_LOCK:
+        _SEARCH_CACHE[key] = result
+        while len(_SEARCH_CACHE) > _SEARCH_CACHE_LIMIT:
+            _SEARCH_CACHE.pop(next(iter(_SEARCH_CACHE)))
 
 
 class ToolError(Exception):
@@ -334,7 +357,7 @@ def get_case_briefing(session: CaseSession) -> dict:
 
 def evaluate_all(session: CaseSession) -> dict:
     key = _search_cache_key(session)
-    result = _SEARCH_CACHE.get(key)
+    result = _cache_get(key)
     cached = result is not None
 
     if result is None:
@@ -347,9 +370,7 @@ def evaluate_all(session: CaseSession) -> dict:
             scenario.horizon_s,
             candidates=session.candidates(),
         )
-        if len(_SEARCH_CACHE) >= _SEARCH_CACHE_LIMIT:
-            _SEARCH_CACHE.pop(next(iter(_SEARCH_CACHE)))
-        _SEARCH_CACHE[key] = result
+        _cache_put(key, result)
 
     session.search_result = result
 

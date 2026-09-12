@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import ast
 import json
-from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -124,7 +123,7 @@ def test_verifier_and_search_agree_on_the_primary_encounter(primary_document, pr
         checked += 1
 
     print(
-        f"\n[agreement] {checked} candidates, 5 s brentq-on-range-rate vs 1 s "
+        f"\n[agreement] {checked} candidates, 5 s Newton-on-range-rate vs 1 s "
         f"bounded-minimisation: worst distance disagreement {worst_distance:.3e} m "
         f"(tol {AGREEMENT_DISTANCE_TOL_M}), worst time {worst_time:.3e} s "
         f"(tol {AGREEMENT_TIME_TOL_S})"
@@ -239,7 +238,7 @@ def test_over_budget_candidate_is_blocked(primary_document):
     assert REASON_OVER_BUDGET in result.reason_codes
 
 
-def test_burn_inside_a_blocked_window_is_blocked(primary_document, primary_document_window=None):
+def test_burn_inside_a_blocked_window_is_blocked(primary_document):
     policy = Policy(
         policy_version=3,
         max_delta_v_mps=0.20,
@@ -438,3 +437,33 @@ def test_a_strong_burn_can_make_a_pre_burn_encounter_the_binding_one(
         e for e in result.encounters if e.other_object_id == scenario.primary_threat_id
     )
     assert primary.tca_s == pytest.approx(binding_t, abs=AGREEMENT_TIME_TOL_S)
+
+
+def test_screening_partitions_at_every_burn_epoch_not_only_the_satellite_s():
+    """Velocity is discontinuous at any burn, whichever object performs it.
+
+    Debris is ballistic in every current scenario, so this is a latent case --
+    but the module documents that it partitions at every impulse epoch, and a
+    bracket straddling one refines against a velocity that changes mid-interval.
+    """
+    from backend.core.trajectory import impulse_vector
+    from backend.planning.verifier import _segment_edges
+
+    document = json.loads(PRIMARY_PATH.read_text(encoding="utf-8"))
+    scenario = reconstruct(document)
+    horizon = scenario.horizon_s
+
+    satellite = scenario.satellite.apply_impulse(
+        1800.0, impulse_vector(scenario.satellite, 1800.0, "RETROGRADE", 0.10)
+    )
+    debris = scenario.debris[scenario.primary_threat_id]
+    manoeuvring_debris = debris.apply_impulse(
+        9000.0, impulse_vector(debris, 9000.0, "PROGRADE", 0.10)
+    )
+
+    edges = _segment_edges((satellite, manoeuvring_debris), horizon)
+    assert edges == [0.0, 1800.0, 9000.0, horizon]
+
+    # And the screen still returns a usable result across the extra partition.
+    found = screen_pair(satellite, manoeuvring_debris, "DEB-1", horizon)
+    assert found is not None and found.min_separation_m > 0.0

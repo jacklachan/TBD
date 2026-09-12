@@ -326,3 +326,118 @@ That is correct, and it is the strongest thing in the demo. The whole 0.10 m/s t
 - Frontend. `contracts.ts` and `api.ts` exist for B to build against.
 - CORS is wide open for the dev server. Narrow it before anything leaves a laptop.
 - Live runs above were driven directly, not through the HTTP API. The API path uses the same planner and is covered by tests, but an end-to-end live run through `uvicorn` has not been timed.
+
+---
+
+## [2026-09-12] — Builder C — three defects fixed, and two model round trips removed
+
+**Changed paths**
+
+- `backend/api.py` — `scenario_id` validated before it reaches the filesystem; run registry bounded; a failed run's reason is written before its status.
+- `backend/store.py`, `backend/agent/memory.py` — every method serialised against the shared connection.
+- `backend/agent/tools.py` — search cache reads and evictions guarded; `scenario_id` added to the cache key.
+- `backend/agent/llm.py` — API key moved to `x-goog-api-key`; transient failures retried with jittered backoff.
+- `backend/agent/planner.py` — the proposal is now the best-ranked passing validation, not the last one; briefing and screening precomputed before the first model call.
+- `tests/test_api.py`, `tests/test_agent.py` — 20 tests added; 168 total.
+
+### Three defects, each reproduced before it was fixed
+
+**A scenario ID was a path.** `POST /cases {"scenario_id": "../data/evil"}` returned
+**201** and served an arbitrary JSON file from anywhere on disk as a scenario.
+`scenario_id` is interpolated into a path, so it is now matched against
+`^[a-z0-9][a-z0-9_-]{0,63}$` and the resolved path is confirmed to sit under
+`scenarios/`. Both checks, because a pattern alone would not stop a symlink.
+
+**Concurrent runs on one case silently lost their traces.** `append_events` reads
+the last sequence number and then inserts, and all four worker threads share one
+connection. Eight concurrent writers of 20 events each:
+
+```
+before:  errors: ['IntegrityError: UNIQUE constraint failed: events.case_id, events.sequence', ...]
+         appended 9 of 160 expected
+after:   errors: none
+         appended 160 of 160 expected; unique seqs 160; monotonic=True
+```
+
+Nine of 160 events survived. The loser of the race did not get a partial trace —
+its whole run raised and was reported `FAILED` for a reason unrelated to it.
+Every `Store` and `CaseMemory` method now takes a reentrant lock.
+`test_concurrent_event_appends_do_not_lose_a_trace` reproduces it.
+
+**The API key travelled in the query string.** `?key=...` reaches proxy logs,
+browser history and error reports. It is a header now, with a test asserting the
+key appears in no URL.
+
+### Transport: a single 503 no longer ends the run
+
+429/500/502/503/504/408 and connection failures are retried up to three times
+with jittered backoff, honouring `Retry-After`. 400 and 403 are raised on the
+first reply — a bad schema or a bad key says the same thing more slowly the
+second time. The bound matters: unlimited retries would quietly eat the
+planner's 60 s deadline instead of reporting `PROVIDER_ERROR`.
+
+### The proposal is ranked, not whichever was validated last
+
+`passed[-1]` meant the recommendation depended on the order the model explored
+in. Validate a good option, then validate another out of curiosity, and the
+second silently became the proposal. It is now the same ranking the search uses:
+least fuel, then most clearance, then earliest burn, then ID. Both options in
+the test cost 0.20 m/s, so the clearance tiebreak decides — `t30_ret_200` at
+2491.9 m is proposed over `t60_pro_200` at 1367.6 m, whichever order they were
+validated in.
+
+This reads no more of the model's opinion than before: it reads typed validation
+results and the candidate grid. When the prose recommends a *different* option
+that also passed, that is now a `rationale_mismatch` event rather than a silent
+disagreement between the text and the proposal on screen.
+
+### Two model round trips removed
+
+`get_case_briefing` and `evaluate_candidates` are deterministic, take no
+argument the model chooses, and are always the first two turns. Paying for them
+as sequential round trips buys nothing — the model asks, waits, reads, asks
+again. They are computed before the first call and handed over as context.
+
+```
+$ python -m pytest tests/test_agent.py -q -k prefetch
+3 passed
+```
+
+`test_prefetch_removes_two_model_round_trips` runs the same case both ways: **5
+model calls** with the model fetching them itself, **2** with them precomputed,
+and the same proposal either way.
+
+**On the latency claim, carefully.** At the ~3 s per call measured earlier this
+predicts roughly 6 s off a ~16.6 s loop. That is arithmetic on a previous
+measurement, not a new measurement: there is no key in this environment and no
+live run was made. It also depends on the model actually skipping tools it has
+already been given — the system prompt tells it to, and if it ignores that the
+cost is one wasted round trip, not a wrong answer. **Re-time it live before
+putting any number on a slide.** The ten-second target is still not verified as
+met.
+
+Prefetch grants nothing. It is the same data the same tools return, scenario
+free text is still absent from it (`test_prefetched_context_carries_no_scenario_free_text`
+re-checks the injection case through the prompt this time), and a model handed
+the context that recommends an option without validating it still produces no
+proposal.
+
+**Not verified / not run**
+
+- No live model call. Every agent test uses `ScriptedProvider`; the retry path is
+  tested against a fake `requests.post`, not a real endpoint.
+- The latency saving above is predicted, not measured.
+- Run state is still in memory, so `--workers 1` still stands.
+- `backend/domain/models.py` still does not exist; the frontend is still
+  `contracts.ts` and `api.ts` only.
+- CORS was already narrowed in an earlier session; unchanged here.
+
+**Contract changes**
+
+- None. `plan_case` gained a `prefetch_context` keyword defaulting to `True`;
+  no endpoint, payload or tool declaration changed.
+
+**Next concrete action**
+
+Re-run `scripts/live_api_check.py` with a real key and record the actual model
+call count and wall time under prefetch, replacing the predicted figure above.
