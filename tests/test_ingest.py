@@ -205,6 +205,27 @@ def test_the_endpoint_refuses_rubbish_with_a_typed_error():
     assert response.json()["detail"]["error"] == "TLE_UNREADABLE"
 
 
-def test_the_endpoint_bounds_the_paste_size():
+def test_the_endpoint_bounds_the_paste_size_before_parsing_it():
+    """413 rather than 422: the guard drops the body before it is read.
+
+    Parsing a 20 KB paste only to reject it would mean the size limit is
+    enforced after the work it exists to prevent.
+    """
     client = TestClient(create_app(store=Store(":memory:")))
-    assert client.post("/ingest/tle", json={"text": "x" * 20_000}).status_code == 422
+    assert client.post("/ingest/tle", json={"text": "x" * 20_000}).status_code == 413
+
+
+def test_the_endpoint_is_behind_the_same_guard_as_the_rest_of_the_api():
+    """It creates a case and runs a screening, so it is not a free endpoint.
+
+    An endpoint added outside the guard's prefix list is unauthenticated,
+    unbounded and cross-origin by omission rather than by decision.
+    """
+    client = TestClient(create_app(store=Store(":memory:")))
+    denied = client.post(
+        "/ingest/tle",
+        json={"text": pasted()},
+        headers={"Origin": "https://untrusted.example"},
+    )
+    assert denied.status_code == 403
+    assert denied.json()["detail"]["error"] == "ORIGIN_DENIED"

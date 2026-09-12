@@ -9,6 +9,12 @@ from starlette.responses import JSONResponse
 
 MAX_REQUEST_BYTES = 16_384
 
+# Every path that costs something to answer: case data, model quota, or the CPU
+# of a propagation. Listed in one place because an endpoint added outside it is
+# unauthenticated, unbounded and cross-origin by omission rather than by
+# decision -- which is how /ingest and /interop were briefly served.
+PROTECTED_PREFIXES = ("/cases", "/runs", "/context", "/ingest", "/interop")
+
 
 class APIGuard:
     """Protect case data/model quota and bound JSON bodies before parsing."""
@@ -21,7 +27,10 @@ class APIGuard:
 
     async def __call__(self, scope, receive, send):
         path = scope.get("path", "")
-        is_api = any(path == p or path.startswith(p + "/") for p in ("/cases", "/runs", "/context"))
+        is_api = any(
+            path == prefix or path.startswith(prefix + "/")
+            for prefix in PROTECTED_PREFIXES
+        )
         if scope["type"] != "http" or not is_api or scope.get("method") == "OPTIONS":
             return await self.app(scope, receive, send)
 

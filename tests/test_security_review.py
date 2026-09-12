@@ -175,3 +175,45 @@ def test_case_creation_is_bounded(monkeypatch):
     new_case(client)
     new_case(client)
     assert client.post("/cases", json={"scenario_id": "primary"}).status_code == 429
+
+
+def test_every_endpoint_that_costs_something_is_behind_the_guard():
+    """The guard's prefix list is the whole boundary, so omissions are silent.
+
+    An endpoint added outside it is unauthenticated, unbounded and cross-origin
+    by omission rather than by decision. This enumerates the routes that cost
+    case storage, model quota or the CPU of a propagation and asserts each one
+    is covered, so adding the next one without listing it fails here.
+    """
+    from backend.security import PROTECTED_PREFIXES
+
+    costly = [
+        "/cases",
+        "/runs/run_x",
+        "/context/socrates",
+        "/ingest/tle",
+        "/interop/verify-cdm",
+    ]
+    for path in costly:
+        assert any(
+            path == prefix or path.startswith(prefix + "/")
+            for prefix in PROTECTED_PREFIXES
+        ), f"{path} is not behind the guard"
+
+    # /health stays public so a deployment can be checked without a token.
+    assert not any(
+        "/health" == prefix or "/health".startswith(prefix + "/")
+        for prefix in PROTECTED_PREFIXES
+    )
+
+
+def test_an_untrusted_origin_cannot_spend_cpu_on_the_new_endpoints():
+    client = make_client()
+    for path, payload in (
+        ("/ingest/tle", {"text": "irrelevant"}),
+        ("/interop/verify-cdm", {"text": "irrelevant"}),
+    ):
+        response = client.post(
+            path, json=payload, headers={"Origin": "https://untrusted.example"}
+        )
+        assert response.status_code == 403, path

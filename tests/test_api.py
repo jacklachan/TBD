@@ -859,3 +859,47 @@ def test_a_designed_burn_survives_into_the_comparison_a_later_request_builds():
         },
     ).json()["variants"]
     assert proposed in {v["candidate_id"] for v in variants}
+
+
+def test_a_record_exported_after_the_comparison_states_what_the_screen_shows():
+    """The workspace says "Verified clear"; the record must not say otherwise.
+
+    The numerical comparison verifies options with the same verifier the planner
+    uses. Discarding those results meant a record exported from a case the
+    operator had been looking at claimed nothing had been screened.
+    """
+    client = make_client()
+    case = new_case(client)
+    case_id = case["case_id"]
+
+    before = client.get(f"/cases/{case_id}/export", params={"format": "cdm"}).text
+    assert "No screening has been run" in before
+
+    analysis = client.post(
+        f"/cases/{case_id}/analysis",
+        json={"expected_scenario_version": 1, "expected_policy_version": 1},
+    ).json()
+    assert analysis["recommended_id"], "the comparison verified something"
+
+    after = client.get(f"/cases/{case_id}/export", params={"format": "cdm"}).text
+    assert "No screening has been run" not in after
+    assert "MISS_DISTANCE" in after
+    assert "Screening result:" in after
+
+    # And it still holds up when someone else recomputes it.
+    verdict = client.post("/interop/verify-cdm", json={"text": after}).json()
+    assert verdict["verdict"] == "AGREES", verdict["checks"]
+
+
+def test_the_comparison_still_creates_nothing_that_could_be_approved():
+    """Storing what it verified must not open an approval path."""
+    client = make_client()
+    case = new_case(client)
+    case_id = case["case_id"]
+    client.post(
+        f"/cases/{case_id}/analysis",
+        json={"expected_scenario_version": 1, "expected_policy_version": 1},
+    )
+    snapshot = client.get(f"/cases/{case_id}").json()
+    assert snapshot["proposal"] is None
+    assert snapshot["execution"] is None

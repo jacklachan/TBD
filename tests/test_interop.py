@@ -243,3 +243,20 @@ def test_an_unscreened_case_still_issues_a_checkable_record():
         f"{len(result['independent_result']['encounters'])} encounters found by "
         "the receiver"
     )
+
+
+def test_the_verify_endpoint_is_behind_the_same_guard_as_the_rest_of_the_api(
+    issued_cdm,
+):
+    """Recomputing a record is a full screening, so it is not a free endpoint."""
+    client = TestClient(create_app(store=Store(":memory:")))
+    denied = client.post(
+        "/interop/verify-cdm",
+        json={"text": issued_cdm},
+        headers={"Origin": "https://untrusted.example"},
+    )
+    assert denied.status_code == 403
+    assert denied.json()["detail"]["error"] == "ORIGIN_DENIED"
+
+    oversized = client.post("/interop/verify-cdm", json={"text": "x" * 20_000})
+    assert oversized.status_code == 413, "the body is dropped before parsing"

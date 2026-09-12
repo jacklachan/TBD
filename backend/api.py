@@ -121,9 +121,10 @@ class ApproveRequest(VersionedRequest):
 
 
 class CdmRequest(BaseModel):
-    # Bounded to match the middleware's own 16 KiB body cap rather than
-    # advertising a limit the request could never reach. A real record is
-    # around 3 KB.
+    # Bounded to match the guard's 16 KiB body cap rather than advertising a
+    # limit the request could never reach. A real record is around 3 KB. The
+    # guard drops an oversized body before this model ever sees it; this bound
+    # is the second line, for anything reaching the model another way.
     text: str = Field(..., min_length=1, max_length=16_000)
 
 
@@ -535,8 +536,17 @@ def create_app(
         if not state.model_slots.acquire(blocking=False):
             raise HTTPException(429, {"error": "CAPACITY", "message": "The analysis engine is busy. Try again shortly."})
         try:
-            result = analyze(_session_for(case_row, state.store))
+            session = _session_for(case_row, state.store)
+            result = analyze(session)
             _check_versions(_case_or_404(state, case_id), payload.expected_scenario_version, payload.expected_policy_version)
+            # Keep what the comparison verified. These are ordinary results from
+            # the same verifier, and without them a record exported from a case
+            # the operator has been looking at says no screening has been run --
+            # contradicting the "Verified clear" on their screen. Storing them
+            # opens no approval path: approval needs a proposal, and the
+            # numerical comparison never makes one.
+            for validation in session.validations.values():
+                state.store.save_validation(case_id, validation)
             return result
         finally:
             state.model_slots.release()
