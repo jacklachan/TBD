@@ -2211,3 +2211,17 @@ td .subtle-button {
     font-size: 8px;
   }
 }
+
+/* Panels that sit over the live 3D scene have to occlude it. At 0.82 alpha with
+   no backdrop filter, the scene's own object labels read straight through the
+   card: "DEB-1" and a range badge land on top of the clearance figures, which
+   is the one place in this interface two numbers must never be confusable.
+   Colour and everything else are unchanged; only the bleed-through is. */
+.left-stack .glass,
+.right-stack .glass {
+  background-color: rgba(9, 12, 13, 0.97);
+}
+:root[data-theme="light"] .left-stack .glass,
+:root[data-theme="light"] .right-stack .glass {
+  background-color: rgba(202, 219, 233, 0.97);
+}
