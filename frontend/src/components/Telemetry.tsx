@@ -91,13 +91,28 @@ export function EventTrack({
   if (variant?.burn_t_s != null) {
     marks.push({ at: variant.burn_t_s, label: "Burn", tone: "chrome" });
   }
-  for (const encounter of variant?.encounters ?? []) {
+
+  // A six-hour horizon holds many passes, and marking all of them printed the
+  // same object name seven times and said nothing. Only two kinds of moment
+  // are worth a mark: one that breaches the floor, and the closest approach.
+  const encounters = variant?.encounters ?? [];
+  const breaches = encounters.filter((e) => e.below_floor);
+  const closest = encounters.reduce<(typeof encounters)[number] | undefined>(
+    (best, e) => (!best || e.min_separation_m < best.min_separation_m ? e : best),
+    undefined,
+  );
+
+  for (const breach of breaches) {
     marks.push({
-      at: encounter.tca_s,
-      label: encounter.object_id,
-      tone: encounter.below_floor ? "danger" : "plain",
+      at: breach.tca_s,
+      label: `${breach.object_id} breach`,
+      tone: "danger",
     });
   }
+  if (closest && !breaches.some((b) => b.tca_s === closest.tca_s)) {
+    marks.push({ at: closest.tca_s, label: "Closest", tone: "plain" });
+  }
+
   marks.push({ at: horizon, label: "End", tone: "plain" });
 
   // Two encounters can land close together at this width; keep the earlier

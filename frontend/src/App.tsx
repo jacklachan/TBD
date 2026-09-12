@@ -68,6 +68,76 @@ function Status({
     </span>
   );
 }
+/**
+ * The one line that says what is happening.
+ *
+ * The workspace showed a distance and left the reader to work out whether it
+ * was bad, and showed nothing at all about what a manoeuvre changed. This
+ * states the situation, and once an option is selected, states the before and
+ * after as a single comparison.
+ */
+function Verdict({
+  baselineMetres,
+  currentMetres,
+  floor,
+  isBaseline,
+  cleared,
+  breachedObject,
+  executed,
+}: {
+  baselineMetres?: number;
+  currentMetres?: number;
+  floor: number;
+  isBaseline: boolean;
+  cleared: boolean;
+  breachedObject?: { object_id: string; min_separation_m: number };
+  executed: boolean;
+}) {
+  if (baselineMetres === undefined || currentMetres === undefined) return null;
+  const [baseValue, baseUnit] = distance(baselineMetres);
+  const [nowValue, nowUnit] = distance(currentMetres);
+  const atRisk = currentMetres < floor;
+  const tone = atRisk ? "risk" : cleared ? "clear" : "watch";
+
+  return (
+    <div className={`verdict verdict-${tone} glass`}>
+      <span className="verdict-state">
+        {atRisk
+          ? "Collision risk"
+          : executed
+            ? "Manoeuvre applied"
+            : cleared
+              ? "Cleared"
+              : "Screened"}
+      </span>
+      {isBaseline ? (
+        <p className="verdict-line">
+          Doing nothing brings the satellite within{" "}
+          <b>
+            {baseValue} {baseUnit}
+          </b>{" "}
+          — inside the {floor.toLocaleString()} m floor.
+        </p>
+      ) : (
+        <p className="verdict-line">
+          <span className="verdict-change">
+            <b className="was">
+              {baseValue} {baseUnit}
+            </b>
+            <span aria-hidden="true">→</span>
+            <b className="now">
+              {nowValue} {nowUnit}
+            </b>
+          </span>
+          {atRisk && breachedObject
+            ? ` still inside the floor — ${breachedObject.object_id} at ${distance(breachedObject.min_separation_m)[0]} ${distance(breachedObject.min_separation_m)[1]}.`
+            : " clear of every tracked object."}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function Metric({
   value,
   unit,
@@ -136,7 +206,30 @@ export default function App() {
   const [minValue, minUnit] = distance(worst?.value);
   const liveDistance = variant?.pair_separations_m[debrisId]?.[sample];
   const [liveValue, liveUnit] = distance(liveDistance);
+  const baselineVariant = bundle?.variants.find((v) => v.kind === "NO_BURN");
+  const baselineWorst = useMemo(
+    () => (baselineVariant ? minimum(baselineVariant.min_to_any_m) : null),
+    [baselineVariant],
+  );
   const policy = snapshot?.policy;
+  // Open on the encounter. At t+0 the objects are thousands of kilometres
+  // apart and nothing looks wrong, so the case opened on its quietest moment.
+  const [framed, setFramed] = useState(false);
+  useEffect(() => {
+    if (!bundle || !variant || framed) return;
+    setFramed(true);
+    setView("approach");
+    const worstEncounter = variant.encounters.reduce(
+      (best, e) =>
+        !best || e.min_separation_m < best.min_separation_m ? e : best,
+      variant.encounters[0],
+    );
+    if (worstEncounter) {
+      setDebrisId(worstEncounter.object_id);
+      desk.setTime(worstEncounter.tca_s);
+    }
+  }, [bundle, variant, framed, desk]);
+
   const status = option
     ? optionStatus(option)
     : { label: "Awaiting analysis", tone: "muted" };
@@ -364,6 +457,15 @@ export default function App() {
 
         <div className="workspace-grid">
           <aside className="left-stack" id="decision-controls">
+            <Verdict
+              baselineMetres={baselineWorst?.value}
+              currentMetres={worst?.value}
+              floor={policy?.min_separation_m ?? 1000}
+              isBaseline={!variant || variant.kind === "NO_BURN"}
+              cleared={option?.validation?.status === "PASS"}
+              breachedObject={variant?.encounters.find((e) => e.below_floor)}
+              executed={!!snapshot?.execution}
+            />
             <div className="scenario-switch glass">
               <span className="eyebrow">SCENARIO</span>
               <select
@@ -700,7 +802,9 @@ export default function App() {
               {snapshot?.execution && (
                 <p className="execution-note">
                   <Check size={16} />
-                  Recorded in simulation
+                  {baselineWorst && worst
+                    ? `Applied in simulation. Closest approach ${distance(baselineWorst.value)[0]} ${distance(baselineWorst.value)[1]} → ${distance(worst.value)[0]} ${distance(worst.value)[1]}.`
+                    : "Applied in simulation."}
                 </p>
               )}
             </section>

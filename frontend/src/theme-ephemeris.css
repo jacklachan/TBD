@@ -831,3 +831,104 @@ select:focus {
 :root[data-theme="light"] .glass {
   background-color: rgba(247, 243, 234, 0.99);
 }
+
+/* ------------------------------------------------------------- the verdict */
+
+/* The first thing read, and the only place the interface states a situation
+   rather than a measurement. It carries its own colour because it is the one
+   element whose whole job is to say whether this is bad. */
+.verdict {
+  padding: 16px 20px 18px;
+  border-left: 2px solid var(--ivory-4);
+}
+
+.verdict-state {
+  display: block;
+  font-family: var(--face);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 10px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--ivory-3);
+}
+
+.verdict-line {
+  margin: 0;
+  font-family: var(--face);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--secondary);
+  letter-spacing: -0.006em;
+}
+
+.verdict-line b {
+  font-family: var(--face-data);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+/* Before and after as one object, so the change reads as a change rather than
+   as two numbers that happen to be near each other. */
+.verdict-change {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-right: 5px;
+}
+
+.verdict-change span {
+  color: var(--ivory-3);
+  font-size: 13px;
+}
+
+.verdict-change .was {
+  color: var(--coral);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  opacity: 0.75;
+}
+
+.verdict-change .now {
+  color: var(--celadon);
+  font-size: 1.15em;
+}
+
+.verdict-risk {
+  border-left-color: var(--coral);
+  background-color: rgba(30, 17, 18, 0.985);
+}
+.verdict-risk .verdict-state {
+  color: var(--coral);
+}
+
+.verdict-clear {
+  border-left-color: var(--celadon);
+}
+.verdict-clear .verdict-state {
+  color: var(--celadon);
+}
+
+.verdict-watch {
+  border-left-color: var(--brass);
+}
+.verdict-watch .verdict-state {
+  color: var(--brass);
+}
+
+:root[data-theme="light"] .verdict-risk {
+  background-color: rgba(252, 245, 242, 0.99);
+}
+
+/* The execution note says what changed, so it needs room to say it. */
+.execution-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--celadon);
+}

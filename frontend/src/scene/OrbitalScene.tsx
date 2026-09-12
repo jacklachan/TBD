@@ -210,13 +210,15 @@ export function OrbitalScene(props: Props) {
       ) {
         disposeScene(paths);
         paths.clear();
+        // Hoisted: the ghost baseline below spans the same window as the
+        // object paths, so the two are directly comparable.
+        const lower = next.view === "orbit" ? 0 : Math.max(0, s - 4);
+        const upper =
+          next.view === "orbit"
+            ? next.bundle.t_s.length
+            : Math.min(next.bundle.t_s.length, s + 5);
         for (const id of next.bundle.object_ids) {
           const points: THREE.Vector3[] = [];
-          const lower = next.view === "orbit" ? 0 : Math.max(0, s - 4);
-          const upper =
-            next.view === "orbit"
-              ? next.bundle.t_s.length
-              : Math.min(next.bundle.t_s.length, s + 5);
           for (let i = lower; i < upper; i++)
             points.push(display(vector(variant.positions_m[id][i])));
           const material = new THREE.LineBasicMaterial({
@@ -235,6 +237,28 @@ export function OrbitalScene(props: Props) {
               material,
             ),
           );
+        }
+
+        // The path the satellite would have flown. Without it the manoeuvre is
+        // a number that changed; with it the change is the thing you can see.
+        const baseline = next.bundle.variants.find((v) => v.kind === "NO_BURN");
+        if (baseline && baseline.candidate_id !== variant.candidate_id) {
+          const ghost: THREE.Vector3[] = [];
+          const track = baseline.positions_m[next.bundle.satellite_id];
+          for (let i = lower; i < upper && i < track.length; i++)
+            ghost.push(display(vector(track[i])));
+          if (ghost.length > 1) {
+            paths.add(
+              new THREE.Line(
+                new THREE.BufferGeometry().setFromPoints(ghost),
+                new THREE.LineBasicMaterial({
+                  color: "#e0705e",
+                  opacity: 0.55,
+                  transparent: true,
+                }),
+              ),
+            );
+          }
         }
       }
       if (
