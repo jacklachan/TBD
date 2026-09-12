@@ -45,6 +45,8 @@ from backend.agent.tools import (
     DECLARATIONS,
     PHASE_PLANNING,
     PHASE_POLICY,
+    MAX_DESIGNED_BURNS,
+    TOOL_DESIGN,
     TOOL_EVALUATE,
     TOOL_PROPOSE_POLICY,
     TOOL_VALIDATE,
@@ -742,3 +744,363 @@ def test_prefetch_does_not_let_the_model_skip_validation(session):
 
     assert outcome.proposal is None
     assert outcome.status in (STATUS_UNRESOLVED, STATUS_NO_APPROVABLE_OPTION)
+
+
+# --------------------------------------------------------------------------
+# Designed manoeuvres
+#
+# The grid is a menu, not the safety property. These tests are about the second
+# half of that sentence: a burn the model invented has to clear exactly the same
+# bar as one we enumerated, and nothing about designing it may bypass a check.
+# --------------------------------------------------------------------------
+
+
+def test_a_designed_burn_is_validated_by_the_same_independent_check(session):
+    result = dispatch(
+        session,
+        TOOL_DESIGN,
+        {"burn_t_s": 1500.0, "direction": "RETROGRADE", "delta_v_mps": 0.15},
+        phase=PHASE_PLANNING,
+    )
+    assert result["source"] == "DESIGNED"
+    assert result["status"] == STATUS_PASS
+    assert result["approvable"] is True
+    # Screened against every object, not just the one that opened the case.
+    assert set(result["screened_objects"]) >= {"DEB-1", "DEB-2"}
+
+    # And the same verifier, called directly, must agree with it.
+    independent = validate_candidate(
+        session.document,
+        session.policy,
+        session.candidate_by_id(result["candidate_id"]),
+    )
+    assert independent.status == result["status"]
+    print(
+        f"\n[designed] {result['candidate_id']} -> {result['status']}, "
+        f"nearest grid option {result['nearest_grid_option']}"
+    )
+
+
+def test_a_designed_burn_can_beat_the_grid_on_fuel(session):
+    """The reason to allow free design at all, stated as a test."""
+    grid = dispatch(
+        session, TOOL_VALIDATE, {"candidate_id": RESCUE}, phase=PHASE_PLANNING
+    )
+    designed = dispatch(
+        session,
+        TOOL_DESIGN,
+        {"burn_t_s": 1500.0, "direction": "RETROGRADE", "delta_v_mps": 0.15},
+        phase=PHASE_PLANNING,
+    )
+    assert grid["status"] == STATUS_PASS and designed["status"] == STATUS_PASS
+    assert designed["delta_v_mps"] < grid["delta_v_mps"]
+    print(
+        f"\n[fuel] grid {grid['candidate_id']} {grid['delta_v_mps']} m/s vs "
+        f"designed {designed['candidate_id']} {designed['delta_v_mps']} m/s"
+    )
+
+
+def test_an_over_budget_design_is_rejected_not_refused(session):
+    """Policy is the verifier's job, so this comes back as evidence, not an error."""
+    result = dispatch(
+        session,
+        TOOL_DESIGN,
+        {"burn_t_s": 1800.0, "direction": "RETROGRADE", "delta_v_mps": 9.0},
+        phase=PHASE_PLANNING,
+    )
+    assert result["approvable"] is False
+    assert "OVER_BUDGET" in result["reason_codes"]
+
+
+@pytest.mark.parametrize(
+    "arguments,fragment",
+    [
+        ({"direction": "RETROGRADE", "delta_v_mps": 0.1}, "burn_t_s must be a number"),
+        (
+            {"burn_t_s": 1800.0, "direction": "SIDEWAYS", "delta_v_mps": 0.1},
+            "direction must be one of",
+        ),
+        (
+            {"burn_t_s": "soon", "direction": "RETROGRADE", "delta_v_mps": 0.1},
+            "burn_t_s must be a number",
+        ),
+        (
+            {"burn_t_s": 99_999.0, "direction": "RETROGRADE", "delta_v_mps": 0.1},
+            "inside the horizon",
+        ),
+        (
+            {"burn_t_s": -60.0, "direction": "RETROGRADE", "delta_v_mps": 0.1},
+            "inside the horizon",
+        ),
+        (
+            {"burn_t_s": 1800.0, "direction": "RETROGRADE", "delta_v_mps": 0.0},
+            "at least",
+        ),
+    ],
+)
+def test_a_malformed_design_never_reaches_the_propagator(session, arguments, fragment):
+    with pytest.raises(ToolError, match=fragment):
+        dispatch(session, TOOL_DESIGN, arguments, phase=PHASE_PLANNING)
+    assert not session.designed
+
+
+def test_designing_is_bounded_per_run(session):
+    """Unlimited attempts at a continuous parameter is a search, not planning."""
+    for i in range(MAX_DESIGNED_BURNS):
+        dispatch(
+            session,
+            TOOL_DESIGN,
+            {
+                "burn_t_s": 1000.0 + 100.0 * i,
+                "direction": "RETROGRADE",
+                "delta_v_mps": 0.15,
+            },
+            phase=PHASE_PLANNING,
+        )
+    assert len(session.designed) == MAX_DESIGNED_BURNS
+    with pytest.raises(ToolError, match="which is the limit"):
+        dispatch(
+            session,
+            TOOL_DESIGN,
+            {"burn_t_s": 1234.0, "direction": "PROGRADE", "delta_v_mps": 0.05},
+            phase=PHASE_PLANNING,
+        )
+
+
+def test_designing_the_same_burn_twice_does_not_consume_the_budget(session):
+    arguments = {"burn_t_s": 1500.0, "direction": "RETROGRADE", "delta_v_mps": 0.15}
+    first = dispatch(session, TOOL_DESIGN, arguments, phase=PHASE_PLANNING)
+    second = dispatch(session, TOOL_DESIGN, dict(arguments), phase=PHASE_PLANNING)
+    assert first["candidate_id"] == second["candidate_id"]
+    assert len(session.designed) == 1
+
+
+def test_the_policy_phase_cannot_design_a_burn(session):
+    """Interpreting an instruction must not be a route to proposing a manoeuvre."""
+    with pytest.raises(ToolError):
+        dispatch(
+            session,
+            TOOL_DESIGN,
+            {"burn_t_s": 1800.0, "direction": "RETROGRADE", "delta_v_mps": 0.15},
+            phase=PHASE_POLICY,
+        )
+
+
+def test_ranking_prefers_margin_over_fuel_when_the_cheap_option_barely_clears(session):
+    """The ranker must not hand the reviewer something it is known to refuse.
+
+    Built from real validations rather than stubs, so the ordering is exercised
+    against the same typed results the planner ranks in a live run.
+    """
+    from backend.agent.planner import _winning_validation
+    from backend.agent.reviewer import MARGINAL_CLEARANCE_RATIO
+
+    cheap = dispatch(
+        session,
+        TOOL_DESIGN,
+        {"burn_t_s": 1800.0, "direction": "RETROGRADE", "delta_v_mps": 0.15},
+        phase=PHASE_PLANNING,
+    )
+    generous = dispatch(
+        session, TOOL_VALIDATE, {"candidate_id": RESCUE}, phase=PHASE_PLANNING
+    )
+    assert cheap["status"] == STATUS_PASS and generous["status"] == STATUS_PASS
+
+    floor = session.policy.min_separation_m
+    comfortable = floor * MARGINAL_CLEARANCE_RATIO
+    passed = [
+        (cid, session.validations[cid])
+        for cid in (cheap["candidate_id"], generous["candidate_id"])
+    ]
+    winner_id, _ = _winning_validation(session, passed)
+
+    margins = {
+        cid: validation.closest().min_separation_m for cid, validation in passed
+    }
+    roomy = [cid for cid, m in margins.items() if m >= comfortable]
+    if roomy and len(roomy) < len(margins):
+        # One clears comfortably and one does not: margin must decide, whatever
+        # the fuel costs say.
+        assert winner_id in roomy
+    else:
+        # Both are in the same margin class, so the cheaper one wins.
+        assert winner_id == min(
+            margins, key=lambda cid: session.candidate_by_id(cid).delta_v_mps
+        )
+    print(
+        f"\n[ranking] chose {winner_id} from "
+        + ", ".join(f"{cid} at {m:,.1f} m" for cid, m in margins.items())
+        + f" (comfortable is {comfortable:,.0f} m)"
+    )
+
+
+def test_the_cheapest_passing_option_loses_to_one_that_clears_properly():
+    """The collision case, where this actually bites.
+
+    The grid's best answer scrapes past the floor; a designed burn clears it by
+    a wide margin for more fuel. Before margin was ranked ahead of fuel, the
+    cheap one became the proposal and the safety reviewer refused it -- a run
+    that ended with no approvable answer despite having found one.
+    """
+    from backend.agent.planner import _winning_validation
+    from backend.agent.reviewer import MARGINAL_CLEARANCE_RATIO
+
+    path = REPO_ROOT / "scenarios" / "variants" / "collision.json"
+    if not path.exists():
+        pytest.skip("collision fixture not generated")
+    session = CaseSession.from_document(
+        json.loads(path.read_text(encoding="utf-8")), case_id="case_collision"
+    )
+    comfortable = session.policy.min_separation_m * MARGINAL_CLEARANCE_RATIO
+
+    thin = dispatch(
+        session, TOOL_VALIDATE, {"candidate_id": "t15_ret_200"}, phase=PHASE_PLANNING
+    )
+    roomy = dispatch(
+        session,
+        TOOL_DESIGN,
+        {"burn_t_s": 300.0, "direction": "RETROGRADE", "delta_v_mps": 1.0},
+        phase=PHASE_PLANNING,
+    )
+    assert thin["status"] == STATUS_PASS and roomy["status"] == STATUS_PASS
+
+    thin_margin = session.validations[thin["candidate_id"]].closest().min_separation_m
+    roomy_margin = session.validations[roomy["candidate_id"]].closest().min_separation_m
+    assert thin_margin < comfortable <= roomy_margin, (thin_margin, roomy_margin)
+    assert roomy["delta_v_mps"] > thin["delta_v_mps"], "the roomy option costs more"
+
+    winner_id, _ = _winning_validation(
+        session,
+        [
+            (cid, session.validations[cid])
+            for cid in (thin["candidate_id"], roomy["candidate_id"])
+        ],
+    )
+    assert winner_id == roomy["candidate_id"]
+    print(
+        f"\n[collision] chose {winner_id} at {roomy_margin:,.1f} m over "
+        f"{thin['candidate_id']} at {thin_margin:,.1f} m "
+        f"(floor {session.policy.min_separation_m:,.0f} m)"
+    )
+
+
+def test_the_reviewer_is_told_which_burn_it_is_reviewing(session):
+    """A reviewer that cannot see the manoeuvre is reviewing a number, not a plan.
+
+    Grid IDs describe their own burn, so this went unnoticed until the planner
+    began designing manoeuvres. The evidence bundle now carries the burn either
+    way.
+    """
+    from backend.agent.reviewer import build_evidence
+
+    designed = dispatch(
+        session,
+        TOOL_DESIGN,
+        {"burn_t_s": 1500.0, "direction": "RETROGRADE", "delta_v_mps": 0.15},
+        phase=PHASE_PLANNING,
+    )
+    validation = session.validations[designed["candidate_id"]]
+    candidate = session.candidate_by_id(designed["candidate_id"])
+
+    evidence = build_evidence(validation, session.policy, candidate)
+    assert evidence["manoeuvre"]["delta_v_mps"] == pytest.approx(0.15)
+    assert evidence["manoeuvre"]["burn_t_s"] == pytest.approx(1500.0)
+    assert evidence["manoeuvre"]["direction"] == "RETROGRADE"
+    assert evidence["manoeuvre"]["source"] == "DESIGNED"
+    assert evidence["manoeuvre"]["within_budget"] is True
+
+    grid = dispatch(
+        session, TOOL_VALIDATE, {"candidate_id": RESCUE}, phase=PHASE_PLANNING
+    )
+    grid_evidence = build_evidence(
+        session.validations[grid["candidate_id"]],
+        session.policy,
+        session.candidate_by_id(grid["candidate_id"]),
+    )
+    assert grid_evidence["manoeuvre"]["source"] == "GRID"
+
+    # Still safe to build without one; an incomplete bundle is a verdict, not a
+    # crash.
+    assert build_evidence(validation, session.policy)["manoeuvre"] is None
+
+
+def test_a_designed_burn_gets_the_same_two_method_cross_check(session):
+    """One computation is not evidence, whoever asked for the burn.
+
+    Grid options are cross-checked against the screening pass. A designed burn
+    appears in no screening pass, so the search path has to be run for it; if it
+    were not, a designed burn would reach the operator on a single computation.
+    """
+    result = dispatch(
+        session,
+        TOOL_DESIGN,
+        {"burn_t_s": 1500.0, "direction": "RETROGRADE", "delta_v_mps": 0.15},
+        phase=PHASE_PLANNING,
+    )
+    validation = session.validations[result["candidate_id"]]
+    assert validation.max_primary_distance_disagreement_m is not None
+    assert validation.primary_time_disagreement_s is not None
+    assert validation.max_primary_distance_disagreement_m < 1.0
+    print(
+        "\n[cross-check] designed burn: search vs verifier "
+        f"{validation.max_primary_distance_disagreement_m:.3e} m, "
+        f"{validation.primary_time_disagreement_s:.3e} s"
+    )
+
+
+def test_a_designed_burn_is_cross_checked_even_without_a_prior_screening(session):
+    """The screening pass is not a prerequisite for the second opinion."""
+    assert session.search_result is None
+    result = dispatch(
+        session,
+        TOOL_DESIGN,
+        {"burn_t_s": 1500.0, "direction": "RETROGRADE", "delta_v_mps": 0.15},
+        phase=PHASE_PLANNING,
+    )
+    validation = session.validations[result["candidate_id"]]
+    assert validation.max_primary_distance_disagreement_m is not None
+
+
+def test_when_nothing_clears_comfortably_the_roomiest_option_wins():
+    """Saving fuel on a manoeuvre that scrapes the floor is a false economy.
+
+    Within the comfortable group the cheapest option wins. This is the other
+    group: when every option is marginal, separation is the scarce thing and
+    the ranking has to flip.
+    """
+    from backend.agent.planner import _winning_validation
+
+    path = REPO_ROOT / "scenarios" / "variants" / "collision.json"
+    if not path.exists():
+        pytest.skip("collision fixture not generated")
+    session = CaseSession.from_document(
+        json.loads(path.read_text(encoding="utf-8")), case_id="case_collision_marginal"
+    )
+
+    cheap = dispatch(
+        session, TOOL_VALIDATE, {"candidate_id": "t15_ret_200"}, phase=PHASE_PLANNING
+    )
+    roomier = dispatch(
+        session,
+        TOOL_DESIGN,
+        {"burn_t_s": 300.0, "direction": "RETROGRADE", "delta_v_mps": 0.5},
+        phase=PHASE_PLANNING,
+    )
+    assert cheap["marginal"] and roomier["marginal"], "both must be in the same class"
+    assert roomier["delta_v_mps"] > cheap["delta_v_mps"]
+    assert roomier["margin_above_floor_m"] > cheap["margin_above_floor_m"]
+
+    winner_id, _ = _winning_validation(
+        session,
+        [
+            (cid, session.validations[cid])
+            for cid in (cheap["candidate_id"], roomier["candidate_id"])
+        ],
+    )
+    assert winner_id == roomier["candidate_id"]
+    print(
+        f"\n[marginal] chose {winner_id} "
+        f"(+{roomier['margin_above_floor_m']:,.1f} m, {roomier['delta_v_mps']} m/s) over "
+        f"{cheap['candidate_id']} (+{cheap['margin_above_floor_m']:,.1f} m, "
+        f"{cheap['delta_v_mps']} m/s)"
+    )

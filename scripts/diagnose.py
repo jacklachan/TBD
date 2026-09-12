@@ -134,6 +134,7 @@ except Exception as exc:  # noqa: BLE001
 for scenario, expected in (
     ("no_encounter", "BASELINE_ACCEPTABLE"),
     ("no_feasible", "NO_APPROVABLE_OPTION"),
+    ("collision", "VERIFIED_OPTION"),
 ):
     try:
         from scripts.demo_pipeline import run as run_case
@@ -143,7 +144,68 @@ for scenario, expected in (
     except Exception as exc:  # noqa: BLE001
         record(FAIL, f"variant {scenario}", str(exc))
 
-section("2b. Interoperability")
+section("2b. Planner-designed manoeuvres")
+
+try:
+    from backend.agent.tools import CaseSession, design_maneuver
+
+    doc = json.loads(
+        (REPO / "scenarios" / "variants" / "collision.json").read_text(encoding="utf-8")
+    )
+    session = CaseSession.from_document(doc)
+    designed = design_maneuver(
+        session, burn_t_s=300.0, direction="RETROGRADE", delta_v_mps=1.0
+    )
+    validation = session.validations[designed["candidate_id"]]
+    record(
+        OK if designed["status"] == "PASS" else FAIL,
+        "free-form burn",
+        f"{designed['candidate_id']} -> {designed['status']}, "
+        f"+{designed['margin_above_floor_m']:,.1f} m over the floor",
+    )
+    # A designed burn that reached the operator on one computation would be the
+    # one place this system stops being two independent methods.
+    agreement = validation.max_primary_distance_disagreement_m
+    record(
+        OK if agreement is not None else FAIL,
+        "designed burn cross-check",
+        f"search vs verifier {agreement:.3e} m"
+        if agreement is not None
+        else "NO SECOND OPINION -- the designed burn was computed once",
+    )
+except Exception as exc:  # noqa: BLE001
+    record(FAIL, "free-form burn", f"{type(exc).__name__}: {exc}")
+
+section("2c. Real elements")
+
+try:
+    from backend.ingest import scenario_from_tles
+
+    tle = (REPO / "scenarios" / "seed_tle.txt").read_text(encoding="utf-8")
+    pasted = tle + (
+        "OTHER OBJECT\n"
+        "1 54234U 22150A   26254.88000000  .00000021  00000+0  32000-4 0  9995\n"
+        "2 54234  98.7400 193.2000 0001200  60.0000 300.0000 14.19540000200000\n"
+    )
+    ingested = scenario_from_tles(pasted)
+    from backend.planning.candidates import baseline_candidate
+    from backend.planning.policy import policy_from_document
+    from backend.planning.verifier import validate_candidate
+
+    screened = validate_candidate(
+        ingested, policy_from_document(ingested), baseline_candidate()
+    )
+    closest = min(screened.encounters, key=lambda e: e.min_separation_m)
+    record(
+        OK,
+        "TLE ingest",
+        f"{len(ingested['objects'])} objects screened, closest "
+        f"{closest.min_separation_m / 1000:,.1f} km",
+    )
+except Exception as exc:  # noqa: BLE001
+    record(FAIL, "TLE ingest", f"{type(exc).__name__}: {exc}")
+
+section("2d. Interoperability")
 
 try:
     from backend.interop import parse_cdm, verify_cdm, write_cdm

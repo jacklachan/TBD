@@ -3,6 +3,7 @@
 from dataclasses import asdict
 from time import perf_counter
 
+from backend.planning.candidates import DESIGNED_PREFIX
 from backend.agent.tools import CaseSession, evaluate_all, validate_one
 
 
@@ -28,6 +29,12 @@ def analyze(session: CaseSession) -> dict:
             "reason_codes": list(evaluation.reason_codes),
             "rank": evaluation.rank,
             "validation": checks.get(evaluation.candidate.candidate_id),
+            # Whether this burn came off the grid or the planner designed it.
+            # Worth showing: an operator comparing options should be able to see
+            # which one no enumeration would have offered them.
+            "designed": evaluation.candidate.candidate_id.startswith(
+                DESIGNED_PREFIX
+            ),
         })
     return {
         **session.version_stamp(),

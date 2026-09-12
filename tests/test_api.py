@@ -40,10 +40,14 @@ def investigation():
     )
 
 
-def make_client(reviewer_text: str | None = ALLOW, memory: CaseMemory | None = None):
+def make_client(
+    reviewer_text: str | None = ALLOW,
+    memory: CaseMemory | None = None,
+    provider_factory=investigation,
+):
     app = create_app(
         store=Store(":memory:"),
-        provider_factory=investigation,
+        provider_factory=provider_factory,
         reviewer_factory=(lambda: ScriptedProvider([text_reply(reviewer_text)]))
         if reviewer_text
         else None,
@@ -741,13 +745,17 @@ def test_cdm_export_refuses_to_imply_a_probability():
     assert not any("prob" in line.lower() for line in fields), fields
 
 
-def test_cdm_export_before_any_screening_says_so():
+def test_cdm_export_before_any_screening_claims_nothing_but_carries_the_geometry():
+    """Saying "we have not looked yet" is not worth sending. The states are."""
     client = make_client()
     case = new_case(client)
     text = client.get(
         f"/cases/{case['case_id']}/export", params={"format": "cdm"}
     ).text
-    assert "No validated screening exists" in text
+    assert "No screening has been run" in text
+    assert "MISS_DISTANCE" not in text
+    assert "TCA =" not in text
+    assert text.count("X_DOT =") >= 2, "the receiver must be able to screen it"
 
 
 def test_export_rejects_an_unknown_format():
@@ -759,3 +767,95 @@ def test_export_rejects_an_unknown_format():
         ).status_code
         == 422
     )
+
+
+def test_a_designed_burn_can_be_visualised_like_any_other_option():
+    """An operator cannot approve what the workspace refuses to draw."""
+    client = make_client()
+    case = new_case(client)
+    response = client.get(
+        f"/cases/{case['case_id']}/visualization",
+        params={
+            "candidate_ids": "baseline,free_t1500s_ret_150",
+            "expected_scenario_version": case["scenario_version"],
+            "expected_policy_version": case["policy_version"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    variants = {v["candidate_id"] for v in response.json()["variants"]}
+    assert variants == {"baseline", "free_t1500s_ret_150"}
+
+
+def test_a_designed_burn_outside_the_horizon_is_refused_not_drawn():
+    client = make_client()
+    case = new_case(client)
+    response = client.get(
+        f"/cases/{case['case_id']}/visualization",
+        params={
+            "candidate_ids": "free_t9999999s_ret_150",
+            "expected_scenario_version": case["scenario_version"],
+            "expected_policy_version": case["policy_version"],
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_a_designed_burn_survives_into_the_comparison_a_later_request_builds():
+    """An operator cannot approve what the workspace will not show them.
+
+    A designed burn lives in the planner's session and nowhere else, so a later
+    request building a fresh session would not know about it -- including the
+    analysis call that feeds the comparison and the trajectory the operator
+    inspects before approving. It is recovered from the stored validations,
+    which were already being kept as evidence.
+    """
+    from backend.agent.llm import ScriptedProvider, text_reply, tool_call
+
+    designed_burn = {
+        "burn_t_s": 1500.0,
+        "direction": "RETROGRADE",
+        "delta_v_mps": 0.15,
+    }
+
+    def designing():
+        return ScriptedProvider(
+            [
+                tool_call("design_maneuver", **designed_burn),
+                text_reply("Recommend the designed burn."),
+            ]
+        )
+
+    client = make_client(provider_factory=designing)
+    case = new_case(client)
+    case_id = case["case_id"]
+
+    run = client.post(
+        f"/cases/{case_id}/plan",
+        json={"expected_scenario_version": 1, "expected_policy_version": 1},
+    ).json()
+    wait_for_run(client, run["run_id"])
+
+    proposed = client.get(f"/cases/{case_id}").json()["proposal"]["candidate_id"]
+    assert proposed.startswith("free_"), proposed
+
+    analysis = client.post(
+        f"/cases/{case_id}/analysis",
+        json={"expected_scenario_version": 1, "expected_policy_version": 1},
+    ).json()
+    row = next(
+        (o for o in analysis["options"] if o["candidate_id"] == proposed), None
+    )
+    assert row is not None, "the proposed burn is missing from the comparison"
+    assert row["designed"] is True
+    assert row["delta_v_mps"] == pytest.approx(designed_burn["delta_v_mps"])
+
+    # And it can be drawn, which is what "inspect before approving" requires.
+    variants = client.get(
+        f"/cases/{case_id}/visualization",
+        params={
+            "candidate_ids": f"baseline,{proposed}",
+            "expected_scenario_version": 1,
+            "expected_policy_version": 1,
+        },
+    ).json()["variants"]
+    assert proposed in {v["candidate_id"] for v in variants}

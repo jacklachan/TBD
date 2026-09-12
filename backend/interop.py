@@ -137,8 +137,22 @@ def write_cdm(snapshot: dict, document: dict | None = None) -> str:
         "",
     ]
 
+    others = [oid for oid in objects if oid != satellite_id]
+
     if chosen is None:
-        lines.append("COMMENT No validated screening exists for this case yet.")
+        # Nothing has been screened here yet, so the record states no TCA and no
+        # miss distance. It still carries the geometry: a receiver who is handed
+        # this can screen the encounter themselves and tell us what they find,
+        # which is more use than a message saying only that we have not looked.
+        lines += [
+            "COMMENT No screening has been run for this case yet, so this record",
+            "COMMENT makes no claims. The state vectors below are the whole",
+            "COMMENT geometry -- screen it yourself and tell us what you get.",
+            "",
+        ]
+        lines += _object_block("OBJECT1", satellite_id, objects, provenance)
+        for object_id in others:
+            lines += _object_block("OBJECT2", object_id, objects, provenance)
         return NEWLINE.join(lines) + NEWLINE
 
     lines += [
@@ -186,21 +200,7 @@ def write_cdm(snapshot: dict, document: dict | None = None) -> str:
         lines.append("")
 
         for role, object_id in (("OBJECT1", satellite_id), ("OBJECT2", secondary_id)):
-            entry = objects.get(object_id, {})
-            state = entry.get("initial_state") or {}
-            lines += [
-                f"OBJECT = {role}",
-                f"OBJECT_DESIGNATOR = {object_id}",
-                "CATALOG_NAME = " + ("CELESTRAK GP" if role == "OBJECT1" else "SYNTHETIC"),
-                f"OBJECT_NAME = {entry.get('name', object_id)}",
-                f"EPHEMERIS_NAME = {provenance.get('model_version')}",
-                f"MANEUVERABLE = {'YES' if entry.get('kind') == 'SATELLITE' else 'NO'}",
-                f"REF_FRAME = {provenance.get('frame')}",
-                "COVARIANCE_METHOD = NONE",
-            ]
-            if state.get("r_m") and state.get("v_mps"):
-                lines += _state_lines(state["r_m"], state["v_mps"])
-            lines.append("")
+            lines += _object_block(role, object_id, objects, provenance)
 
     execution = snapshot.get("execution")
     if execution:
@@ -214,6 +214,33 @@ def write_cdm(snapshot: dict, document: dict | None = None) -> str:
         ]
 
     return NEWLINE.join(lines) + NEWLINE
+
+
+def _object_block(
+    role: str, object_id: str, objects: dict, provenance: dict
+) -> list[str]:
+    """One object's metadata and state vector.
+
+    Written in one place because the reader pairs OBJECT1 with OBJECT2 by
+    position; two nearly-identical blocks drifting apart would be a parsing bug
+    that only shows up in someone else's software.
+    """
+    entry = objects.get(object_id, {})
+    state = entry.get("initial_state") or {}
+    lines = [
+        f"OBJECT = {role}",
+        f"OBJECT_DESIGNATOR = {object_id}",
+        "CATALOG_NAME = " + ("CELESTRAK GP" if role == "OBJECT1" else "SYNTHETIC"),
+        f"OBJECT_NAME = {entry.get('name', object_id)}",
+        f"EPHEMERIS_NAME = {provenance.get('model_version')}",
+        f"MANEUVERABLE = {'YES' if entry.get('kind') == 'SATELLITE' else 'NO'}",
+        f"REF_FRAME = {provenance.get('frame')}",
+        "COVARIANCE_METHOD = NONE",
+    ]
+    if state.get("r_m") and state.get("v_mps"):
+        lines += _state_lines(state["r_m"], state["v_mps"])
+    lines.append("")
+    return lines
 
 
 def _candidate_fields(candidate_id: str) -> dict | None:

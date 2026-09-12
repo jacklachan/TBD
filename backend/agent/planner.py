@@ -26,6 +26,7 @@ from backend.agent.llm import LLMError, Message, Provider, ToolCall
 from backend.agent.memory import CaseMemory
 from backend.agent.reviewer import (
     DECISION_ALLOW,
+    MARGINAL_CLEARANCE_RATIO,
     ReviewerVerdict,
     review,
 )
@@ -33,14 +34,21 @@ from backend.agent.tools import (
     PHASE_PLANNING,
     PHASE_POLICY,
     TOOL_BRIEFING,
+    TOOL_DESIGN,
     TOOL_EVALUATE,
     TOOL_PROPOSE_POLICY,
+    TOOL_VALIDATE,
     CaseSession,
     ToolError,
     declarations_for_phase,
     dispatch,
 )
 from backend.planning.verifier import STATUS_PASS
+
+# Tools whose result is an independent validation. Kept as a set because two
+# different tools now produce one, and a hardcoded name in either the limit
+# check or the reviewer hand-off would silently exempt the other.
+VALIDATING_TOOLS = frozenset({TOOL_VALIDATE, TOOL_DESIGN})
 
 STATUS_PROPOSAL_READY = "PROPOSAL_READY"
 STATUS_NO_APPROVABLE_OPTION = "NO_APPROVABLE_OPTION"
@@ -68,6 +76,27 @@ next one along. You may widen the search once, and widening adds SMALLER
 magnitudes, so it does not help when you were rejected for being too close to
 something.
 
+The grid is a menu, not a limit. If it brackets a workable answer without
+containing one -- one option leaves too little margin, the next spends more fuel
+than the job needs -- use design_maneuver to specify the burn you actually want:
+any time, either direction, any magnitude within the budget. It is validated by
+the same independent check, so designing a burn clears nothing on its own. Take
+a grid option when one fits; design when the geometry asks for something the
+grid does not offer, and say in your reply that you did.
+
+A pass is not the same as a good answer. Every validation reports
+`margin_above_floor_m`, the bar in `comfortable_margin_m`, and a `marginal`
+flag. A marginal option will be refused by a separate safety reviewer, so
+recommending one spends the run on something nobody can approve.
+
+When a validation comes back marginal, design a better one before you conclude.
+`budget_remaining_mps` says how much more you can spend. Two things buy margin:
+burning earlier, because the displacement has longer to grow, and burning
+harder. The grid's earliest burn is not the earliest one possible, and its
+largest is not the largest one affordable. If a design improves the margin but
+is still marginal, move further in the same direction rather than trying a
+nearby variation.
+
 When you are done, reply with two or three plain sentences: what you recommend,
 what you rejected and why. Plain prose only -- no headings, no bullet lists, no
 markdown. Refer to options by their ID. Do not state distances or times you were
@@ -93,10 +122,14 @@ time window."""
 
 @dataclass
 class PlannerLimits:
-    max_model_calls: int = 10
-    max_tool_calls: int = 14
-    max_validations: int = 4
-    deadline_s: float = 60.0
+    max_model_calls: int = 12
+    max_tool_calls: int = 18
+    # Six rather than four because designing a burn now costs a validation, and
+    # a run that finds a marginal answer and is then cut off before it can
+    # improve on it has spent its budget reaching something the safety reviewer
+    # will refuse.
+    max_validations: int = 6
+    deadline_s: float = 90.0
 
 
 @dataclass
@@ -162,15 +195,42 @@ class _Recorder:
         return event
 
 
+def _has_comfortable_margin(validation, policy) -> bool:
+    """Whether an option clears the floor by more than a hair.
+
+    Uses the safety reviewer's own definition of a thin margin. The two must
+    agree on what counts as comfortable, because a ranking that prefers the
+    cheapest passing option will otherwise keep proposing exactly the options
+    the reviewer refuses -- which is a run spent reaching an answer nobody can
+    approve. The reviewer still decides; this only stops us putting a known
+    refusal in front of it.
+    """
+    closest = validation.closest()
+    if closest is None:
+        return False
+    return closest.min_separation_m >= policy.min_separation_m * MARGINAL_CLEARANCE_RATIO
+
+
 def _winning_validation(session: CaseSession, passed: list[tuple]) -> tuple:
     """Pick among the options that passed, by the policy's own ranking.
 
-    Least fuel, then the most clearance, then the earliest burn, then the ID --
-    the order the search already ranks by. Taking whichever happened to be
-    validated last made the recommendation depend on the order the model
-    explored in: validate a good option, then validate another good one out of
-    curiosity, and the second silently became the proposal. Ranking is a rule
-    that can be stated to an operator; "the last one it looked at" is not.
+    Comfortable margin first, then least fuel, then the most clearance, then
+    the earliest burn, then the ID. Taking whichever happened to be validated
+    last made the recommendation depend on the order the model explored in:
+    validate a good option, then validate another good one out of curiosity,
+    and the second silently became the proposal. Ranking is a rule that can be
+    stated to an operator; "the last one it looked at" is not.
+
+    Margin comes before fuel because the cheapest option that merely scrapes
+    past the floor is not the best answer to a conjunction -- it is the answer
+    most likely to be refused.
+
+    Within the comfortable group the cheapest wins, which is the ordering the
+    search already uses: once there is room to spare, spending more fuel buys
+    nothing worth having. Within the marginal group the order flips and the
+    roomiest wins, because when nothing clears comfortably the scarce thing is
+    separation, not fuel. Saving propellant on a manoeuvre that leaves you
+    eleven metres above the floor is a false economy.
 
     This still reads nothing from the model's opinion. It reads typed
     validation results and the candidate grid.
@@ -181,16 +241,19 @@ def _winning_validation(session: CaseSession, passed: list[tuple]) -> tuple:
         try:
             candidate = session.candidate_by_id(candidate_id)
         except ToolError:
-            return (float("inf"), 0.0, float("inf"), candidate_id)
+            return (1, float("inf"), float("inf"), float("inf"), candidate_id)
         closest = validation.closest()
-        return (
-            candidate.delta_v_mps,
-            -(closest.min_separation_m if closest is not None else 0.0),
-            candidate.burn_t_s if candidate.burn_t_s is not None else -1.0,
-            candidate_id,
-        )
+        separation = closest.min_separation_m if closest is not None else 0.0
+        if _has_comfortable_margin(validation, session.policy):
+            return (0, candidate.delta_v_mps, -separation, _burn_key(candidate), candidate_id)
+        return (1, -separation, candidate.delta_v_mps, _burn_key(candidate), candidate_id)
 
     return min(passed, key=rank_key)
+
+
+def _burn_key(candidate) -> float:
+    """Earliest burn first; the baseline, which has no burn, sorts ahead of all."""
+    return candidate.burn_t_s if candidate.burn_t_s is not None else -1.0
 
 
 def _compact(payload: dict, limit: int = 4000) -> dict:
@@ -354,7 +417,7 @@ def plan_case(
             unresolved = UNRESOLVED_TOOL_CALLS
             break
 
-        if call.name == "validate_proposal" and validations_run >= limits.max_validations:
+        if call.name in VALIDATING_TOOLS and validations_run >= limits.max_validations:
             result = {
                 "error": (
                     f"validation limit of {limits.max_validations} reached in this run"
@@ -384,7 +447,7 @@ def plan_case(
         tool_ms = (time.perf_counter() - tool_started) * 1000.0
         tool_calls += 1
 
-        if call.name == "validate_proposal" and not failed:
+        if call.name in VALIDATING_TOOLS and not failed:
             validations_run += 1
             passing = session.validations.get(result.get("candidate_id", ""))
             if (
@@ -394,8 +457,16 @@ def plan_case(
                 and passing.validation_id != reviewed_validation_id
             ):
                 reviewed_validation_id = passing.validation_id
+                try:
+                    reviewed_candidate = session.candidate_by_id(passing.candidate_id)
+                except ToolError:
+                    reviewed_candidate = None
                 review_future = review_pool.submit(
-                    review, reviewer_provider, passing, session.policy
+                    review,
+                    reviewer_provider,
+                    passing,
+                    session.policy,
+                    reviewed_candidate,
                 )
 
         recorder.add(
@@ -529,7 +600,13 @@ def plan_case(
         if review_future is not None and reviewed_validation_id == validation.validation_id:
             verdict = review_future.result()
         else:
-            verdict = review(reviewer_provider, validation, session.policy)
+            try:
+                reviewed_candidate = session.candidate_by_id(validation.candidate_id)
+            except ToolError:
+                reviewed_candidate = None
+            verdict = review(
+                reviewer_provider, validation, session.policy, reviewed_candidate
+            )
         recorder.add(
             "reviewer",
             f"Safety reviewer returned {verdict.decision}.",

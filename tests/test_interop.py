@@ -214,3 +214,32 @@ def test_the_endpoint_needs_no_case_of_its_own(issued_cdm):
     body = client.post("/interop/verify-cdm", json={"text": issued_cdm}).json()
     assert body["independent_result"]["screened_objects"]
     assert client.get("/cases/case_missing").status_code == 404
+
+
+# ------------------------------------------------- before anything is screened
+
+
+def test_an_unscreened_case_still_issues_a_checkable_record():
+    """The geometry is the useful part, not our conclusions about it.
+
+    A record issued before we have screened anything states no TCA and no miss
+    distance. It must still carry the state vectors, or the receiver cannot do
+    the one thing that makes the exchange worth anything: screen it themselves.
+    """
+    client = TestClient(create_app(store=Store(":memory:")))
+    case = client.post("/cases", json={"scenario_id": "primary"}).json()
+    text = client.get(
+        f"/cases/{case['case_id']}/export", params={"format": "cdm"}
+    ).text
+
+    assert "MISS_DISTANCE" not in text, "nothing was screened, so nothing is claimed"
+    assert text.count("X_DOT =") >= 2
+
+    result = verify_cdm(text)
+    assert result["verdict"] == "NO_CLAIMS"
+    assert result["independent_result"]["encounters"], "we screened it ourselves"
+    print(
+        f"\n[unscreened] {len(text.encode()):,} bytes, no claims, "
+        f"{len(result['independent_result']['encounters'])} encounters found by "
+        "the receiver"
+    )

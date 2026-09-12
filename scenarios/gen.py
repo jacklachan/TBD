@@ -22,7 +22,7 @@ import argparse
 import hashlib
 import json
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -629,10 +629,30 @@ VARIANTS = [
         "require": "MANOEUVRE_AVAILABLE",
     },
     {
+        "scenario_id": "collision",
+        # A metres-level approach between objects that are themselves metres
+        # across is a strike, not a near miss. It exists because "133.7 m" means
+        # nothing to anyone without an intuition for orbital distances, whereas
+        # two objects arriving at the same point plainly does.
+        "description": (
+            "Unavoidable strike on the current trajectory: the two objects "
+            "arrive at the same point. A burn still fixes it."
+        ),
+        "seed": 2004,
+        "primary_tca_s": 16200.0,
+        "primary_miss_m": 4.0,
+        "require": "MANOEUVRE_AVAILABLE",
+        # An operator facing an actual impact authorises more fuel than one
+        # avoiding a routine close pass. The grid does not grow with the budget
+        # -- its largest burn is still 0.20 m/s -- so this is the case where the
+        # enumerated options are the binding constraint rather than the fuel.
+        "max_delta_v_mps": 1.5,
+    },
+    {
         "scenario_id": "no_feasible",
         "description": (
-            "Close approach too early for the supported burn grid to fix; no "
-            "option qualifies."
+            "Close approach too early to fix: no grid option qualifies, and "
+            "burns the planner designs itself do not either."
         ),
         "seed": 2003,
         "primary_tca_s": 1300.0,
@@ -664,12 +684,17 @@ def main() -> int:
     )
 
     built_all = [build_signature_case(seed_state, args.seed, policy)]
+    variant_policies: dict[str, Policy] = {}
     for spec in VARIANTS:
+        variant_policy = policy
+        if "max_delta_v_mps" in spec:
+            variant_policy = replace(policy, max_delta_v_mps=spec["max_delta_v_mps"])
+        variant_policies[spec["scenario_id"]] = variant_policy
         built_all.append(
             build_variant(
                 seed_state,
                 spec["seed"],
-                policy,
+                variant_policy,
                 spec["scenario_id"],
                 spec["description"],
                 spec["primary_tca_s"],
@@ -679,7 +704,9 @@ def main() -> int:
         )
 
     for built in built_all:
-        document = scenario_document(built, seed_state, policy)
+        document = scenario_document(
+            built, seed_state, variant_policies.get(built.scenario_id, policy)
+        )
         evidence = built.evidence
         print(f"\n{built.scenario_id}  (seed {built.seed}, {evidence['attempts_used']} attempt(s))")
         print(f"  {built.description}")

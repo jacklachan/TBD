@@ -8,6 +8,7 @@ taking the total to thirty-three. Expansion never relaxes policy.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 KIND_NO_BURN = "NO_BURN"
@@ -103,3 +104,50 @@ def expansion_candidates() -> list[Candidate]:
         for c in generate_candidates(GRID_REVISION_EXPANDED)
         if c.candidate_id not in base_ids
     ]
+
+
+# --------------------------------------------------------------------------
+# Designed burns
+#
+# A burn the planner specified itself is not in any grid, so it cannot be found
+# by enumeration. Its ID carries the whole design instead -- time in seconds,
+# direction, magnitude in millimetres per second -- which is what lets the API
+# reconstruct one for visualisation without a schema change and without the
+# request being trusted to describe it.
+# --------------------------------------------------------------------------
+
+DESIGNED_PREFIX = "free_"
+_DESIGNED_ID = re.compile(
+    rf"^{DESIGNED_PREFIX}t(?P<seconds>\d{{1,7}})s_(?P<slug>pro|ret)_(?P<milli>\d{{1,6}})$"
+)
+_SLUG_DIRECTION = {slug: name for name, slug in _DIRECTION_SLUG.items()}
+
+
+def designed_candidate_id(burn_t_s: float, direction: str, delta_v_mps: float) -> str:
+    return (
+        f"{DESIGNED_PREFIX}t{int(round(burn_t_s))}s_"
+        f"{_DIRECTION_SLUG[direction]}_{int(round(delta_v_mps * 1000.0)):03d}"
+    )
+
+
+def candidate_from_id(candidate_id: str, grid_revision: int) -> Candidate | None:
+    """Resolve an option ID, from the grid or from a designed burn.
+
+    Returns None for anything that is neither, so callers keep reporting an
+    unknown ID as unknown rather than propagating whatever was asked for.
+    """
+    for candidate in generate_candidates(grid_revision):
+        if candidate.candidate_id == candidate_id:
+            return candidate
+
+    match = _DESIGNED_ID.match(candidate_id or "")
+    if match is None:
+        return None
+    return Candidate(
+        candidate_id=candidate_id,
+        kind=KIND_IMPULSE,
+        delta_v_mps=int(match.group("milli")) / 1000.0,
+        grid_revision=grid_revision,
+        burn_t_s=float(match.group("seconds")),
+        direction=_SLUG_DIRECTION[match.group("slug")],
+    )

@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "scenario_id": "no_feasible",
+  "scenario_id": "collision",
   "scenario_version": 1,
-  "seed": 2003,
-  "description": "Close approach too early to fix: no grid option qualifies, and burns the planner designs itself do not either.",
+  "seed": 2004,
+  "description": "Unavoidable strike on the current trajectory: the two objects arrive at the same point. A burn still fixes it.",
   "epoch_utc": "2026-09-11T21:51:16.570+00:00",
   "horizon_s": 21600.0,
   "objects": [
@@ -32,14 +32,14 @@
       "maneuverable": false,
       "initial_state": {
         "r_m": [
-          1531162.323672737,
-          -6000130.9034435665,
-          3689190.843724627
+          -5406800.193131864,
+          4707559.481265183,
+          740032.4094106564
         ],
         "v_mps": [
-          -3535.2372094759116,
-          2757.447679455021,
-          5934.706663132732
+          -1134.5869899135432,
+          -2408.057929832873,
+          6946.389552098293
         ]
       }
     },
@@ -50,14 +50,14 @@
       "maneuverable": false,
       "initial_state": {
         "r_m": [
-          -6662333.838165161,
-          -2904497.041006438,
-          76291.83110115037
+          -3686566.4815429905,
+          -5895663.688531803,
+          -1368064.0060151592
         ],
         "v_mps": [
-          2238.1538563720146,
-          -4782.477589744321,
-          5188.825253859559
+          425.18634724522667,
+          -2013.0871301770262,
+          7216.0102533842255
         ]
       }
     }
@@ -74,7 +74,7 @@
   ],
   "default_policy": {
     "policy_version": 1,
-    "max_delta_v_mps": 0.2,
+    "max_delta_v_mps": 1.5,
     "min_separation_m": 1000.0,
     "blocked_windows": []
   },
@@ -92,14 +92,14 @@
   },
   "generation_evidence": {
     "attempts_used": 1,
-    "requirement": "NO_QUALIFIED_OPTION",
-    "baseline_vs_primary_m": 150.00000000143632,
-    "baseline_vs_primary_tca_s": 1176.7778497370991,
-    "baseline_vs_secondary_m": 89106.36404834049,
-    "qualified_manoeuvres": 0,
-    "search_status": "NO_PRIMARY_QUALIFIED_OPTION",
+    "requirement": "MANOEUVRE_AVAILABLE",
+    "baseline_vs_primary_m": 4.000000896843645,
+    "baseline_vs_primary_tca_s": 16284.121809905078,
+    "baseline_vs_secondary_m": 67454.57416970041,
+    "qualified_manoeuvres": 1,
+    "search_status": "OPTIONS_AVAILABLE",
     "candidate_count": 25,
     "rejected_attempts": []
   },
-  "input_hash": "ddee5479232958ca1d7986a2a9cedabad8514b92f11594ddefb21ea0bbd77add"
+  "input_hash": "ba6c5db9415db85801b7c9de44e08aaf9fce026efd9d88a421e4349f6f7e59a1"
 }

@@ -20,6 +20,7 @@ import time
 from dataclasses import dataclass, field
 
 from backend.agent.llm import LLMError, Message, Provider
+from backend.planning.candidates import DESIGNED_PREFIX, Candidate
 from backend.planning.verifier import STATUS_PASS, ValidationResult
 from backend.planning.policy import Policy
 
@@ -37,6 +38,11 @@ SYSTEM_PROMPT = """You are a safety reviewer for satellite collision-avoidance p
 You receive computed evidence for one manoeuvre that has already passed automatic
 validation. Your job is to decide whether anything about it should still stop it
 from being carried out.
+
+`candidate_id` is an opaque label. Do not read a burn time or a magnitude out
+of it, and never call the evidence inconsistent because the label does not
+match the numbers. The `manoeuvre` object is the burn under review and is the
+only description of it.
 
 Block if the evidence is internally inconsistent, if a clearance is only
 marginally above the floor, if a reported minimum is flagged as ambiguous, or if
@@ -65,10 +71,38 @@ class ReviewerVerdict:
         return self.decision == DECISION_ALLOW
 
 
-def build_evidence(validation: ValidationResult, policy: Policy) -> dict:
-    """Read-only evidence. No trajectories, no candidate list, no tools."""
+def build_evidence(
+    validation: ValidationResult,
+    policy: Policy,
+    candidate: Candidate | None = None,
+) -> dict:
+    """Read-only evidence. No trajectories, no candidate list, no tools.
+
+    ``candidate`` is the burn under review. It is optional only because a
+    reviewer that is handed no manoeuvre should say so rather than crash --
+    "required evidence is missing" is a correct verdict on an incomplete
+    bundle. It should be supplied. Grid IDs happen to describe their own burn,
+    which is why its absence went unnoticed until the planner started designing
+    manoeuvres whose IDs the reviewer had never seen.
+    """
+    manoeuvre: dict | None = None
+    if candidate is not None:
+        manoeuvre = {
+            "kind": candidate.kind,
+            "delta_v_mps": candidate.delta_v_mps,
+            "burn_t_s": candidate.burn_t_s,
+            "direction": candidate.direction,
+            "within_budget": candidate.delta_v_mps <= policy.max_delta_v_mps + 1e-12,
+            "source": (
+                "DESIGNED"
+                if candidate.candidate_id.startswith(DESIGNED_PREFIX)
+                else "GRID"
+            ),
+        }
+
     return {
         "candidate_id": validation.candidate_id,
+        "manoeuvre": manoeuvre,
         "validation_id": validation.validation_id,
         "validation_status": validation.status,
         "clearance_floor_m": policy.min_separation_m,
@@ -118,6 +152,7 @@ def review(
     provider: Provider,
     validation: ValidationResult,
     policy: Policy,
+    candidate: Candidate | None = None,
 ) -> ReviewerVerdict:
     """Second opinion on an already-validated proposal.
 
@@ -135,7 +170,7 @@ def review(
             evidence_ids=(validation.validation_id,),
         )
 
-    evidence = build_evidence(validation, policy)
+    evidence = build_evidence(validation, policy, candidate)
     started = time.perf_counter()
 
     try:

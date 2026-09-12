@@ -42,8 +42,13 @@ from backend.agent.llm import GeminiProvider, LLMError, Provider
 from backend.agent.memory import CaseMemory
 from backend.agent.planner import PlannerLimits, interpret_instruction, plan_case
 from backend.agent.tools import CaseSession
+from backend.ingest import IngestError, epoch_spread_s, scenario_from_tles
 from backend.interop import CdmError, verify_cdm, write_cdm
-from backend.planning.candidates import Candidate, generate_candidates
+from backend.planning.candidates import (
+    DESIGNED_PREFIX,
+    Candidate,
+    candidate_from_id,
+)
 from backend.planning.policy import STATUS_READY as DIFF_READY
 from backend.planning.policy import Policy, policy_from_document
 from backend.planning.verifier import MODEL_VERSION, STATUS_PASS, reconstruct
@@ -120,6 +125,14 @@ class CdmRequest(BaseModel):
     # advertising a limit the request could never reach. A real record is
     # around 3 KB.
     text: str = Field(..., min_length=1, max_length=16_000)
+
+
+class TleIngestRequest(BaseModel):
+    # Twelve three-line sets is about 2.5 KB; the cap matches the middleware's
+    # body limit rather than advertising a size the request could never carry.
+    text: str = Field(..., min_length=1, max_length=16_000)
+    satellite_index: int = Field(0, ge=0, le=11)
+    horizon_s: float = Field(21_600.0, ge=60.0, le=172_800.0, allow_inf_nan=False)
 
 
 class ResetRequest(VersionedRequest):
@@ -252,11 +265,39 @@ def _check_versions(case_row, expected_scenario: int, expected_policy: int) -> N
         )
 
 
-def _session_for(case_row) -> CaseSession:
+def _session_for(case_row, store=None) -> CaseSession:
     session = CaseSession.from_document(case_row.document, case_id=case_row.case_id)
     session.policy = case_row.policy
     session.grid_revision = case_row.grid_revision
+    if store is not None:
+        session.designed = _designed_from_history(store, case_row)
     return session
+
+
+def _designed_from_history(store, case_row) -> list[Candidate]:
+    """Burns the planner designed in an earlier run for this case.
+
+    A designed burn exists in the planner's session and nowhere else, so a later
+    request building a fresh session would not know about it -- and the one that
+    matters is usually the proposal the operator is being asked to approve.
+    Recovering them from the stored validations means the comparison, the
+    trajectory the operator inspects, and the options table all see the same set
+    of options the decision was actually made from.
+
+    The IDs carry the whole design, so nothing has to be stored for this beyond
+    the validations that were already being kept as evidence.
+    """
+    recovered: list[Candidate] = []
+    seen: set[str] = set()
+    for validation in store.validations(case_row.case_id):
+        candidate_id = validation.candidate_id
+        if candidate_id in seen or not candidate_id.startswith(DESIGNED_PREFIX):
+            continue
+        candidate = candidate_from_id(candidate_id, case_row.grid_revision)
+        if candidate is not None:
+            recovered.append(candidate)
+            seen.add(candidate_id)
+    return recovered
 
 
 def _persist_run(state: AppState, case_row, session: CaseSession, outcome, run_id: str) -> None:
@@ -494,7 +535,7 @@ def create_app(
         if not state.model_slots.acquire(blocking=False):
             raise HTTPException(429, {"error": "CAPACITY", "message": "The analysis engine is busy. Try again shortly."})
         try:
-            result = analyze(_session_for(case_row))
+            result = analyze(_session_for(case_row, state.store))
             _check_versions(_case_or_404(state, case_id), payload.expected_scenario_version, payload.expected_policy_version)
             return result
         finally:
@@ -655,12 +696,21 @@ def create_app(
         if len(wanted) > 3:
             raise HTTPException(422, "at most three variants per request")
 
-        available = {c.candidate_id: c for c in generate_candidates(case_row.grid_revision)}
         selected: list[Candidate] = []
         for candidate_id in wanted:
-            if candidate_id not in available:
+            # Grid options and burns the planner designed itself resolve the
+            # same way here; a designed burn that cannot be visualised would be
+            # a proposal the operator is asked to approve without seeing it.
+            candidate = candidate_from_id(candidate_id, case_row.grid_revision)
+            if candidate is None:
                 raise HTTPException(404, f"unknown candidate_id {candidate_id!r}")
-            selected.append(available[candidate_id])
+            if candidate.burn_t_s is not None and not (
+                0.0 < candidate.burn_t_s < float(case_row.document["horizon_s"])
+            ):
+                raise HTTPException(
+                    422, f"candidate {candidate_id!r} burns outside the horizon"
+                )
+            selected.append(candidate)
 
         scenario = reconstruct(case_row.document)
         return build_bundle(
@@ -832,6 +882,38 @@ def create_app(
             raise HTTPException(
                 422, {"error": "CDM_UNREADABLE", "message": str(exc)}
             ) from exc
+
+    @app.post("/ingest/tle", status_code=201)
+    def ingest_tle(payload: TleIngestRequest, request: Request) -> dict:
+        """Build a case from pasted catalogue elements and screen it.
+
+        The orbits are real; the encounter is whatever the elements say. Two
+        catalogue objects usually have no close approach at all, and returning
+        that is the point -- a screening tool that always finds something is not
+        screening.
+        """
+        state = _state(request)
+        try:
+            document = scenario_from_tles(
+                payload.text,
+                satellite_index=payload.satellite_index,
+                horizon_s=payload.horizon_s,
+            )
+        except IngestError as exc:
+            raise HTTPException(
+                422, {"error": "TLE_UNREADABLE", "message": str(exc)}
+            ) from exc
+
+        case_row = state.store.create_case(
+            document, policy_from_document(document), max_cases=MAX_CASES
+        )
+        snapshot = _snapshot(state, case_row.case_id)
+        snapshot["ingest"] = {
+            "objects": document["provenance"]["objects"],
+            "epoch_spread_s": round(epoch_spread_s(payload.text), 1),
+            "note": document["provenance"]["note"],
+        }
+        return snapshot
 
     @app.get("/health")
     def health() -> dict:

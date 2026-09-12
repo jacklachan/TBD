@@ -14,17 +14,15 @@ A satellite is predicted to pass too close to a piece of debris. This decides wh
 
 The interesting part is what happens next. The cheapest manoeuvre that clears the original threat turns out to put the satellite **523 m from a second object** — so an independent check rejects it, and the planner finds one that clears both. Then an operator can halve the fuel budget in plain English, and the system re-solves and reports honestly that nothing is left that works.
 
-**Temporary name.** "Satellite Demo" is a placeholder, not a brand.
-
 ## Against the problem statement
 
 > *Space Tech & Orbital Sustainability: Build autonomous agents to track space debris, optimize satellite maneuver planning, or coordinate open-source orbital traffic management to protect global communication infrastructure.*
 
 | Clause | Where it lives | How far it goes |
 |---|---|---|
-| **Autonomous agents** | `backend/agent/` | A bounded planner with five tools, a safety reviewer that can veto, case memory, and plain-English constraint interpretation. Approvability is read off typed results, so the model cannot approve anything — that is enforced in code, not in a prompt. |
-| **Track space debris** | `data/context/`, the Real-world context panel | A frozen CelesTrak SOCRATES snapshot: 25 real predicted conjunctions with real object names, times and miss distances. It is displayed and dated, and it drives nothing. We do not run a catalogue screen of our own. |
-| **Optimize satellite manoeuvre planning** | `backend/planning/`, `backend/core/` | The core. 25 options screened against the primary threat, then independently re-verified against every object over the full horizon by a separate code path at a finer step. The two paths agree to 3.6e-08 m. |
+| **Autonomous agents** | `backend/agent/` | A bounded planner with six tools, a safety reviewer that can veto, case memory, and plain-English constraint interpretation. It can design a burn of its own rather than only pick one off the grid — and a designed burn passes through the identical independent check, so the freedom costs no safety. Approvability is read off typed results, so the model cannot approve anything — that is enforced in code, not in a prompt. |
+| **Track space debris** | `data/context/`, the Real-world context panel | A frozen CelesTrak SOCRATES snapshot: 25 real predicted conjunctions with real object names, times and miss distances. It is displayed and dated, and it drives nothing. Separately, `POST /ingest/tle` screens element sets you paste — real orbits, evaluated at one shared epoch, screened by the same two paths. That is a screen you drive, not a catalogue-wide one we run. |
+| **Optimize satellite manoeuvre planning** | `backend/planning/`, `backend/core/` | The core. 25 options screened against the primary threat, then independently re-verified against every object over the full horizon by a separate code path at a finer step. The two paths agree to 3.6e-08 m. The planner may also design a burn the grid does not contain; that burn is screened by both paths too, agreeing to 7.7e-10 m. |
 | **Coordinate open-source orbital traffic management** | `backend/interop.py`, `?format=cdm`, `POST /interop/verify-cdm` | A decision leaves as a CCSDS-shaped Conjunction Data Message **carrying the state vectors and the manoeuvre, not just the conclusion** — and the receiving endpoint throws the conclusions away and recomputes the encounter from those states with the same verifier that gates our own proposals. The receiver does not have to trust the sender. `python scripts/interop_demo.py` shows the exchange, including a tampered record being caught. |
 | **Protect global communication infrastructure** | The same SOCRATES snapshot | **19 of the 25 real conjunctions we ship involve a communications satellite** — Starlink, Iridium, Kinéis — mostly against Fengyun 1C and Cosmos break-up debris. The constellations carrying global connectivity share these shells with the debris. |
 
@@ -32,7 +30,7 @@ The interesting part is what happens next. The cheapest manoeuvre that clears th
 
 The statement offers three tracks joined by *or*. We went deep on manoeuvre planning rather than wide across all three, and the gaps are worth naming rather than glossing:
 
-- **No catalogue screening.** We screen three objects, not eighteen thousand. Public element sets are roughly a kilometre accurate at epoch, which is the same order as the clearance floor we enforce — a screen built on them would produce confident numbers we could not defend.
+- **No catalogue screening.** You can paste up to twelve real objects and we will screen them; we do not screen eighteen thousand. And the caveat that keeps us from claiming more is unchanged: public element sets are roughly a kilometre accurate at epoch, the same order as the clearance floor we enforce, and our propagation from that epoch is two-body rather than SGP4. A pasted screen is a reason to look, not a prediction, and the UI says so.
 - **No multi-operator negotiation.** One operator, one spacecraft, and no automated protocol between agents. Coordination here means a record another operator can independently *check* — which is the part that actually blocks trust — not a negotiation.
 - **No collision probability, anywhere.** A conforming CDM carries a covariance for each object and public element sets do not have one. We report deterministic simulated separation and say what was screened. The CDM export states this in its own header.
 
@@ -61,7 +59,7 @@ No collision probability is computed anywhere. Separations are deterministic val
 ```bash
 pip install -r requirements-dev.txt  # Python 3.12+
 cp .env.example .env          # then put your GEMINI_API_KEY in it
-python -m pytest tests/ -q    # 191 tests after frontend integration
+python -m pytest tests/ -q    # 254 tests
 ```
 
 ```bash
@@ -90,7 +88,7 @@ Open **http://127.0.0.1:8000**. The server serves both the API and the productio
 The workspace includes a rotatable 3D globe, an inspectable procedural spacecraft, exact encounter jumps, shared-clock playback, a separation chart, a 25-option comparison table, manual budget changes, AI restriction preview/confirmation, reviewed simulated approval, reset and evidence export. The numerical comparison works without an API key and is labeled separately from AI runs. Set `GEMINI_API_KEY` on the backend to use the real planner. Remote access also requires `DESK_ACCESS_TOKEN`; the browser asks for the operator token and keeps it in memory only.
 
 ```bash
-python -m pytest tests -q                    # 191 tests
+python -m pytest tests -q                    # 254 tests
 npm --prefix frontend test                  # 7 unit tests
 npm --prefix frontend run test:browser      # running API + Vite; Chrome installed
 ```
@@ -115,7 +113,7 @@ Full evidence, including what is still unverified, is in [Handoff/STATE.md](Hand
 ```
 backend/core/        propagation, trajectories, encounter detection — numpy only
 backend/planning/    the 25-option grid, primary screening, independent verifier
-backend/agent/       provider seam, five tools, bounded planner, reviewer, memory
+backend/agent/       provider seam, six tools, bounded planner, reviewer, memory
 backend/api.py       HTTP surface, version gating, approval, export
 scenarios/           the generator and four asserted fixtures
 ```

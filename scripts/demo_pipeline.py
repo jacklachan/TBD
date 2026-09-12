@@ -41,6 +41,7 @@ SCENARIO_PATHS = {
     "no_encounter": REPO_ROOT / "scenarios" / "variants" / "no_encounter.json",
     "simple_conflict": REPO_ROOT / "scenarios" / "variants" / "simple_conflict.json",
     "no_feasible": REPO_ROOT / "scenarios" / "variants" / "no_feasible.json",
+    "collision": REPO_ROOT / "scenarios" / "variants" / "collision.json",
 }
 
 OUTCOME_VERIFIED = "VERIFIED_OPTION"

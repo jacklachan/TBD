@@ -24,9 +24,14 @@ import uuid
 from dataclasses import dataclass, field
 
 from backend.planning.candidates import (
+    DIRECTION_PROGRADE,
+    DIRECTION_RETROGRADE,
+    DIRECTIONS,
     GRID_REVISION_BASE,
     GRID_REVISION_EXPANDED,
+    KIND_IMPULSE,
     Candidate,
+    designed_candidate_id,
     generate_candidates,
 )
 from backend.planning.policy import (
@@ -38,7 +43,12 @@ from backend.planning.policy import (
     PolicyDiff,
     policy_from_document,
 )
-from backend.planning.search import SearchResult, evaluate_candidates
+from backend.planning.search import (
+    SearchResult,
+    evaluate_candidate,
+    evaluate_candidates,
+)
+from backend.agent.reviewer import MARGINAL_CLEARANCE_RATIO
 from backend.planning.verifier import (
     STATUS_PASS,
     ValidationResult,
@@ -54,10 +64,19 @@ TOOL_EVALUATE = "evaluate_candidates"
 TOOL_VALIDATE = "validate_proposal"
 TOOL_PROPOSE_POLICY = "propose_policy"
 TOOL_WIDEN = "widen_search"
+TOOL_DESIGN = "design_maneuver"
 
 DIMENSION_SMALLER_MAGNITUDES = "SMALLER_MAGNITUDES"
 
 MAX_LISTED_OPTIONS = 8
+
+# The grid exists because a finite, pre-enumerated set of burns is easy to
+# reason about. Free design is the escape hatch for geometry the grid does not
+# cover, and it is bounded for the same reason the grid is: an agent allowed
+# unlimited attempts at a continuous parameter is doing a search, not planning,
+# and the run deadline would be the only thing stopping it.
+MAX_DESIGNED_BURNS = 4
+MIN_DESIGN_DELTA_V_MPS = 0.001
 
 # Screening 25 options takes about half a second, and it is deterministic for a
 # given scenario, policy and grid. Reset mints a new case ID from the same
@@ -90,6 +109,10 @@ def _search_cache_key(session: "CaseSession") -> tuple:
         policy.min_separation_m,
         tuple(sorted(w.window_id for w in policy.blocked_windows)),
         session.grid_revision,
+        # The candidate set is no longer the grid revision alone: a session can
+        # carry burns the planner designed. Leaving these out would serve a
+        # cached grid-only screening and silently drop them.
+        tuple(sorted(c.candidate_id for c in session.designed)),
     )
 
 
@@ -128,6 +151,9 @@ class CaseSession:
     widen_used: bool = False
     tool_log: list[dict] = field(default_factory=list)
     memory_hits: list[dict] = field(default_factory=list)
+    # Burns the model designed itself rather than picked off the grid. Kept
+    # separate so evidence can always say which of the two a decision came from.
+    designed: list[Candidate] = field(default_factory=list)
 
     @classmethod
     def from_document(cls, document: dict, case_id: str | None = None) -> "CaseSession":
@@ -157,7 +183,7 @@ class CaseSession:
         }
 
     def candidates(self) -> list[Candidate]:
-        return generate_candidates(self.grid_revision)
+        return generate_candidates(self.grid_revision) + list(self.designed)
 
     def candidate_by_id(self, candidate_id: str) -> Candidate:
         for candidate in self.candidates():
@@ -165,7 +191,7 @@ class CaseSession:
                 return candidate
         raise ToolError(
             f"unknown candidate_id {candidate_id!r}; it is not in the active grid "
-            f"(revision {self.grid_revision})"
+            f"(revision {self.grid_revision}) and was not designed in this run"
         )
 
     def version_stamp(self) -> dict:
@@ -251,6 +277,51 @@ DECLARATIONS: dict[str, dict] = {
             },
         },
     },
+    TOOL_DESIGN: {
+        "name": TOOL_DESIGN,
+        "description": (
+            "Design a burn of your own instead of taking one off the grid: any "
+            "time in the horizon, either direction, any magnitude within the "
+            "fuel budget. The burn is recomputed independently against every "
+            "object before it can be approved, exactly like a grid option, so "
+            "designing one is not the same as clearing one. Use this when the "
+            "grid brackets a workable answer but does not contain it -- for "
+            "example when one option leaves too little margin and the next is "
+            "more fuel than the job needs."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "burn_t_s": {
+                    "type": "number",
+                    "description": (
+                        "Seconds after epoch to burn. Must be inside the "
+                        "horizon given in the case briefing."
+                    ),
+                },
+                "direction": {
+                    "type": "string",
+                    "enum": [DIRECTION_PROGRADE, DIRECTION_RETROGRADE],
+                    "description": "Along the velocity, or against it.",
+                },
+                "delta_v_mps": {
+                    "type": "number",
+                    "description": (
+                        "Magnitude in metres per second. Must be within the "
+                        "fuel budget in the active policy."
+                    ),
+                },
+                "rationale": {
+                    "type": "string",
+                    "description": (
+                        "Why this burn rather than the nearest grid option. "
+                        "Recorded in the evidence trail."
+                    ),
+                },
+            },
+            "required": ["burn_t_s", "direction", "delta_v_mps"],
+        },
+    },
     TOOL_WIDEN: {
         "name": TOOL_WIDEN,
         "description": (
@@ -272,7 +343,13 @@ DECLARATIONS: dict[str, dict] = {
 }
 
 _PHASE_TOOLS = {
-    PHASE_PLANNING: (TOOL_BRIEFING, TOOL_EVALUATE, TOOL_VALIDATE, TOOL_WIDEN),
+    PHASE_PLANNING: (
+        TOOL_BRIEFING,
+        TOOL_EVALUATE,
+        TOOL_VALIDATE,
+        TOOL_DESIGN,
+        TOOL_WIDEN,
+    ),
     PHASE_POLICY: (TOOL_BRIEFING, TOOL_PROPOSE_POLICY),
 }
 
@@ -425,17 +502,35 @@ def validate_one(session: CaseSession, candidate_id: str) -> dict:
 
     candidate = session.candidate_by_id(candidate_id.strip())
 
-    expected = None
+    # The safety property of this system is that two independently written
+    # methods agree, not that one of them ran. Grid options get their second
+    # opinion from the screening pass; a designed burn is in no screening pass,
+    # so the search path is run for it here. Without this a designed burn would
+    # reach the operator on a single computation -- which the reviewer correctly
+    # refuses as missing evidence.
+    evaluation = None
     if session.search_result is not None:
         try:
             evaluation = session.search_result.by_id(candidate.candidate_id)
         except KeyError:
             evaluation = None
-        if evaluation is not None and evaluation.primary_encounter is not None:
-            expected = {
-                "min_separation_m": evaluation.primary_encounter.min_separation_m,
-                "tca_s": evaluation.primary_encounter.tca_s,
-            }
+    if evaluation is None:
+        scenario = reconstruct(session.document)
+        evaluation = evaluate_candidate(
+            scenario.satellite,
+            scenario.debris[scenario.primary_threat_id],
+            scenario.primary_threat_id,
+            candidate,
+            session.policy,
+            scenario.horizon_s,
+        )
+
+    expected = None
+    if evaluation is not None and evaluation.primary_encounter is not None:
+        expected = {
+            "min_separation_m": evaluation.primary_encounter.min_separation_m,
+            "tca_s": evaluation.primary_encounter.tca_s,
+        }
 
     result = validate_candidate(
         session.document,
@@ -462,6 +557,23 @@ def validate_one(session: CaseSession, candidate_id: str) -> dict:
         if e.min_separation_m < session.policy.min_separation_m
     ]
 
+    # An option that passes by a hair will be refused downstream by the safety
+    # reviewer, so "PASS" on its own is not enough for the planner to act on.
+    # Reporting the margin, the bar, and the fuel still available turns that
+    # from something the planner has to guess at into something it can read.
+    closest = result.closest()
+    margin_m = (
+        closest.min_separation_m - session.policy.min_separation_m
+        if closest is not None
+        else None
+    )
+    comfortable_m = session.policy.min_separation_m * MARGINAL_CLEARANCE_RATIO
+    marginal = (
+        closest is not None
+        and result.status == STATUS_PASS
+        and closest.min_separation_m < comfortable_m
+    )
+
     return {
         **session.version_stamp(),
         "candidate_id": result.candidate_id,
@@ -474,11 +586,143 @@ def validate_one(session: CaseSession, candidate_id: str) -> dict:
         "delta_v_mps": candidate.delta_v_mps,
         "burn_t_s": candidate.burn_t_s,
         "approvable": result.approvable,
+        "margin_above_floor_m": None if margin_m is None else round(margin_m, 1),
+        "comfortable_margin_m": round(comfortable_m, 1),
+        "marginal": marginal,
+        "budget_remaining_mps": round(
+            max(0.0, session.policy.max_delta_v_mps - candidate.delta_v_mps), 3
+        ),
         "note": (
             "Independent recomputation against every object over the full "
             "horizon, at a finer sample step than the screening pass."
+            + (
+                " This clears the floor, but by less than the safety reviewer "
+                "accepts; it will be refused as marginal unless nothing better "
+                "exists."
+                if marginal
+                else ""
+            )
         ),
     }
+
+
+def _finite_number(value, field: str) -> float:
+    """A model can send a string, a null, or a NaN. None of those are a burn."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise ToolError(f"{field} must be a number, got {type(value).__name__}")
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise ToolError(f"{field} must be a number, got {value!r}") from None
+    if not math.isfinite(number):
+        raise ToolError(f"{field} must be finite, got {value!r}")
+    return number
+
+
+def design_maneuver(
+    session: CaseSession,
+    burn_t_s=None,
+    direction=None,
+    delta_v_mps=None,
+    rationale: str = "",
+) -> dict:
+    """A burn the model specified itself, gated by the same independent check.
+
+    The grid is a convenience, not the safety property. What makes a manoeuvre
+    approvable is that the verifier recomputed it against every object over the
+    full horizon and found it clear -- and that is true whether the burn came
+    off the grid or out of the model. So this tool does not relax anything: it
+    hands the design straight to ``validate_one``.
+
+    What it does enforce is that the design is well formed before it reaches
+    the propagator, and that there are only so many of them per run.
+    """
+    if len(session.designed) >= MAX_DESIGNED_BURNS:
+        raise ToolError(
+            f"already designed {MAX_DESIGNED_BURNS} burns in this run, which is "
+            "the limit. Validate one of them, or take an option off the grid."
+        )
+
+    t_s = _finite_number(burn_t_s, "burn_t_s")
+    magnitude = _finite_number(delta_v_mps, "delta_v_mps")
+
+    if not isinstance(direction, str) or direction.strip().upper() not in DIRECTIONS:
+        raise ToolError(
+            f"direction must be one of {list(DIRECTIONS)}, got {direction!r}"
+        )
+    heading = direction.strip().upper()
+
+    horizon = session.horizon_s
+    if not 0.0 < t_s < horizon:
+        raise ToolError(
+            f"burn_t_s must be inside the horizon (0 to {horizon:,.0f} s), got "
+            f"{t_s:,.1f} s"
+        )
+    if magnitude < MIN_DESIGN_DELTA_V_MPS:
+        raise ToolError(
+            f"delta_v_mps must be at least {MIN_DESIGN_DELTA_V_MPS} m/s; for no "
+            "burn at all, validate the baseline option instead"
+        )
+    # Over-budget is a policy rejection, not a malformed request, so it is left
+    # to the verifier to report as OVER_BUDGET with the rest of the evidence.
+
+    candidate = Candidate(
+        candidate_id=designed_candidate_id(t_s, heading, magnitude),
+        kind=KIND_IMPULSE,
+        delta_v_mps=magnitude,
+        grid_revision=session.grid_revision,
+        burn_t_s=t_s,
+        direction=heading,
+    )
+
+    existing = next(
+        (c for c in session.candidates() if c.candidate_id == candidate.candidate_id),
+        None,
+    )
+    if existing is None:
+        session.designed.append(candidate)
+    else:
+        candidate = existing
+
+    result = validate_one(session, candidate.candidate_id)
+    nearest = _nearest_grid_option(candidate)
+    return {
+        **result,
+        "source": "DESIGNED",
+        "direction": candidate.direction,
+        "rationale": str(rationale or "")[:400],
+        "nearest_grid_option": nearest,
+        "designs_remaining": MAX_DESIGNED_BURNS - len(session.designed),
+        "note": (
+            "Designed by the planner, then recomputed independently against "
+            "every object over the full horizon. The design itself clears "
+            "nothing; this result does."
+        ),
+    }
+
+
+def _nearest_grid_option(candidate: Candidate) -> str:
+    """The grid option a designed burn sits closest to.
+
+    Recorded so a reviewer can see at a glance whether the model reached for
+    free design because the grid genuinely did not cover the geometry, or out
+    of habit.
+    """
+    grid = [
+        c
+        for c in generate_candidates(GRID_REVISION_EXPANDED)
+        if not c.is_baseline and c.direction == candidate.direction
+    ]
+    if not grid or candidate.burn_t_s is None:
+        return ""
+    # Seconds and metres per second are not comparable, so each axis is scaled
+    # by its own grid spacing before they are added.
+    closest = min(
+        grid,
+        key=lambda c: abs((c.burn_t_s or 0.0) - candidate.burn_t_s) / 900.0
+        + abs(c.delta_v_mps - candidate.delta_v_mps) / 0.05,
+    )
+    return closest.candidate_id
 
 
 def propose_policy_change(
@@ -676,6 +920,14 @@ def dispatch(
             max_delta_v_mps=arguments.get("max_delta_v_mps"),
             blocked_window_id=arguments.get("blocked_window_id"),
             source_text=source_text,
+        )
+    if name == TOOL_DESIGN:
+        return design_maneuver(
+            session,
+            burn_t_s=arguments.get("burn_t_s"),
+            direction=arguments.get("direction"),
+            delta_v_mps=arguments.get("delta_v_mps"),
+            rationale=arguments.get("rationale", ""),
         )
     if name == TOOL_WIDEN:
         return widen(session, arguments.get("dimension", ""))

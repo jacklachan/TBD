@@ -116,7 +116,7 @@ Seed orbit: NOAA 20 (JPSS-1), NORAD 43013, epoch 2026-09-11T21:51:16Z, a = 7211.
 
 `tests/test_scenarios.py` rebuilds the trajectories from the serialized JSON and recomputes all three facts, so the fixture is checked independently of the generator that wrote it.
 
-`no_feasible` variant: 0 of 25 options qualify, and 0 of 33 after grid widening — the agent's one permitted expansion cannot manufacture an answer.
+`no_feasible` variant: 0 of 25 options qualify, and 0 of 33 after grid widening — the agent's one permitted expansion cannot manufacture an answer. Since the planner gained `design_maneuver` it cannot manufacture one by hand either: in a live run it designed three burns of its own on this variant and the verifier rejected all three (294.1 m, 157.1 m, 362.8 m against a 1000 m floor), so the infeasibility is a property of the geometry rather than of the grid's coarseness.
 
 **Update, same day:** `backend/planning/verifier.py` now exists, and the veto comes from it rather than from the generator and the tests.
 
@@ -284,3 +284,87 @@ stands: report the measured number, not a predicted one.
   entry above.
 - No authentication and no rate limiting on the API. Known and recorded in
   DEPLOY.md; fine for a judged demo, not for a public URL.
+
+## Coordination, designed manoeuvres and real elements — 12 September 2026
+
+Three additions, in the order they change what a reader should believe about
+the system.
+
+### The planner can design a burn, and it is gated identically
+
+`design_maneuver` lets the model specify any burn — any time inside the
+horizon, either direction, any magnitude — instead of picking one of the 25
+enumerated options. The grid remains the default menu; this is the escape hatch
+for geometry the grid does not cover.
+
+Nothing about it relaxes a check. A designed burn is handed straight to
+`validate_one`, so it is recomputed against every object over the full horizon
+by the same verifier, and it is over-budget or in a blocked window exactly as a
+grid option would be. Bounded at four designs per run, because unlimited
+attempts at a continuous parameter is a search rather than planning.
+
+Three defects were found by building it, all of which predate it and two of
+which would have bitten a grid-only system eventually:
+
+- **The verifier's second opinion was tied to the screening pass.** A grid
+  option is cross-checked against the search path; a designed burn appears in
+  no screening pass, so it was reaching a validation on a single computation.
+  `validate_one` now runs the search path for any candidate the screening
+  result does not contain. Measured agreement on a designed burn: **7.685e-10
+  m**, in line with the grid options.
+- **The proposal ranking and the safety reviewer disagreed about what "good"
+  means.** The ranking took the cheapest passing option; the reviewer refuses
+  anything within 1.25× of the clearance floor. On the collision variant that
+  combination proposed a burn clearing by 11.4 m and then refused it — a run
+  spent reaching an answer nobody could approve. The ranking now puts margin
+  first, and within the marginal group prefers the roomiest rather than the
+  cheapest.
+- **The reviewer was never told which burn it was reviewing.** Its evidence
+  bundle carried the validation and the policy but no manoeuvre; grid IDs
+  happen to describe their own burn, which hid it. It now receives the burn
+  explicitly, and its prompt says the ID is an opaque label — it had been
+  reading `free_t100s_ret_1000` as 100 minutes and blocking on the resulting
+  "inconsistency".
+
+Live, on the `collision` variant, five consecutive runs: the grid's best option
+clears by 11.4 m and the planner designed its way past it every time, reaching
+1,375–1,990 m and an ALLOW from the reviewer in 22–45 s.
+
+On `no_feasible` the same tool changes nothing, which is the point — see the
+note above.
+
+### A collision scenario
+
+Every previous fixture is a near miss; the closest was 133.7 m against a 1000 m
+floor, which does not read as dangerous to anyone without an intuition for
+orbital distances. `scenarios/variants/collision.json` closes to **4.0 m** —
+between objects that are themselves metres across, that is a strike. The UI
+says so in place of the usual caption rather than leaving it to the number.
+
+Its fuel budget is 1.5 m/s rather than the usual 0.2, on the grounds that an
+operator facing an impact authorises more than one avoiding a routine pass. The
+grid does not grow with the budget — its largest burn is still 0.20 m/s — so
+this is the case where the enumerated options, not the fuel, are the binding
+constraint.
+
+### Real catalogue elements
+
+`backend/ingest.py` and `POST /ingest/tle` build a case from pasted two-line
+element sets. The orbits are real; the conjunction is whatever the elements say,
+which for two catalogue objects is usually nothing, and reporting that is the
+honest answer.
+
+Every set is evaluated with SGP4 at **one shared epoch**, not at its own —
+public element sets are published hours apart and screening them at their own
+epochs compares positions that never coexisted. Propagation from that epoch is
+two-body, so this is not an SGP4 conjunction analysis; the provenance and the UI
+both say so, and no element set carries covariance so nothing states a
+probability.
+
+Building it exposed one frontend bug: the 3D scene assumed a third object,
+because every generated fixture has one. A pasted pair crashed it.
+
+### Counts
+
+254 Python tests, 7 frontend tests. `scripts/diagnose.py` covers the designed
+burn and its cross-check, the TLE ingest, and the collision variant's outcome.
