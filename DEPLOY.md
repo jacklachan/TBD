@@ -18,6 +18,27 @@ pinned: false
 ---
 ```
 
+## 1b. What was checked without Docker
+
+Docker was not available in the build environment, so the image itself is
+unbuilt. Both of its stages were exercised separately against the same inputs
+the `Dockerfile` gives them:
+
+- **Frontend stage.** `npm ci` from the committed lockfile into an empty tree,
+  then `npm run build` over sources filtered by `.dockerignore` — which drops
+  `frontend/e2e`. That is safe because `tsconfig.json` includes only `src`.
+  Produces a 3.4 MB `dist` with the scene chunk, fonts and Earth texture.
+- **Runtime stage.** A clean virtual environment with `requirements.txt` alone,
+  no dev dependencies. Every runtime module imports, `create_app()` builds, and
+  the server answers on port 7860: health, the workspace page, case creation,
+  pasted-element ingest and the CDM round trip. Nothing under `backend/` or
+  `scenarios/` imports a dev-only package, which is what would break a Space
+  that installs only this file.
+- **Secrets.** `.dockerignore` excludes `.env` and `.env.*` while keeping
+  `.env.example`, so no key reaches the image.
+
+The remaining untested step is the image build itself.
+
 ## 2. The API key
 
 **Never commit it.** In the Space, go to *Settings → Variables and secrets → New secret*:
