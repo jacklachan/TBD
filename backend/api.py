@@ -78,6 +78,11 @@ SCENARIO_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 MAX_TRACKED_RUNS = 200
 MAX_CASES = 200
 
+# How long a numerical comparison waits for a free CPU slot before giving up.
+# Longer than the work itself by a wide margin, so the queue drains rather than
+# rejecting; short enough that a genuinely wedged server still answers.
+ANALYSIS_QUEUE_WAIT_S = 15.0
+
 RUN_RUNNING = "RUNNING"
 RUN_DONE = "DONE"
 RUN_FAILED = "FAILED"
@@ -183,7 +188,19 @@ class AppState:
         self.runs: dict[str, RunState] = {}
         self.executor = ThreadPoolExecutor(max_workers=4)
         self.lock = threading.Lock()
+        # Two different scarcities, which were sharing one semaphore.
+        #
+        # model_slots rations a paid quota. Refusing immediately is the right
+        # answer there: the caller wants to know the model is busy, not to be
+        # held while someone else's turn finishes.
+        #
+        # compute_slots rations CPU for the numerical comparison, which makes no
+        # model calls at all. That work takes well under two seconds, so a short
+        # wait empties the queue while an instant refusal turned several people
+        # opening the page at once into several people seeing an error -- the
+        # comparison is the first thing the workspace asks for.
         self.model_slots = threading.BoundedSemaphore(4)
+        self.compute_slots = threading.BoundedSemaphore(8)
 
     def scenario_path(self, scenario_id: str) -> Path:
         """Resolve a fixture name to a file inside ``scenarios_dir``.
@@ -533,7 +550,7 @@ def create_app(
         state = _state(request)
         case_row = _case_or_404(state, case_id)
         _check_versions(case_row, payload.expected_scenario_version, payload.expected_policy_version)
-        if not state.model_slots.acquire(blocking=False):
+        if not state.compute_slots.acquire(timeout=ANALYSIS_QUEUE_WAIT_S):
             raise HTTPException(429, {"error": "CAPACITY", "message": "The analysis engine is busy. Try again shortly."})
         try:
             session = _session_for(case_row, state.store)
@@ -549,7 +566,7 @@ def create_app(
                 state.store.save_validation(case_id, validation)
             return result
         finally:
-            state.model_slots.release()
+            state.compute_slots.release()
 
     @app.post("/cases/{case_id}/policy-manual")
     def manual_policy(case_id: str, payload: ManualPolicyRequest, request: Request) -> dict:

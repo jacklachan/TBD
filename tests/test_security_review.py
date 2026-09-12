@@ -217,3 +217,53 @@ def test_an_untrusted_origin_cannot_spend_cpu_on_the_new_endpoints():
             path, json=payload, headers={"Origin": "https://untrusted.example"}
         )
         assert response.status_code == 403, path
+
+
+def test_several_viewers_opening_the_page_at_once_are_not_refused():
+    """The comparison is the first thing the workspace asks for.
+
+    It makes no model calls, so rationing it against the paid model quota turned
+    a handful of people opening the link together into a handful of people
+    seeing a capacity error. Refusing a model call under load is honest;
+    refusing arithmetic is not.
+    """
+    import concurrent.futures as futures
+
+    client = make_client()
+    cases = [new_case(client) for _ in range(8)]
+
+    def compare(case):
+        return client.post(
+            f"/cases/{case['case_id']}/analysis", json=versions(case)
+        ).status_code
+
+    with futures.ThreadPoolExecutor(max_workers=8) as pool:
+        codes = list(pool.map(compare, cases))
+
+    assert codes == [200] * len(cases), codes
+
+
+def test_the_model_quota_is_still_rationed_separately():
+    """Separating CPU from quota must not have widened the quota."""
+    client = make_client()
+    state = client.app.state.desk
+    assert state.compute_slots is not state.model_slots
+    # Exhaust the model quota and confirm a plan is refused rather than queued.
+    acquired = []
+    while state.model_slots.acquire(blocking=False):
+        acquired.append(True)
+    try:
+        case = new_case(client)
+        response = client.post(f"/cases/{case['case_id']}/plan", json=versions(case))
+        assert response.status_code == 429
+        assert response.json()["detail"]["error"] == "CAPACITY"
+        # The comparison is unaffected by the model being busy.
+        assert (
+            client.post(
+                f"/cases/{case['case_id']}/analysis", json=versions(case)
+            ).status_code
+            == 200
+        )
+    finally:
+        for _ in acquired:
+            state.model_slots.release()
