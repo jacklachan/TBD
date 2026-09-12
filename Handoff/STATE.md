@@ -432,3 +432,35 @@ above resolves, and a test now asserts the prior case's ID reaches the trace.
 **Still open:** no live Gemini run in this checkout, so the AI planner is
 unexercised here and the workspace shows it offline; `relevant_prior_cases` is
 structured for the model but reaches the operator only as the event sentence.
+
+
+## Second audit pass — the silent key bug — 12 September 2026
+
+```
+$ python -m pytest tests/ -q
+300 passed, 2 warnings in 80.04s          # 275 before
+
+$ python scripts/diagnose.py
+No failures. Demo is safe to show.
+```
+
+**`export GEMINI_API_KEY=...` in a `.env` file was silently ignored.** The reader
+kept the whole left side of the `=` as the key, storing it as
+`"export GEMINI_API_KEY"`, which nothing looks up. The symptom is
+`model_access: false` and an AI-offline workspace with a perfectly good key on
+disk — the most likely reason a working key looks like a broken deployment.
+Fixed, with the quote-stripping bug found alongside it. Detail in
+[handoffs/C_AGENT_API.md](handoffs/C_AGENT_API.md).
+
+**The Gemini wire format had no test.** `_to_contents` and `_parse` are the only
+translation between our message model and the provider's, and a live run was the
+only thing that would have caught a regression. They are pure and need no key,
+so they are unit-tested now, including the two shapes that cost a documented 400
+— `thoughtSignature` as a sibling of `functionCall`, and function responses
+going back on the `user` turn. `backend/agent/llm.py` coverage 81% → 96%;
+overall 92%.
+
+**Still open:** no live Gemini run in this checkout, so `scripts/smoke_llm.py`
+and `scripts/live_api_check.py` remain the only unexercised paths in the agent
+layer; `relevant_prior_cases` reaches the operator as the event sentence rather
+than as structured data.

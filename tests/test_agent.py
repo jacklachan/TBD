@@ -1174,3 +1174,141 @@ def test_case_memory_does_not_grow_without_a_ceiling():
     assert len(kept) == MAX_RECORDS
     # The rows that survive are the recent ones, which is what retrieval reads.
     assert kept[0].case_id == f"case_{MAX_RECORDS + 24}"
+
+
+# --------------------------------------------------------------------------
+# The Gemini wire format
+#
+# `_to_contents` and `_parse` are the only translation between this
+# application's message model and the provider's. They are pure, they need no
+# key and no network, and until now nothing exercised them: a live run was the
+# only thing that would notice a regression, and a live run needs a key nobody
+# has in CI. Two of the shapes below cost a documented HTTP 400 the first time
+# they were got wrong.
+# --------------------------------------------------------------------------
+
+
+def _contents(messages):
+    from backend.agent.llm import GeminiProvider
+
+    return GeminiProvider._to_contents(messages)
+
+
+def test_a_user_turn_becomes_one_text_part():
+    assert _contents([Message(role="user", text="what is the situation?")]) == [
+        {"role": "user", "parts": [{"text": "what is the situation?"}]}
+    ]
+
+
+def test_a_replayed_tool_call_carries_its_thought_signature_as_a_sibling_key():
+    """Gemini 3.x rejects a functionCall replayed without the signature it issued.
+
+    The signature sits beside `functionCall` on the same part, not inside it.
+    Nesting it is a 400, not a soft degradation, and the whole planner loop
+    replays history on every turn — so this shape is load-bearing.
+    """
+    from backend.agent.llm import ToolCall
+
+    call = ToolCall(
+        name="validate_proposal",
+        arguments={"candidate_id": "t30_ret_200"},
+        call_id="call-7",
+        thought_signature="sig-abc",
+    )
+    part = _contents([Message(role="model", text="", tool_call=call)])[0]["parts"][0]
+
+    assert part["thoughtSignature"] == "sig-abc"
+    assert "thoughtSignature" not in part["functionCall"]
+    assert part["functionCall"] == {
+        "name": "validate_proposal",
+        "args": {"candidate_id": "t30_ret_200"},
+        "id": "call-7",
+    }
+
+
+def test_bookkeeping_the_provider_did_not_issue_is_left_out_entirely():
+    """Scripted turns carry no id or signature; sending empty strings is not the same."""
+    from backend.agent.llm import ToolCall
+
+    part = _contents(
+        [Message(role="model", tool_call=ToolCall(name="evaluate_candidates", arguments={}))]
+    )[0]["parts"][0]
+    assert part == {"functionCall": {"name": "evaluate_candidates", "args": {}}}
+
+
+def test_a_tool_result_goes_back_as_a_user_turn_named_for_its_call():
+    content = _contents(
+        [Message(role="tool", name="validate_proposal", result={"status": "PASS"}, call_id="call-7")]
+    )[0]
+    # The provider expects function responses on the user turn, not a tool role.
+    assert content["role"] == "user"
+    assert content["parts"][0]["functionResponse"] == {
+        "name": "validate_proposal",
+        "response": {"status": "PASS"},
+        "id": "call-7",
+    }
+
+
+def test_a_tool_result_with_no_payload_still_sends_an_object():
+    part = _contents([Message(role="tool", name="widen_search")])[0]["parts"][0]
+    assert part["functionResponse"]["response"] == {}
+
+
+def test_a_model_turn_with_both_prose_and_a_call_keeps_the_order():
+    from backend.agent.llm import ToolCall
+
+    parts = _contents([
+        Message(role="model", text="Checking the alternative.",
+                tool_call=ToolCall(name="validate_proposal", arguments={"candidate_id": "x"}))
+    ])[0]["parts"]
+    assert [next(iter(p)) for p in parts] == ["text", "functionCall"]
+
+
+def test_an_unknown_role_is_refused_rather_than_silently_dropped():
+    with pytest.raises(LLMError, match="unsupported message role"):
+        _contents([Message(role="assistant", text="hello")])
+
+
+def _parse(payload):
+    from backend.agent.llm import GeminiProvider
+
+    return GeminiProvider.__new__(GeminiProvider)._parse.__func__(
+        type("P", (), {"model": "test-model"})(), payload, 12.0
+    )
+
+
+def test_a_reply_with_no_candidates_names_the_block_reason():
+    with pytest.raises(LLMError, match="SAFETY"):
+        _parse({"candidates": [], "promptFeedback": {"blockReason": "SAFETY"}})
+
+
+def test_an_empty_reply_without_a_reason_still_fails_loudly():
+    with pytest.raises(LLMError, match="no candidates"):
+        _parse({})
+
+
+def test_parsing_lifts_the_signature_off_the_part_not_the_call():
+    reply = _parse({"candidates": [{"content": {"parts": [
+        {"text": "Looking at "},
+        {"text": "the options."},
+        {"functionCall": {"name": "evaluate_candidates", "args": {}, "id": "c1"},
+         "thoughtSignature": "sig-xyz"},
+    ]}}]})
+    # Multi-part text is joined, not truncated to the first chunk.
+    assert reply.text == "Looking at the options."
+    assert reply.tool_calls[0].thought_signature == "sig-xyz"
+    assert reply.tool_calls[0].call_id == "c1"
+    assert reply.wants_tool
+
+
+def test_a_round_trip_survives_being_replayed_as_history():
+    """What comes back must be sendable again unchanged; that is the planner loop."""
+    reply = _parse({"candidates": [{"content": {"parts": [
+        {"functionCall": {"name": "validate_proposal", "args": {"candidate_id": "t30_ret_200"}, "id": "c9"},
+         "thoughtSignature": "sig-9"},
+    ]}}]})
+    replayed = _contents([Message(role="model", text=reply.text, tool_call=reply.tool_calls[0])])[0]
+    part = replayed["parts"][0]
+    assert part["functionCall"]["id"] == "c9"
+    assert part["functionCall"]["args"] == {"candidate_id": "t30_ret_200"}
+    assert part["thoughtSignature"] == "sig-9"

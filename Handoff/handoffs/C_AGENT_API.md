@@ -539,3 +539,87 @@ ID in the summary the UI prints.
 `relevant_prior_cases` reaches the model in the briefing but is not rendered as
 structured data anywhere — only as the event sentence. If an operator should be
 able to open the prior case, that needs a field in the snapshot, not a string.
+
+---
+
+## [2026-09-12] — Builder C — the silent key bug, and the wire format nothing tested
+
+**Changed paths**
+
+- `backend/config.py` — `.env` reader: honours `export KEY=value`, and strips only a matching quote pair.
+- `tests/test_config.py` — new, 14 tests.
+- `tests/test_agent.py` — 10 tests for the Gemini wire format, both directions.
+
+### `export GEMINI_API_KEY=...` in `.env` was silently ignored
+
+The reader split on `=` and kept the left side as the key, so an exported line
+stored the key as `"export GEMINI_API_KEY"`. Nothing looks that up. The key was
+simply never found.
+
+It fails in the worst possible way — quietly. `/health` reports
+`model_access: false`, the workspace says the AI is offline, and nothing
+anywhere says the file was read and misparsed. `export KEY=value` is exactly
+what someone pastes out of a shell into a `.env`, which makes this the most
+likely reason a working key looks like a broken deployment.
+
+Reproduced before the fix:
+
+```
+parsed: {'export GEMINI_API_KEY': 'abc123', ...}
+```
+
+and after:
+
+```
+parsed: {'GEMINI_API_KEY': 'abc123', ...}
+```
+
+The same pass fixed quote stripping. `value.strip('"').strip("'")` removes
+*every* leading and trailing quote, so a value ending in a lone `"` — legal in a
+key — was silently truncated. It now strips one matching surrounding pair and
+leaves anything else alone.
+
+### The wire format had no test at all
+
+`GeminiProvider._to_contents` and `._parse` are the only translation between
+this application's message model and the provider's. Coverage on `llm.py` was
+81%, and the missing block was exactly that translation: pure functions needing
+no key and no network, where the only thing that would notice a regression was a
+live run nobody can make in CI.
+
+Two of the shapes now pinned cost a documented HTTP 400 the first time they were
+wrong — `thoughtSignature` is a sibling of `functionCall` on the same part, and
+a function *response* goes back on the `user` turn. The planner replays its
+whole history every turn, so both are load-bearing on every call after the
+first. `test_a_round_trip_survives_being_replayed_as_history` parses a reply and
+sends it straight back, which is the actual loop.
+
+`llm.py` coverage: **81% → 96%**.
+
+**Commands run**
+
+```
+$ python -m pytest tests/ -q
+300 passed, 2 warnings in 80.04s          # 275 before
+
+$ python scripts/diagnose.py
+No failures. Demo is safe to show.
+1 warning(s): model access - no GEMINI_API_KEY
+```
+
+**Not verified / not run**
+
+- Still no live model call. These tests pin the shapes a live call needs; they
+  do not prove the endpoint accepts them. Only `scripts/smoke_llm.py` with a
+  real key does that, and it remains the right first check on any new key.
+- The `export` fix is exercised through `load_env` and `gemini_api_key()`, not
+  through a real deployment.
+
+**Contract changes**
+
+- None.
+
+**Next concrete action**
+
+With a key present, run `scripts/smoke_llm.py` and then `scripts/live_api_check.py`.
+Those are now the only unexercised paths left in the agent layer.

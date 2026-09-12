@@ -46,7 +46,16 @@ def load_env(path: Path = ENV_PATH, override: bool = False) -> dict[str, str]:
             continue
         key, _, value = line.partition("=")
         key = key.strip()
-        value = value.strip().strip('"').strip("'")
+        # `export KEY=value` is what people paste out of a shell, and without
+        # this the key is stored as "export KEY" and never found again -- a
+        # silent miss that shows up only as the model reporting itself offline.
+        if key.startswith("export "):
+            key = key[len("export "):].strip()
+        value = value.strip()
+        # Strip one pair of matching quotes, not every quote character: a value
+        # ending in a lone quote is a value, and stripping it corrupts the key.
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
         if not key:
             continue
         if override or key not in os.environ:
