@@ -296,14 +296,21 @@ def create_app(
 ) -> FastAPI:
     app = FastAPI(title="Satellite Demo", version="0.1.0")
 
-    # Open during the event so the Vite dev server can call this directly.
-    # Narrow it before anything is exposed beyond a laptop.
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    # Named origins only, and none at all when the frontend ships from the same
+    # origin. A wildcard would let any page the operator has open spend the
+    # model quota behind this API.
+    from backend.config import allowed_origins
+
+    origins = allowed_origins()
+    if origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins,
+            allow_credentials=False,
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["Content-Type"],
+            max_age=600,
+        )
 
     app.state.desk = AppState(
         store=store or Store(":memory:"),

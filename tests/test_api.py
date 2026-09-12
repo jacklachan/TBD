@@ -530,3 +530,51 @@ def test_memory_from_an_earlier_case_reaches_the_briefing():
     events = client.get(f"/cases/{case['case_id']}").json()["events"]
     assert any(e["event_type"] == "memory" for e in events)
     memory.close()
+
+
+# --------------------------------------------------------------------------
+# CORS
+# --------------------------------------------------------------------------
+
+
+def test_cors_allows_a_named_dev_origin_but_not_an_arbitrary_one(monkeypatch):
+    monkeypatch.delenv("ALLOWED_ORIGINS", raising=False)
+    client = make_client()
+
+    allowed = client.get("/health", headers={"Origin": "http://localhost:5173"})
+    assert allowed.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+    # An origin nobody named gets no grant. Starlette answers the request; the
+    # browser is what refuses to hand the response to the calling page.
+    stranger = client.get("/health", headers={"Origin": "https://evil.example"})
+    assert "access-control-allow-origin" not in stranger.headers
+
+
+def test_cors_never_answers_with_a_wildcard(monkeypatch):
+    """A wildcard would let any page the operator has open spend the quota."""
+    monkeypatch.delenv("ALLOWED_ORIGINS", raising=False)
+    client = make_client()
+    response = client.get("/health", headers={"Origin": "http://localhost:5173"})
+    assert response.headers.get("access-control-allow-origin") != "*"
+
+
+def test_same_origin_deployment_sends_no_cors_headers(monkeypatch):
+    monkeypatch.setenv("ALLOWED_ORIGINS", "none")
+    client = make_client()
+    response = client.get("/health", headers={"Origin": "http://localhost:5173"})
+    assert "access-control-allow-origin" not in response.headers
+
+
+def test_explicitly_named_origin_is_honoured(monkeypatch):
+    monkeypatch.setenv("ALLOWED_ORIGINS", "https://user-space.hf.space")
+    client = make_client()
+    response = client.get("/health", headers={"Origin": "https://user-space.hf.space"})
+    assert response.headers.get("access-control-allow-origin") == "https://user-space.hf.space"
+    blocked = client.get("/health", headers={"Origin": "http://localhost:5173"})
+    assert "access-control-allow-origin" not in blocked.headers
+
+
+def test_health_reports_whether_a_key_is_visible():
+    payload = make_client().get("/health").json()
+    assert "model_access" in payload
+    assert payload["planner_model"]

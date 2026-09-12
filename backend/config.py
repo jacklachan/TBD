@@ -19,6 +19,16 @@ DEFAULT_PLANNER_MODEL = "gemini-3.6-flash"
 DEFAULT_REVIEWER_MODEL = "gemini-3.6-flash"
 DISPLAY_NAME = "Satellite Demo"
 
+# Vite and Next defaults, on both spellings of loopback. Enough for a dev server
+# and nothing else -- a deployment either serves the frontend from the same
+# origin or names its origin explicitly.
+DEFAULT_DEV_ORIGINS = (
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+)
+
 
 def load_env(path: Path = ENV_PATH, override: bool = False) -> dict[str, str]:
     """Read KEY=VALUE lines into the environment. Missing file is fine.
@@ -60,6 +70,26 @@ def planner_model() -> str:
 
 def reviewer_model() -> str:
     return os.environ.get("REVIEWER_MODEL", DEFAULT_REVIEWER_MODEL).strip()
+
+
+def allowed_origins() -> list[str]:
+    """Origins permitted to call the API from a browser.
+
+    ``ALLOWED_ORIGINS`` is a comma-separated list. Set it to ``none`` when the
+    frontend is served from the same origin, which is the case for a single
+    container -- then no CORS headers are sent at all, which is the safest
+    posture rather than a permissive one.
+
+    Unset falls back to local dev servers only. A wildcard is never the default:
+    this API spends a paid model quota, and an open CORS policy invites any page
+    the operator visits to spend it.
+    """
+    raw = os.environ.get("ALLOWED_ORIGINS", "").strip()
+    if not raw:
+        return list(DEFAULT_DEV_ORIGINS)
+    if raw.lower() in {"none", "off", "same-origin"}:
+        return []
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
 def database_path() -> str:

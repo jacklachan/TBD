@@ -35,6 +35,7 @@ Optional variables, if the model ID moves again:
 | `PLANNER_MODEL` | `gemini-3.6-flash` |
 | `REVIEWER_MODEL` | `gemini-3.6-flash` |
 | `DESK_DB` | `:memory:` |
+| `ALLOWED_ORIGINS` | local dev servers; set to `none` for a single container |
 
 Check it landed: `GET /health` reports `"model_access": true` when a key is visible. If that is false, the Space will still build and serve, and every plan will end as an unresolved case — a symptom worth recognising quickly.
 
@@ -71,6 +72,6 @@ Twenty checks covering create, plan, visualization, a plain-English constraint c
 
 ## Before this is public
 
-- **Narrow CORS.** `create_app` currently allows every origin, which is right for a dev server and wrong for a deployment. If the frontend is served from the same Space, you can drop the middleware entirely.
+- **CORS is already narrowed.** Unset, it permits local dev servers only. Serving the frontend from the same Space? Set `ALLOWED_ORIGINS=none` and no CORS headers are sent at all. Calling from somewhere else? Name that origin explicitly. There is no wildcard option, on purpose: this API spends a paid model quota.
 - **There is no auth and no rate limiting.** Anyone with the URL can spend your Gemini quota. For a judged demo that is usually fine; know that it is true.
 - Model calls dominate latency — around 15 s for a full plan. Stream events into the trace so the page is never blank.
