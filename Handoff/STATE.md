@@ -1,6 +1,6 @@
 # Satellite Demo — current state and decisions
 
-Revision 1, 12 September 2026. This records documentation decisions, not measured application performance.
+Revision 2, 12 September 2026. This records documentation decisions, not measured application performance.
 
 ## Current state
 
@@ -8,7 +8,7 @@ Revision 1, 12 September 2026. This records documentation decisions, not measure
 |---|---|
 | Team and duration | Confirmed: three builders, twenty hours |
 | Placeholder name | Satellite Demo; repository name remains TBD |
-| Current package | Checkpoint: entry files, current plan, engineering spec and contracts written; updated data/dashboard specs and role handoffs still being prepared |
+| Current package | Complete. Entry files, plan, engineering spec, contracts, updated data and dashboard specs, and all three role handoffs are written. Nothing further is required before implementation begins |
 | Application source, dependencies, deployment | Not created or installed |
 | Numerical tests and generated scenarios | Not implemented or run |
 | Gemini key, model availability, tool call | Not verified in this project |
@@ -38,6 +38,21 @@ The three supplied specifications and earlier plan/research are preserved under 
 | Fuel quantity | Delta-v budget is the simulated fuel proxy; no kilograms or actual thruster capability is modeled |
 | Fixed model/tool turn count and zero-temperature determinism | Count actual calls; bounded loop; repeated live timing measurements; no claim of deterministic LLM output |
 | Pydantic schema generation claimed to always fail | Handwritten flat tool declarations are a simplification choice; validate against the selected SDK/API |
+
+## Added in revision 2
+
+Documentation only. No code was written, no command was run, no dataset was downloaded, and no gate evidence exists.
+
+| File | Content |
+|---|---|
+| `DATA.md` | Current acquisition spec. Supersedes `reference/DATA.md`. Catalogue number and epoch are now parsed from the committed TLE rather than hardcoded; fetch ownership split (A takes the TLE, C takes SOCRATES); frame reasoning stated as reasoning rather than a measured bound; low temperature no longer described as producing deterministic model output |
+| `DASHBOARD.md` | Current interface spec. Supersedes `reference/DASHBOARD.md`, which recommended cutting 3D. 3D is required; chart ships first; one shared clock; shared-sample rule; enlarged geometry labelled and excluded from separation arithmetic |
+| `handoffs/A_PHYSICS.md` | Scope, hour sequence, Gate 1 and Gate 2 acceptance checks, blocking-issue table |
+| `handoffs/B_PRODUCT.md` | Scope, hour sequence, chart-then-3D order, required states, blocking-issue table |
+| `handoffs/C_AGENT_API.md` | Scope, hour sequence, first-thirty-minutes tool-call proof, Gate 3, blocking-issue table |
+| `handoffs/TEMPLATE.md` | Update format for role files |
+
+Two items carried into the role files as explicit warnings because they are the likeliest correctness bugs: recomputing the Stumpff and radius terms after the final Newton update before forming the Lagrange coefficients, and partitioning encounter detection at every burn epoch because velocity is discontinuous there.
 
 ## First action once implementation is requested
 
