@@ -49,3 +49,36 @@ def policy_from_document(document: dict, policy_version: int | None = None) -> P
         min_separation_m=float(spec["min_separation_m"]),
         blocked_windows=windows,
     )
+
+
+@dataclass(frozen=True)
+class PolicyChange:
+    """One field the operator is being asked to confirm."""
+
+    field: str
+    before: object
+    after: object
+    note: str = ""
+
+
+@dataclass(frozen=True)
+class PolicyDiff:
+    """A proposed policy change awaiting confirmation. Applying it is a
+    separate, human-gated step -- producing a diff never mutates anything.
+
+    ``source_text`` is the operator's sentence, bound to the run by the API
+    rather than supplied by the model.
+    """
+
+    diff_id: str
+    base_policy_version: int
+    before: Policy
+    after: Policy
+    changes: tuple[PolicyChange, ...]
+    status: str
+    source_text: str = ""
+    clarification: str = ""
+
+
+STATUS_READY = "READY"
+STATUS_NEEDS_CLARIFICATION = "NEEDS_CLARIFICATION"
