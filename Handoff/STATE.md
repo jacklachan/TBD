@@ -118,4 +118,14 @@ Seed orbit: NOAA 20 (JPSS-1), NORAD 43013, epoch 2026-09-11T21:51:16Z, a = 7211.
 
 `no_feasible` variant: 0 of 25 options qualify, and 0 of 33 after grid widening — the agent's one permitted expansion cannot manufacture an answer.
 
-**Caveat:** the secondary veto is currently computed by the generator and by the tests. `backend/planning/verifier.py` — the independent reconstruction path that actually gates approval — is not written. Gate 3 is untouched.
+**Update, same day:** `backend/planning/verifier.py` now exists, and the veto comes from it rather than from the generator and the tests.
+
+It rebuilds from raw scenario JSON, scans at 1 s against the search's 5 s, refines by bounded minimisation of squared distance against the search's root-finding on range rate, and screens every debris object rather than only the primary threat. It shares the tested Kepler primitives, which is disclosed; independence is at the reconstruction and screening layer. A test parses the module with `ast` and fails if anyone imports the search path into it.
+
+Measured agreement across six candidates: worst disagreement **3.559e-08 m** and **1.328e-08 s**, against tolerances of 1 m and 0.1 s.
+
+`t30_ret_100` — ranked first, clears the primary threat at 2016.9 m — is returned `BLOCK` because DEB-2 sits at 523.2 m at 20313 s. `t30_ret_200` returns `PASS`.
+
+A strong burn can be limited by an encounter it cannot affect: `t30_ret_200` and `t45_ret_200` report identical separations because the binding crossing at 999 s precedes both burns. The metric is correct; the chart must label the dip actually found.
+
+Gate 3 is still untouched, and `scripts/demo_pipeline.py` does not exist, so Gate 2 has no single end-to-end command yet.
