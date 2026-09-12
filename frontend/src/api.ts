@@ -15,8 +15,9 @@
 
 import type {
   Analysis,
-  Health,
   CaseSnapshot,
+  CdmVerification,
+  Health,
   PolicyDiff,
   RunRecord,
   SocratesContext,
@@ -105,7 +106,9 @@ async function request<T>(
     throw new ApiError(response.status, detail);
   }
 
-  if (response.headers.get("content-type")?.includes("text/markdown")) {
+  // Markdown reports and CCSDS records both come back as text, not JSON.
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("text/markdown") || contentType.includes("text/plain")) {
     return (await response.text()) as unknown as T;
   }
   return (await response.json()) as T;
@@ -156,6 +159,21 @@ export const api = {
     return request("/cases", {
       method: "POST",
       body: JSON.stringify({ scenario_id: scenarioId }),
+    });
+  },
+
+  ingestTle(
+    text: string,
+    satelliteIndex = 0,
+    horizonS = 21600,
+  ): Promise<CaseSnapshot> {
+    return request("/ingest/tle", {
+      method: "POST",
+      body: JSON.stringify({
+        text,
+        satellite_index: satelliteIndex,
+        horizon_s: horizonS,
+      }),
     });
   },
 
@@ -253,6 +271,19 @@ export const api = {
     return request(`/cases/${caseId}/export?format=json`);
   },
 
+  /** The case as a CCSDS-shaped record, carrying states so it can be rechecked. */
+  exportCdm(caseId: string): Promise<string> {
+    return request(`/cases/${caseId}/export?format=cdm`);
+  },
+
+  /** Recompute a record from another operator instead of believing it. */
+  verifyCdm(text: string): Promise<CdmVerification> {
+    return request("/interop/verify-cdm", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    });
+  },
+
   exportMarkdown(caseId: string): Promise<string> {
     return request(`/cases/${caseId}/export?format=markdown`);
   },
@@ -280,7 +311,10 @@ export async function waitForRun(
     signal?: AbortSignal;
   } = {},
 ): Promise<RunRecord> {
-  const { intervalMs = 400, timeoutMs = 120_000, signal } = options;
+  // Longer than the planner's own deadline plus its reviewer call, so a run
+  // that legitimately uses its whole budget is not reported here as a
+  // client timeout. The server is the thing that bounds a run.
+  const { intervalMs = 400, timeoutMs = 180_000, signal } = options;
   const deadline = Date.now() + timeoutMs;
 
   for (;;) {

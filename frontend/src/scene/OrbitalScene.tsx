@@ -147,10 +147,17 @@ export function OrbitalScene(props: Props) {
         v.clone().sub(currentOrigin).multiplyScalar(scale);
       satellite.position.copy(display(sat));
       debris.position.copy(display(other));
+      // The generated fixtures always carry a third object, so this mesh used
+      // to be unconditional. A case built from pasted elements can be just a
+      // spacecraft and one other object, and reaching for a third then read
+      // position samples off undefined.
       const extraId = next.bundle.object_ids.find(
         (id) => id !== otherId && id !== next.bundle.satellite_id,
-      )!;
-      second.position.copy(display(vector(variant.positions_m[extraId][s])));
+      );
+      second.visible = extraId !== undefined;
+      if (extraId !== undefined) {
+        second.position.copy(display(vector(variant.positions_m[extraId][s])));
+      }
       const gap = sat.distanceTo(other) * scale;
       satellite.scale.setScalar(
         next.view === "orbit" ? 0.033 : Math.max(0.01, gap * 0.025),

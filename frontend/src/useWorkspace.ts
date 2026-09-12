@@ -59,7 +59,7 @@ export function useWorkspace() {
     const computed = await api.analysis(next.case_id, versionsOf(next));
     if (ticket !== generation.current) return;
     guard(computed, versionsOf(current.current!));
-    const ids = comparisonIds(computed);
+    const ids = comparisonIds(computed, next.proposal?.candidate_id);
     const chosen =
       keepSelected && computed.options.some((o) => o.candidate_id === selected)
         ? selected
@@ -191,6 +191,14 @@ export function useWorkspace() {
     openScenario: (id: string) =>
       action("Opening scenario", async () => {
         await refresh(await api.createCase(id));
+        setTime(0);
+      }),
+    // Pasted elements become an ordinary case, so everything downstream --
+    // screening, the planner, approval, the exported record -- works on real
+    // orbits without knowing where they came from.
+    openPastedElements: (text: string, satelliteIndex: number) =>
+      action("Screening pasted elements", async () => {
+        await refresh(await api.ingestTle(text, satelliteIndex));
         setTime(0);
       }),
     retry: () =>

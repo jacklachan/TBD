@@ -38,9 +38,22 @@ export interface Provenance {
   tle_epoch_utc: string;
   frame: string;
   model_version: string;
-  /** Always true. The orbit is real; the encounter is constructed. */
+  /**
+   * True for the generated fixtures, where the orbit is real and the encounter
+   * is constructed. False for pasted catalogue elements, where the encounter is
+   * whatever the elements say -- usually nothing.
+   */
   synthetic_conjunction: boolean;
   note: string;
+  /** Present only for pasted elements: one entry per object, with its own
+   * element epoch before everything was moved to a shared one. */
+  objects?: {
+    object_id: string;
+    norad_id: number;
+    name: string;
+    tle_epoch_utc: string;
+    altitude_km: number;
+  }[];
 }
 
 export interface ScenarioSummary {
@@ -186,6 +199,18 @@ export interface CaseSnapshot {
   execution: ExecutionRecord | null;
   events: CaseEvent[];
   runs: RunRecord[];
+  /** Present only on the response that created a case from pasted elements. */
+  ingest?: {
+    objects: {
+      object_id: string;
+      norad_id: number;
+      name: string;
+      tle_epoch_utc: string;
+      altitude_km: number;
+    }[];
+    epoch_spread_s: number;
+    note: string;
+  };
 }
 
 /**
@@ -306,6 +331,9 @@ export interface OptionRow {
       tca_s: number;
     }[];
   } | null;
+  /** True when the planner specified this burn itself rather than taking it
+   * off the grid. Screened identically either way. */
+  designed?: boolean;
 }
 
 export interface Analysis {
@@ -328,4 +356,54 @@ export interface Health {
   planner_model: string;
   model_access: boolean;
   access_token_required: boolean;
+}
+
+/**
+ * The result of recomputing a conjunction record received from someone else.
+ *
+ * `checks` is the comparison that matters: what the sender claimed against what
+ * we computed from the state vectors they sent. A record whose numbers cannot be
+ * reproduced comes back DISAGREES with the difference spelled out.
+ */
+export interface CdmCheck {
+  object_id: string;
+  agrees: boolean;
+  claimed_miss_distance_m: number;
+  recomputed_miss_distance_m: number | null;
+  distance_delta_m?: number;
+  claimed_tca_s?: number;
+  recomputed_tca_s?: number;
+  time_delta_s?: number;
+  reason: string;
+}
+
+export interface CdmVerification {
+  originator: string;
+  message_id: string;
+  created_at: string;
+  frame: string;
+  epoch_utc: string;
+  objects: { object_id: string; name: string; maneuverable: boolean }[];
+  manoeuvre: {
+    candidate_id: string;
+    burn_t_s: number | null;
+    direction: string;
+    delta_v_mps: number;
+  } | null;
+  independent_result: {
+    status: ValidationStatus;
+    reason_codes: string[];
+    screened_objects: string[];
+    sample_step_s: number;
+    method: string;
+    encounters: {
+      object_id: string;
+      min_separation_m: number;
+      tca_s: number;
+      relative_speed_mps: number;
+    }[];
+  };
+  checks: CdmCheck[];
+  verdict: "AGREES" | "DISAGREES" | "NO_CLAIMS";
+  note: string;
 }

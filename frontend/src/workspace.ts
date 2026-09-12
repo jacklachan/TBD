@@ -29,7 +29,20 @@ export function currentVariant(
   return bundle?.variants.find((v) => v.candidate_id === selected);
 }
 
-export function comparisonIds(analysis: Analysis): string[] {
+/**
+ * The options worth putting side by side: doing nothing, the one that looked
+ * good and was rejected, and what is actually being proposed.
+ *
+ * `proposedId` is the AI proposal when there is one. It is listed first among
+ * the answers because the operator is being asked to approve *that*, and it may
+ * be a burn the planner designed rather than one from the grid — in which case
+ * it appears in no ranking and would otherwise be absent from the comparison
+ * and from the trajectory they inspect before approving.
+ */
+export function comparisonIds(
+  analysis: Analysis,
+  proposedId?: string | null,
+): string[] {
   const baseline = analysis.options.find(
     (o) => o.kind === "NO_BURN",
   )?.candidate_id;
@@ -38,10 +51,14 @@ export function comparisonIds(analysis: Analysis): string[] {
     .find(
       (o) => o.primary_qualified && o.validation?.status === "BLOCK",
     )?.candidate_id;
+  const proposed =
+    proposedId && analysis.options.some((o) => o.candidate_id === proposedId)
+      ? proposedId
+      : undefined;
   return [
     ...new Set(
-      [baseline, veto, analysis.recommended_id].filter((id): id is string =>
-        Boolean(id),
+      [baseline, veto, proposed, analysis.recommended_id].filter(
+        (id): id is string => Boolean(id),
       ),
     ),
   ];

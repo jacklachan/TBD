@@ -18,6 +18,8 @@ import {
   Sun,
   WarningCircle,
 } from "@phosphor-icons/react";
+import { api } from "./api";
+import type { CdmVerification } from "./contracts";
 import { useWorkspace } from "./useWorkspace";
 import {
   currentVariant,
@@ -41,6 +43,7 @@ const SatellitePreview = lazy(() =>
 );
 const scenarios = [
   { id: "primary", name: "The second encounter" },
+  { id: "collision", name: "Impact if nothing changes" },
   { id: "simple_conflict", name: "A single close approach" },
   { id: "no_encounter", name: "A clear orbit" },
   { id: "no_feasible", name: "No feasible maneuver" },
@@ -95,11 +98,22 @@ export default function App() {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(180);
   const [panel, setPanel] = useState<
-    "options" | "evidence" | "about" | "limits" | null
+    "options" | "evidence" | "about" | "limits" | "elements" | null
   >(null);
   const [instruction, setInstruction] = useState("");
   const [token, setToken] = useState("");
   const [budget, setBudget] = useState("0.20");
+  // Pasted catalogue elements, and the exchange panel's issued and received
+  // records. Grouped because all three are someone else's data passing through
+  // a dialog; none of them belongs in case state.
+  const [elements, setElements] = useState("");
+  const [elementsIndex, setElementsIndex] = useState(0);
+  const [elementsError, setElementsError] = useState("");
+  const [issued, setIssued] = useState("");
+  const [received, setReceived] = useState("");
+  const [checked, setChecked] = useState<CdmVerification | null>(null);
+  const [exchangeError, setExchangeError] = useState("");
+  const [exchangeBusy, setExchangeBusy] = useState("");
   const [filter, setFilter] = useState("all");
   const variant = currentVariant(bundle, selected);
   const option = analysis?.options.find((o) => o.candidate_id === selected);
@@ -107,7 +121,35 @@ export default function App() {
     () => (variant ? minimum(variant.min_to_any_m) : null),
     [variant],
   );
+  // Names recognised in the pasted text, so the picker and the count respond as
+  // you type. The server parses it again properly; this is only for the form.
+  const elementNames = useMemo(() => {
+    const lines = elements.split(/\r?\n/).map((l) => l.trimEnd());
+    const names: string[] = [];
+    let pending = "";
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      if (!line.trim()) continue;
+      if (/^1 [ 0-9]{5}[A-Z] /.test(line)) {
+        if (/^2 [ 0-9]{5} /.test(lines[i + 1] ?? "")) {
+          names.push(pending || `OBJECT ${line.slice(2, 7).trim()}`);
+          pending = "";
+          i += 1;
+        }
+        continue;
+      }
+      if (/^2 [ 0-9]{5} /.test(line)) continue;
+      pending = line.trim();
+    }
+    return names;
+  }, [elements]);
   const [minValue, minUnit] = distance(worst?.value);
+  // Both objects are metres across. Below this the centres are close enough
+  // that the hardware occupies the same space -- a strike, not a near miss,
+  // and the difference is worth saying out loud rather than leaving to whoever
+  // is reading the number.
+  const CONTACT_M = 25;
+  const strike = worst != null && worst.value < CONTACT_M;
   const liveDistance = variant?.pair_separations_m[debrisId]?.[sample];
   const [liveValue, liveUnit] = distance(liveDistance);
   const policy = snapshot?.policy;
@@ -115,10 +157,18 @@ export default function App() {
     ? optionStatus(option)
     : { label: "Awaiting analysis", tone: "muted" };
   const comparison = analysis
-    ? comparisonIds(analysis).map((id) =>
-        analysis.options.find((o) => o.candidate_id === id)!,
-      )
+    ? comparisonIds(analysis, snapshot?.proposal?.candidate_id)
+        .map((id) => analysis.options.find((o) => o.candidate_id === id))
+        .filter((o): o is NonNullable<typeof o> => Boolean(o))
     : [];
+
+  useEffect(() => {
+    if (!bundle) return;
+    const others = bundle.object_ids.filter((id) => id !== bundle.satellite_id);
+    if (others.length && !others.includes(debrisId)) {
+      setDebrisId(bundle.primary_threat_id ?? others[0]);
+    }
+  }, [bundle, debrisId]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -160,6 +210,38 @@ export default function App() {
     setPlaying(false);
     desk.setTime(time);
   };
+  const issueRecord = async () => {
+    if (!snapshot) return;
+    setExchangeError("");
+    setExchangeBusy("Issuing the record");
+    try {
+      setIssued(await api.exportCdm(snapshot.case_id));
+    } catch (reason) {
+      setExchangeError(
+        reason instanceof Error ? reason.message : "The record could not be issued.",
+      );
+    } finally {
+      setExchangeBusy("");
+    }
+  };
+
+  const checkRecord = async () => {
+    setExchangeError("");
+    setChecked(null);
+    setExchangeBusy("Recomputing the record");
+    try {
+      setChecked(await api.verifyCdm(received));
+    } catch (reason) {
+      setExchangeError(
+        reason instanceof Error
+          ? reason.message
+          : "That record could not be read as a conjunction message.",
+      );
+    } finally {
+      setExchangeBusy("");
+    }
+  };
+
   const jump = (objectId?: string) => {
     if (!variant) return;
     const encounters = variant.encounters.filter(
@@ -354,7 +436,20 @@ export default function App() {
                     {s.name}
                   </option>
                 ))}
+                {snapshot?.scenario?.provenance?.source_kind ===
+                  "PASTED_TLE" && (
+                  <option value={snapshot.scenario_id}>
+                    Pasted catalogue elements
+                  </option>
+                )}
               </select>
+              <button
+                className="subtle-button compact"
+                onClick={() => setPanel("elements")}
+                disabled={!!busy}
+              >
+                Use real elements <ArrowUpRight size={15} />
+              </button>
             </div>
             <section className="metric-card glass">
               <div className="section-heading">
@@ -369,8 +464,10 @@ export default function App() {
                 </button>
               </div>
               <Metric value={minValue} unit={minUnit} />
-              <p className="caption">
-                Minimum to either object · 6-hour horizon
+              <p className={strike ? "caption strike-note" : "caption"}>
+                {strike
+                  ? "The objects occupy the same space. On this trajectory they collide."
+                  : "Minimum to either object · 6-hour horizon"}
               </p>
               <div className="clearance-meter">
                 <div
@@ -408,12 +505,16 @@ export default function App() {
                 comparison.map((item, i) => {
                   const state = optionStatus(item);
                   const active = item.candidate_id === selected;
+                  const proposed =
+                    item.candidate_id === snapshot?.proposal?.candidate_id;
                   const title =
                     item.kind === "NO_BURN"
                       ? "Do nothing"
-                      : item.candidate_id === analysis?.recommended_id
-                        ? "The clear alternative"
-                        : "The hidden conflict";
+                      : item.designed
+                        ? "Designed by the planner"
+                        : item.candidate_id === analysis?.recommended_id
+                          ? "The clear alternative"
+                          : "The hidden conflict";
                   return (
                     <button
                       key={item.candidate_id}
@@ -439,6 +540,17 @@ export default function App() {
                             : `${item.delta_v_mps.toFixed(2)} m/s · ${optionName(item)}`}
                         </span>
                         <Status tone={state.tone}>{state.label}</Status>
+                        {/* Said out loud because the claim it supports — that
+                            the agent is not just picking from a menu — is only
+                            credible if you can see which option is not on it. */}
+                        {item.designed && (
+                          <span className="option-note">
+                            Not on the grid · screened the same way
+                          </span>
+                        )}
+                        {proposed && !item.designed && (
+                          <span className="option-note">AI proposal</span>
+                        )}
                       </div>
                       <span className="option-index">0{i + 1}</span>
                     </button>
@@ -787,6 +899,115 @@ export default function App() {
         )}
       </main>
 
+      {panel === "elements" && (
+        <Dialog
+          title="Screen real catalogue objects"
+          onClose={() => setPanel(null)}
+        >
+          <p className="dialog-intro">
+            Paste two-line element sets — a spacecraft and whatever you want it
+            screened against. The same two independent paths run on those
+            orbits instead of a generated fixture.
+          </p>
+
+          <div className="elements-panel">
+            <label className="visually-hidden" htmlFor="pasted-elements">
+              Two-line element sets
+            </label>
+            <textarea
+              id="pasted-elements"
+              className="record-input tall"
+              rows={10}
+              spellCheck={false}
+              placeholder={
+                "NOAA 20 (JPSS-1)\n" +
+                "1 43013U 17073A   26254.91060846  .00000019  00000+0  30092-4 0  9999\n" +
+                "2 43013  98.7810 193.6155 0001610  53.1622 306.9701 14.19525379456774\n" +
+                "…and at least one more object"
+              }
+              value={elements}
+              onChange={(e) => {
+                setElements(e.target.value);
+                setElementsError("");
+              }}
+            />
+
+            <div className="elements-controls">
+              <label>
+                Which one can manoeuvre
+                <select
+                  value={elementsIndex}
+                  onChange={(e) => setElementsIndex(Number(e.target.value))}
+                >
+                  {elementNames.map((name, index) => (
+                    <option key={index} value={index}>
+                      {index + 1}. {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                className="primary-button"
+                disabled={elementNames.length < 2 || !!busy}
+                onClick={async () => {
+                  setElementsError("");
+                  try {
+                    await desk.openPastedElements(elements, elementsIndex);
+                    setPanel(null);
+                    setView("orbit");
+                  } catch (e) {
+                    setElementsError(
+                      e instanceof Error ? e.message : "Could not read those.",
+                    );
+                  }
+                }}
+              >
+                Screen these objects <ArrowRight size={16} />
+              </button>
+            </div>
+
+            {elements.trim() && (
+              <p className="caption">
+                {elementNames.length === 0
+                  ? "No element sets recognised yet."
+                  : `${elementNames.length} object${
+                      elementNames.length === 1 ? "" : "s"
+                    } recognised: ${elementNames.join(", ")}${
+                      elementNames.length < 2
+                        ? ". At least two are needed."
+                        : "."
+                    }`}
+              </p>
+            )}
+            {elementsError && (
+              <p className="exchange-error">
+                <WarningCircle size={16} /> {elementsError}
+              </p>
+            )}
+          </div>
+
+          <h3>What this is, and what it is not</h3>
+          <p className="caption">
+            The orbits are real. Every state vector comes from the element sets
+            you paste, evaluated with SGP4 at one shared epoch — element sets
+            are published hours apart, and screening them at their own epochs
+            would compare positions that never coexisted.
+          </p>
+          <p className="caption">
+            Propagation from that epoch is two-body, so this is not an SGP4
+            conjunction analysis; over six hours in low orbit the difference is
+            kilometres. No element set carries covariance, so nothing here
+            states a probability. Two catalogue objects usually have no close
+            approach at all, and reporting that is the point — a screening tool
+            that always finds something is not screening.
+          </p>
+          <p className="caption">
+            Current element sets are at{" "}
+            <span className="mono">celestrak.org/NORAD/elements/</span>.
+          </p>
+        </Dialog>
+      )}
+
       {panel === "limits" && (
         <Dialog title="Mission limits" onClose={() => setPanel(null)}>
           <section className="budget-card">
@@ -1083,6 +1304,192 @@ export default function App() {
               </li>
             ))}
           </ol>
+          <h3>
+            Exchange with another operator{" "}
+            <span className="caption">CCSDS-shaped record · recomputed, not trusted</span>
+          </h3>
+          <p className="caption">
+            A record that only states a conclusion has to be taken on trust. This
+            one carries the state vectors and the manoeuvre, so whoever receives
+            it can recompute every figure in it — and disagree.
+          </p>
+
+          <div className="exchange">
+            <div className="exchange-half">
+              <h4>Issue this decision</h4>
+              <button
+                className="subtle-button"
+                onClick={issueRecord}
+                disabled={!snapshot || !!exchangeBusy}
+              >
+                {exchangeBusy === "Issuing the record"
+                  ? "Issuing…"
+                  : "Issue record"}{" "}
+                <ArrowUpRight size={16} />
+              </button>
+              {issued && (
+                <>
+                  <p className="caption">
+                    {issued.length.toLocaleString()} bytes ·{" "}
+                    {issued.split("\n").filter((l) => l.startsWith("X_DOT")).length}{" "}
+                    state vectors · no covariance, so no probability
+                  </p>
+                  <pre className="record" aria-label="Issued conjunction record">
+                    {issued}
+                  </pre>
+                  <button
+                    className="subtle-button"
+                    onClick={() => {
+                      setReceived(issued);
+                      setChecked(null);
+                    }}
+                  >
+                    Hand it to the other operator <ArrowRight size={16} />
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div className="exchange-half">
+              <h4>Check a received record</h4>
+              <label className="visually-hidden" htmlFor="received-record">
+                Conjunction record received from another operator
+              </label>
+              <textarea
+                id="received-record"
+                className="record-input"
+                rows={6}
+                spellCheck={false}
+                placeholder="Paste a CCSDS conjunction record here."
+                value={received}
+                onChange={(e) => {
+                  setReceived(e.target.value);
+                  setChecked(null);
+                }}
+              />
+              <button
+                className="primary-button"
+                onClick={checkRecord}
+                disabled={!received.trim() || !!exchangeBusy}
+              >
+                {exchangeBusy === "Recomputing the record"
+                  ? "Recomputing…"
+                  : "Recompute it"}{" "}
+                <ArrowRight size={16} />
+              </button>
+
+              {exchangeError && (
+                <p className="exchange-error">
+                  <WarningCircle size={16} /> {exchangeError}
+                </p>
+              )}
+
+              {checked && (
+                <div className={`exchange-result verdict-${checked.verdict.toLowerCase()}`}>
+                  <p className="exchange-verdict">
+                    {checked.verdict === "AGREES" && (
+                      <>
+                        <Check size={16} /> Its numbers hold
+                      </>
+                    )}
+                    {checked.verdict === "DISAGREES" && (
+                      <>
+                        <WarningCircle size={16} /> Its numbers do not hold
+                      </>
+                    )}
+                    {checked.verdict === "NO_CLAIMS" && (
+                      <>It claims nothing — so we screened it ourselves</>
+                    )}
+                    <span className="caption">
+                      from {checked.originator} · recomputed at{" "}
+                      {checked.independent_result.sample_step_s} s
+                    </span>
+                  </p>
+                  {/* With no claims there is nothing to compare against, so the
+                      table shows what we found rather than four empty columns. */}
+                  <div className="table-scroll">
+                    <table>
+                      <thead>
+                        {checked.verdict === "NO_CLAIMS" ? (
+                          <tr>
+                            <th>Object</th>
+                            <th>Closest approach</th>
+                            <th>At</th>
+                            <th>Relative speed</th>
+                          </tr>
+                        ) : (
+                          <tr>
+                            <th>Object</th>
+                            <th>Claimed</th>
+                            <th>Recomputed</th>
+                            <th>Difference</th>
+                          </tr>
+                        )}
+                      </thead>
+                      <tbody>
+                        {checked.verdict === "NO_CLAIMS" &&
+                          checked.independent_result.encounters.map((e) => (
+                            <tr key={e.object_id}>
+                              <td>{e.object_id}</td>
+                              <td>
+                                {e.min_separation_m.toLocaleString(undefined, {
+                                  maximumFractionDigits: 1,
+                                })}{" "}
+                                m
+                              </td>
+                              <td>T+{clockText(e.tca_s)}</td>
+                              <td>
+                                {e.relative_speed_mps.toLocaleString(undefined, {
+                                  maximumFractionDigits: 0,
+                                })}{" "}
+                                m/s
+                              </td>
+                            </tr>
+                          ))}
+                        {checked.checks.map((check) => (
+                          <tr
+                            key={check.object_id}
+                            className={check.agrees ? "" : "row-disagrees"}
+                          >
+                            <td>{check.object_id}</td>
+                            <td>
+                              {check.claimed_miss_distance_m.toLocaleString(
+                                undefined,
+                                { maximumFractionDigits: 1 },
+                              )}{" "}
+                              m
+                            </td>
+                            <td>
+                              {check.recomputed_miss_distance_m === null
+                                ? "—"
+                                : `${check.recomputed_miss_distance_m.toLocaleString(
+                                    undefined,
+                                    { maximumFractionDigits: 1 },
+                                  )} m`}
+                            </td>
+                            <td>
+                              {check.distance_delta_m === undefined
+                                ? "—"
+                                : `${check.distance_delta_m.toExponential(2)} m`}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {checked.checks
+                    .filter((c) => !c.agrees)
+                    .map((c) => (
+                      <p className="exchange-error" key={c.object_id}>
+                        {c.reason}
+                      </p>
+                    ))}
+                  <p className="caption">{checked.note}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
           <h3>
             Real-world context{" "}
             <span className="caption">

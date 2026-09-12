@@ -2225,3 +2225,172 @@ td .subtle-button {
 :root[data-theme="light"] .right-stack .glass {
   background-color: rgba(202, 219, 233, 0.97);
 }
+
+/* Exchange with another operator.
+
+   Two halves, because the panel is describing a handover: what we issue on the
+   left, what we were handed on the right. The record itself is shown rather
+   than hidden behind a download, since the point being made is that it carries
+   enough for someone else to check it. */
+.exchange {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  margin: 14px 0 8px;
+}
+.exchange-half {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+.exchange-half h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+.record {
+  width: 100%;
+  max-height: 190px;
+  overflow: auto;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  background: var(--solid);
+  color: var(--secondary);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre;
+  tab-size: 2;
+}
+.record-input {
+  width: 100%;
+  resize: vertical;
+  padding: 12px 14px;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  background: var(--solid);
+  color: var(--text);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.exchange-result {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--divider);
+  border-left-width: 3px;
+  border-radius: 10px;
+  background: var(--solid);
+}
+/* The verdict carries the colour, because it is the only thing in this panel
+   that is a judgement rather than a value. */
+.verdict-agrees {
+  border-left-color: var(--good);
+}
+.verdict-disagrees {
+  border-left-color: var(--danger);
+}
+.exchange-verdict {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+.verdict-agrees .exchange-verdict svg {
+  color: var(--good);
+}
+.verdict-disagrees .exchange-verdict svg {
+  color: var(--danger);
+}
+.exchange-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--danger);
+}
+.row-disagrees td {
+  color: var(--danger);
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A metres-level approach is a collision, and the copy says so. It is coloured
+   because it is the one caption on the page that is not a qualifier. */
+.strike-note {
+  color: var(--danger);
+}
+
+/* Pasting real catalogue elements.
+
+   The textarea is the panel: everything else is a caption on what the paste
+   means. It is deliberately monospaced and tall, because a TLE that has been
+   soft-wrapped is a TLE that will not parse, and seeing that is easier than
+   being told. */
+.elements-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 14px 0 22px;
+}
+.record-input.tall {
+  min-height: 190px;
+  white-space: pre;
+  overflow-x: auto;
+}
+.elements-controls {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.elements-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--secondary);
+}
+.elements-controls select {
+  min-width: 240px;
+}
+.scenario-switch .subtle-button.compact {
+  margin-top: 10px;
+  padding: 0;
+  font-size: 12px;
+}
+.mono {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 0.95em;
+  color: var(--text);
+}
+
+/* Why an option is in the list, when that is not obvious from its numbers. */
+.option-note {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--secondary);
+}
