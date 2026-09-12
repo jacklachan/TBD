@@ -464,3 +464,31 @@ overall 92%.
 and `scripts/live_api_check.py` remain the only unexercised paths in the agent
 layer; `relevant_prior_cases` reaches the operator as the event sentence rather
 than as structured data.
+
+
+## Prior cases surfaced — 12 September 2026
+
+```
+$ python -m pytest tests/ -q
+302 passed, 2 warnings in 82.28s
+
+$ npm --prefix frontend test
+Tests  7 passed (7)
+
+$ python scripts/diagnose.py
+No failures. Demo is safe to show.
+```
+
+`CaseSnapshot` gains `prior_cases`, and the workspace renders the earlier cases
+on the same scenario above the event trace — ID, outcome, the clearance the
+verifier measured, and what it suggests. Previously this reached the operator
+only as a sentence in the trace. Labelled advisory, and the test asserts the new
+case still starts on policy v1 and grid revision 1. Additive contract change;
+`contracts.ts` updated in the same commit. Verified in Chromium against the
+built bundle, not only in the payload. Detail in
+[handoffs/C_AGENT_API.md](handoffs/C_AGENT_API.md).
+
+**`scripts/smoke_llm.py` remains unrun: there is no API key in this checkout.**
+No live model call has been made in this revision and none is claimed. That and
+`scripts/live_api_check.py` are the only unexercised paths left in the agent
+layer.

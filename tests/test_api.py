@@ -1028,3 +1028,40 @@ def test_the_memory_hit_reaches_the_operator_trace():
     assert memory_events, "the second run's trace never mentioned the earlier case"
     assert first["case_id"] in memory_events[0]["summary"]
     assert memory_events[0]["details"]["memory_ids"]
+
+
+def test_prior_cases_reach_the_snapshot_as_data_not_only_prose():
+    """The trace prints a sentence naming the prior case; that is not linkable.
+
+    The workspace needs the case ID, its outcome and what it suggests as typed
+    fields, so it can offer the operator the earlier case rather than ask them
+    to read an ID out of a log line.
+    """
+    from backend.agent.memory import CaseMemory
+
+    client = make_client(memory=CaseMemory())
+
+    first = new_case(client)
+    run_plan(client, first)
+    second = new_case(client)
+    run_plan(client, second)
+
+    snapshot = client.get(f"/cases/{second['case_id']}").json()
+    prior = snapshot["prior_cases"]
+    assert prior, "the snapshot carried no prior cases"
+
+    entry = next(p for p in prior if p["case_id"] == first["case_id"])
+    assert entry["outcome"] == "PROPOSAL_READY"
+    assert entry["summary"]
+    assert set(entry) >= {"case_id", "memory_id", "outcome", "tags", "summary", "suggestion"}
+
+    # Advisory only: seeing a prior case changes nothing about this one.
+    assert snapshot["policy_version"] == 1
+    assert snapshot["grid_revision"] == 1
+
+
+def test_a_case_with_no_history_reports_an_empty_list_not_a_missing_field():
+    """The browser types this as an array; absent and empty are different bugs."""
+    client = make_client()
+    snapshot = client.get(f"/cases/{new_case(client)['case_id']}").json()
+    assert snapshot["prior_cases"] == []

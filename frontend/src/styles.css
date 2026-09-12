@@ -2438,3 +2438,57 @@ td .subtle-button {
   line-height: 1.55;
   color: var(--secondary);
 }
+
+
+/* Prior cases the planner consulted. Advisory, so it reads quieter than the
+   evidence above it and never borrows the colour reserved for a breach.
+   Spacing and tokens follow .event-list directly below it. */
+.prior-cases {
+  margin: 18px 0 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--divider);
+}
+.prior-cases h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.prior-cases ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.prior-cases li {
+  padding: 10px 0 13px;
+  border-bottom: 1px solid var(--divider);
+}
+.prior-cases li:last-child {
+  border-bottom: 0;
+}
+.prior-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.prior-head code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--text);
+}
+.prior-outcome {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.prior-cases p {
+  font-size: 12px;
+  margin: 7px 0 0;
+  line-height: 1.6;
+}
+.prior-cases small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+}

@@ -623,3 +623,75 @@ No failures. Demo is safe to show.
 
 With a key present, run `scripts/smoke_llm.py` and then `scripts/live_api_check.py`.
 Those are now the only unexercised paths left in the agent layer.
+
+---
+
+## [2026-09-12] — Builder C — the prior case is now data, not a sentence
+
+**Changed paths**
+
+- `backend/agent/planner.py` — the `memory` event carries the whole hit, not only its id.
+- `backend/api.py` — `_prior_cases()`; the snapshot gains `prior_cases`.
+- `frontend/src/contracts.ts` — `PriorCase`, and `prior_cases` on `CaseSnapshot`.
+- `frontend/src/App.tsx`, `frontend/src/styles.css` — rendered above the trace.
+- `tests/test_api.py` — two tests.
+
+The trace already printed "Found 1 relevant prior case(s): case_abc". That is a
+string an operator has to read an ID out of. The snapshot now carries the same
+hits typed — id, outcome, tags, summary, suggestion — read back off the event the
+planner already records, so there is one definition of a hit and no second store
+to drift.
+
+Rendered under Evidence, above the event list, in the `.event-list` idiom: a
+hairline between cases, the outcome beside the ID, the suggestion muted. It is
+labelled *advisory — nothing here changed this case*, which is the property the
+API test also asserts: policy still v1, grid revision still 1.
+
+**Verified in the browser, not only in the payload**
+
+Two runs seeded over HTTP, then the workspace's own **Run AI planner** clicked in
+Chromium against the built bundle. `.prior-cases` renders with both earlier case
+IDs and their measured summaries.
+
+Three things that cost a retry each, worth knowing:
+
+- The planner button is **disabled without a key**, which is correct. The probe
+  borrows `frontend/e2e/scripted_server.py`'s trick of reporting model access in
+  `/health`; the planner underneath is still `ScriptedProvider`.
+- The Evidence panel is not mounted until its tab is selected, so the element
+  does not exist before the click.
+- My first stylesheet used invented tokens (`--space-small`, `--rule`,
+  `--ink-muted`). None exist. This file defines `--divider`, `--muted`, `--text`
+  and sizes in px; the block was rewritten to match `.event-list` directly below
+  it. **Check the tokens the file actually defines before adding a block.**
+
+**Commands run**
+
+```
+$ python -m pytest tests/ -q
+302 passed, 2 warnings in 82.28s
+
+$ npm --prefix frontend test
+Test Files  1 passed (1)      Tests  7 passed (7)
+
+$ python scripts/diagnose.py
+No failures. Demo is safe to show.
+```
+
+**Not verified / not run**
+
+- **`scripts/smoke_llm.py` was not run. There is no API key in this checkout** —
+  no `.env`, nothing in the environment — so no live call was made and none is
+  claimed. `scripts/live_api_check.py` likewise.
+- The rendering was exercised with a scripted planner, not a live one.
+
+**Contract changes**
+
+- `CaseSnapshot` gains `prior_cases: PriorCase[]`. Additive; an older client
+  ignoring it is unaffected. `contracts.ts` updated in the same commit, per the
+  integration rule.
+
+**Next concrete action**
+
+Run `scripts/smoke_llm.py` with a real key, then `scripts/live_api_check.py`.
+That is the only unexercised path left in the agent layer.

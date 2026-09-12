@@ -360,6 +360,10 @@ def plan_case(
                 + ", ".join(h.case_id for h in hits),
                 0.0,
                 memory_ids=[h.memory_id for h in hits],
+                # The compact hit, not only its id: the operator should be able
+                # to see which prior case informed this run and what it
+                # concluded, without re-reading the model's briefing.
+                cases=session.memory_hits,
             )
 
     task = instruction or (

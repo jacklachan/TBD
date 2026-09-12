@@ -186,6 +186,17 @@ export interface RunRecord {
   };
 }
 
+/** A prior case on the same scenario that the last run consulted. */
+export interface PriorCase {
+  case_id: string;
+  memory_id: string;
+  outcome: PlannerStatus | string;
+  tags: string[];
+  summary: string;
+  /** What it suggests. Advisory only — it never changed this case's policy. */
+  suggestion: string;
+}
+
 export interface CaseSnapshot {
   case_id: string;
   parent_case_id: string | null;
@@ -201,6 +212,7 @@ export interface CaseSnapshot {
   proposal: Proposal | null;
   execution: ExecutionRecord | null;
   events: CaseEvent[];
+  prior_cases: PriorCase[];
   runs: RunRecord[];
   /** Present only on the response that created a case from pasted elements. */
   ingest?: {

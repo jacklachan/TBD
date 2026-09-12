@@ -1323,6 +1323,26 @@ export default function App() {
               )}
             </article>
           ))}
+          {!!snapshot?.prior_cases?.length && (
+            <div className="prior-cases">
+              <h4>
+                Earlier cases on this scenario{" "}
+                <span className="caption">advisory — nothing here changed this case</span>
+              </h4>
+              <ul>
+                {snapshot.prior_cases.map((prior) => (
+                  <li key={prior.memory_id}>
+                    <span className="prior-head">
+                      <code>{prior.case_id}</code>
+                      <span className="prior-outcome">{prior.outcome.replaceAll("_", " ")}</span>
+                    </span>
+                    <p>{prior.summary}</p>
+                    {prior.suggestion && <small>{prior.suggestion}</small>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {!snapshot?.events.length && (
             <p className="empty-state">
               No AI run yet. The comparison above was computed by the numerical

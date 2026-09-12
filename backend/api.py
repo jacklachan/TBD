@@ -431,12 +431,26 @@ def _persist_run(state: AppState, case_row, session: CaseSession, outcome, run_i
     _record_memory(state, case_row, session, outcome)
 
 
+def _prior_cases(events: list[dict]) -> list[dict]:
+    """The memory hits from the latest run that had any, newest run first.
+
+    Read back off the event the planner already records, so there is one place
+    that decides what a hit is and no second store to drift out of step.
+    """
+    for event in reversed(events):
+        if event["event_type"] == "memory":
+            cases = event.get("details", {}).get("cases") or []
+            return [c for c in cases if isinstance(c, dict)]
+    return []
+
+
 def _snapshot(state: AppState, case_id: str) -> dict:
     store = state.store
     case_row = _case_or_404(state, case_id)
     document = case_row.document
     execution = store.execution_for_case(case_id)
     proposal = store.latest_proposal(case_id)
+    events = store.events(case_id)
 
     return {
         "case_id": case_row.case_id,
@@ -499,7 +513,12 @@ def _snapshot(state: AppState, case_id: str) -> dict:
         ],
         "proposal": proposal,
         "execution": asdict(execution) if execution else None,
-        "events": store.events(case_id),
+        "events": events,
+        # Prior cases the most recent run consulted. The trace already prints a
+        # sentence naming them; this is the same thing typed, so the workspace
+        # can link to a case instead of asking the operator to read an ID out of
+        # a log line.
+        "prior_cases": _prior_cases(events),
         "runs": state.runs_for(case_id),
     }
 
