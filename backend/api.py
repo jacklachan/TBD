@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import os
 import re
 import threading
@@ -39,8 +40,20 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend import store as store_module
 from backend.agent.llm import GeminiProvider, LLMError, Provider
-from backend.agent.memory import CaseMemory
-from backend.agent.planner import PlannerLimits, interpret_instruction, plan_case
+from backend.agent.memory import (
+    TAG_BUDGET_REDUCED,
+    TAG_NO_FEASIBLE_OPTION,
+    TAG_OPERATOR_REJECTED,
+    TAG_SECONDARY_CONFLICT,
+    TAG_WINDOW_BLOCKED,
+    CaseMemory,
+)
+from backend.agent.planner import (
+    STATUS_NO_APPROVABLE_OPTION,
+    PlannerLimits,
+    interpret_instruction,
+    plan_case,
+)
 from backend.agent.tools import CaseSession
 from backend.ingest import IngestError, epoch_spread_s, scenario_from_tles
 from backend.interop import CdmError, verify_cdm, write_cdm
@@ -60,6 +73,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCENARIOS_DIR = REPO_ROOT / "scenarios"
 SOCRATES_CSV = REPO_ROOT / "data" / "context" / "socrates_snapshot.csv"
 SOCRATES_PROVENANCE = REPO_ROOT / "data" / "context" / "socrates_provenance.json"
+
+_log = logging.getLogger("orion_west.api")
 
 SOCRATES_MAX_ROWS = 10
 
@@ -324,6 +339,87 @@ def _designed_from_history(store, case_row) -> list[Candidate]:
     return recovered
 
 
+def _memory_tags(case_row, session: CaseSession, outcome) -> tuple[str, ...]:
+    """Tags derived from what the run actually computed, never from its prose."""
+    tags: list[str] = []
+    primary = case_row.document.get("primary_threat_id")
+    for validation in session.validations.values():
+        if any(
+            e.min_separation_m < case_row.policy.min_separation_m
+            and e.other_object_id != primary
+            for e in validation.encounters
+        ):
+            tags.append(TAG_SECONDARY_CONFLICT)
+            break
+    if outcome.status == STATUS_NO_APPROVABLE_OPTION:
+        tags.append(TAG_NO_FEASIBLE_OPTION)
+    if case_row.policy_version > 1:
+        tags.append(TAG_BUDGET_REDUCED)
+    if case_row.policy.blocked_windows:
+        tags.append(TAG_WINDOW_BLOCKED)
+    verdict = outcome.proposal.reviewer_verdict if outcome.proposal else None
+    if verdict is not None and verdict.decision != "ALLOW":
+        tags.append(TAG_OPERATOR_REJECTED)
+    return tuple(dict.fromkeys(tags))
+
+
+def _record_memory(state: AppState, case_row, session: CaseSession, outcome) -> None:
+    """File what this run concluded, so a later case on the same scenario sees it.
+
+    The planner already reads this table at the top of every run. Nothing was
+    ever writing to it, so it could only ever return no hits -- the feature was
+    inert rather than absent, which is the harder kind of gap to notice.
+
+    What is stored is computed: the option, the clearance the verifier measured,
+    and tags derived from the results. Memory still only *suggests*; the
+    briefing surfaces a prior case with its ID and nothing here changes a
+    policy or clears a proposal.
+    """
+    if state.memory is None:
+        return
+    proposal = outcome.proposal
+    candidate_id = proposal.candidate_id if proposal else None
+    validation = session.validations.get(candidate_id) if candidate_id else None
+    closest = validation.closest() if validation else None
+
+    if proposal is not None and closest is not None:
+        summary = (
+            f"{candidate_id} was proposed and cleared every screened object by "
+            f"{closest.min_separation_m:,.1f} m."
+        )
+        suggestion = f"{candidate_id} cleared this geometry before."
+    elif outcome.status == STATUS_NO_APPROVABLE_OPTION:
+        summary = (
+            f"No option in the supported set cleared the {case_row.policy.min_separation_m:,.0f} m "
+            f"floor under a {case_row.policy.max_delta_v_mps} m/s budget."
+        )
+        suggestion = "Widening the grid did not help here; the budget was the binding constraint."
+    else:
+        summary = f"Run ended {outcome.status}" + (
+            f" ({outcome.unresolved_reason})" if outcome.unresolved_reason else ""
+        ) + "."
+        suggestion = ""
+
+    try:
+        state.memory.record(
+            case_id=case_row.case_id,
+            scenario_id=case_row.scenario_id,
+            scenario_family=case_row.scenario_id,
+            outcome=outcome.status,
+            summary=summary,
+            tags=_memory_tags(case_row, session, outcome),
+            candidate_id=candidate_id,
+            detail={
+                "suggestion": suggestion,
+                "policy_version": case_row.policy_version,
+                "validations_run": outcome.validations_run,
+            },
+        )
+    except Exception as exc:  # noqa: BLE001
+        # A memory write must never be the reason a completed run reports failure.
+        _log.warning("case memory write failed: %s", exc)
+
+
 def _persist_run(state: AppState, case_row, session: CaseSession, outcome, run_id: str) -> None:
     store = state.store
     store.append_events(case_row.case_id, run_id, outcome.events)
@@ -332,6 +428,7 @@ def _persist_run(state: AppState, case_row, session: CaseSession, outcome, run_i
     if outcome.proposal is not None:
         store.save_proposal(case_row.case_id, outcome.proposal)
     store.set_grid_revision(case_row.case_id, session.grid_revision, expected_policy_version=case_row.policy_version)
+    _record_memory(state, case_row, session, outcome)
 
 
 def _snapshot(state: AppState, case_id: str) -> dict:

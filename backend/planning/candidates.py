@@ -96,16 +96,6 @@ def generate_candidates(grid_revision: int = GRID_REVISION_BASE) -> list[Candida
     return options
 
 
-def expansion_candidates() -> list[Candidate]:
-    """Only the options revision 2 adds, for reporting what widening produced."""
-    base_ids = {c.candidate_id for c in generate_candidates(GRID_REVISION_BASE)}
-    return [
-        c
-        for c in generate_candidates(GRID_REVISION_EXPANDED)
-        if c.candidate_id not in base_ids
-    ]
-
-
 # --------------------------------------------------------------------------
 # Designed burns
 #

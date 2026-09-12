@@ -17,7 +17,6 @@ ENV_PATH = REPO_ROOT / ".env"
 
 DEFAULT_PLANNER_MODEL = "gemini-3.6-flash"
 DEFAULT_REVIEWER_MODEL = "gemini-3.6-flash"
-DISPLAY_NAME = "Orion West"
 
 # Vite and Next defaults, on both spellings of loopback. Enough for a dev server
 # and nothing else -- a deployment either serves the frontend from the same

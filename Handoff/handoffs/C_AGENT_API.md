@@ -441,3 +441,89 @@ proposal.
 
 Re-run `scripts/live_api_check.py` with a real key and record the actual model
 call count and wall time under prefetch, replacing the predicted figure above.
+
+---
+
+## [2026-09-12] — Builder C — case memory was inert; dead code removed
+
+**Changed paths**
+
+- `backend/api.py` — a finished run now files what it concluded to case memory; module logger added.
+- `backend/agent/memory.py` — `MAX_RECORDS` cap and `_prune()`, because something now writes per run.
+- `backend/planning/candidates.py` — removed `expansion_candidates`.
+- `backend/agent/reviewer.py` — removed `marginal_clearances`.
+- `backend/config.py` — removed `DISPLAY_NAME`.
+- `tests/test_api.py`, `tests/test_agent.py` — four tests.
+
+### The defect: memory was read-only
+
+`plan_case` calls `memory.relevant(...)` at the top of every run and surfaces the
+hits in the briefing. **Nothing in the application ever called `memory.record`.**
+Only tests did. So `relevant()` could only ever return nothing, and the "small
+case memory" the plan lists as a required feature was inert rather than absent —
+the harder kind of gap to see, because the read path, the schema, the retrieval
+ranking and the briefing field all exist and all work.
+
+It also explains four constants that looked like dead code: `TAG_BUDGET_REDUCED`,
+`TAG_WINDOW_BLOCKED`, `TAG_NO_FEASIBLE_OPTION` and `TAG_OPERATOR_REJECTED` had
+exactly one occurrence each in the repository. They were the vocabulary of a
+feature nothing was using. Deleting them would have been the wrong repair.
+
+`_persist_run` now files a row per completed run. What is stored is computed —
+the option, the clearance the verifier measured, and tags derived from the typed
+results, never from the model's prose. Memory still only *suggests*: the briefing
+surfaces a prior case with its ID, and nothing in this path changes a policy,
+widens a grid or clears a proposal. `test_a_later_case_on_the_same_scenario_sees_the_earlier_one`
+asserts both halves — that the hit arrives, and that the new case still starts on
+policy v1 and grid revision 1.
+
+A write failure is caught and logged. A bookkeeping row is not allowed to turn a
+completed run into a FAILED one, and there is a test for that.
+
+**Commands run**
+
+```
+$ python -m pytest tests/ -q
+274 passed, 2 warnings in 79.38s
+
+$ python scenarios/gen.py --check
+--check: all fixtures built and verified; nothing written.
+
+$ python scripts/demo_pipeline.py
+OUTCOME    verified option t30_ret_200
+           0.70 s total
+```
+
+**Dead code, each verified before removal**
+
+Removed only symbols with exactly one occurrence in the entire repository —
+their own definition — confirmed across `.py`, `.ts`, `.tsx`, `.md`, `.json`,
+`.html` and `.css`:
+
+| Symbol | Where |
+|---|---|
+| `expansion_candidates` | `backend/planning/candidates.py` |
+| `marginal_clearances` | `backend/agent/reviewer.py` |
+| `DISPLAY_NAME` | `backend/config.py` |
+
+`mark_scripted_fixture` in `frontend/e2e/scripted_server.py` scans as unreferenced
+and is **not** dead — it is a registered `@app.middleware("http")`. Left alone.
+`MARGINAL_CLEARANCE_RATIO` stays: the reviewer prompt and the ranking both use it.
+
+**Not verified / not run**
+
+- No live model call; every agent test still uses `ScriptedProvider`.
+- `frontend/dist` is not built in this checkout, so `scripts/diagnose.py` reports
+  that one failure. Nothing else in it fails.
+- The memory cap is exercised by a unit test, not by a long-running server.
+
+**Contract changes**
+
+- None. No endpoint, payload, tool declaration or stored schema changed. The
+  `case_memory` table gains rows it was always shaped to hold.
+
+**Next concrete action**
+
+Surface the memory hit in the UI. The briefing carries `relevant_prior_cases`
+and the planner records the ID, but the workspace never shows the operator that
+a previous case informed this one.

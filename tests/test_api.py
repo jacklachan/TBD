@@ -939,3 +939,66 @@ def test_a_running_plan_reports_its_progress_over_http():
     summaries = [e["summary"] for e in events]
     assert any("Validated" in summary for summary in summaries), summaries
     assert steps[-1][0] <= len(events)
+
+
+# --------------------------------------------------------------------------
+# Case memory has to be written, not only read
+# --------------------------------------------------------------------------
+
+
+def test_a_finished_run_files_what_it_concluded():
+    """The planner reads this table at the top of every run.
+
+    Nothing was ever writing to it, so `relevant()` could only ever return
+    nothing — the feature was inert rather than absent, which is why no test
+    caught it. This asserts the round trip, not just the read.
+    """
+    from backend.agent.memory import CaseMemory
+
+    memory = CaseMemory()
+    client = make_client(memory=memory)
+    case = new_case(client)
+    run = run_plan(client, case)
+    assert run["status"] == "DONE", run
+
+    filed = memory.all_records()
+    assert filed, "a completed run filed nothing to case memory"
+    entry = filed[0]
+    assert entry.case_id == case["case_id"]
+    assert entry.scenario_family == case["scenario_id"]
+    assert entry.outcome == run["result"]["status"]
+    # The summary quotes a measured clearance, so it must name the option it measured.
+    assert entry.candidate_id and entry.candidate_id in entry.summary
+
+
+def test_a_later_case_on_the_same_scenario_sees_the_earlier_one():
+    from backend.agent.memory import CaseMemory
+
+    memory = CaseMemory()
+    client = make_client(memory=memory)
+
+    first = new_case(client)
+    run_plan(client, first)
+
+    second = new_case(client)
+    hits = memory.relevant(scenario_family=second["scenario_id"], exclude_case_id=second["case_id"])
+    assert hits, "the second case saw no prior case on the same scenario"
+    assert first["case_id"] in {h.case_id for h in hits}
+    # Memory suggests; it never applies. The new case starts on the base policy.
+    assert second["policy_version"] == 1
+    assert second["grid_revision"] == 1
+
+
+def test_a_memory_failure_never_fails_a_completed_run():
+    """A bookkeeping write is not allowed to turn a good run into a FAILED one."""
+    from backend.agent.memory import CaseMemory
+
+    class Breaks(CaseMemory):
+        def record(self, *a, **k):
+            raise RuntimeError("disk went away")
+
+    client = make_client(memory=Breaks())
+    case = new_case(client)
+    run = run_plan(client, case)
+    assert run["status"] == "DONE", run
+    assert run["result"]["status"] == "PROPOSAL_READY"

@@ -368,3 +368,43 @@ because every generated fixture has one. A pasted pair crashed it.
 
 254 Python tests, 7 frontend tests. `scripts/diagnose.py` covers the designed
 burn and its cross-check, the TLE ingest, and the collision variant's outcome.
+
+
+## Audit pass — case memory, dead code — 12 September 2026
+
+```
+$ python -m pytest tests/ -q
+274 passed, 2 warnings in 79.38s          # 270 before, four added here
+
+$ python scenarios/gen.py --check
+--check: all fixtures built and verified; nothing written.
+
+$ python scripts/demo_pipeline.py
+OUTCOME    verified option t30_ret_200    0.70 s total
+```
+
+**One defect, and it was a feature rather than a line.** The planner reads case
+memory at the top of every run; nothing in the application ever wrote to it. The
+read path, the schema, the retrieval ranking and the briefing field all worked,
+so nothing failed — `relevant()` simply always returned nothing. A finished run
+now files what it concluded, and two tests assert the round trip rather than only
+the read. Detail in [handoffs/C_AGENT_API.md](handoffs/C_AGENT_API.md).
+
+That also resolved four constants that scanned as dead: they were the tag
+vocabulary of the unused half of that feature.
+
+**Dead code removed**, each confirmed to have exactly one occurrence repository-wide
+before deletion: `expansion_candidates`, `marginal_clearances`, `DISPLAY_NAME`.
+`mark_scripted_fixture` scans the same way and was **kept** — it is a registered
+FastAPI middleware, which a symbol scan cannot see.
+
+**Checked and found correct**, recorded so the next reader does not re-audit them:
+WebGL disposal in `OrbitalScene.tsx` (geometries, materials, controls, renderer,
+listener, and the context-lost handler all released on unmount); the one broad
+`except` in `api.py` releases its model slot and re-raises; no mutable default
+arguments, no TODO/FIXME markers, and no unreferenced TypeScript exports anywhere
+in `frontend/src`.
+
+**Still open:** no live Gemini run in this checkout; `frontend/dist` is unbuilt
+here, which is the single failure `scripts/diagnose.py` reports; the memory hit is
+recorded and retrieved but never shown in the UI.

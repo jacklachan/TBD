@@ -1158,3 +1158,19 @@ def test_a_designed_burn_reports_what_was_designed_and_how_it_did(session):
     assert "1,500 s" in summary
     assert "clears by" in summary
     print(f"\n[progress] {summary}")
+
+
+def test_case_memory_does_not_grow_without_a_ceiling():
+    """A row is filed per completed run, so the table needs a bound."""
+    from backend.agent.memory import MAX_RECORDS, CaseMemory
+
+    memory = CaseMemory()
+    for n in range(MAX_RECORDS + 25):
+        memory.record(
+            case_id=f"case_{n}", scenario_id="primary", outcome="PROPOSAL_READY",
+            summary=f"run {n}", scenario_family="primary",
+        )
+    kept = memory.all_records()
+    assert len(kept) == MAX_RECORDS
+    # The rows that survive are the recent ones, which is what retrieval reads.
+    assert kept[0].case_id == f"case_{MAX_RECORDS + 24}"

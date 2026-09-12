@@ -36,6 +36,11 @@ CREATE TABLE IF NOT EXISTS case_memory (
 CREATE INDEX IF NOT EXISTS idx_case_memory_family ON case_memory(scenario_family);
 """
 
+# A row is filed per completed run, so the table needs a ceiling. Retrieval
+# only ever reads the three most relevant rows in a family; older ones are
+# history nobody queries, and an unbounded demo database is a slow leak.
+MAX_RECORDS = 500
+
 TAG_BUDGET_REDUCED = "BUDGET_REDUCED"
 TAG_WINDOW_BLOCKED = "WINDOW_BLOCKED"
 TAG_SECONDARY_CONFLICT = "SECONDARY_CONFLICT"
@@ -141,7 +146,17 @@ class CaseMemory:
             ),
         )
         self._connection.commit()
+        self._prune()
         return entry
+
+    def _prune(self, keep: int = MAX_RECORDS) -> None:
+        """Drop the oldest rows beyond the cap. Called under the record lock."""
+        self._connection.execute(
+            "DELETE FROM case_memory WHERE rowid NOT IN ("
+            " SELECT rowid FROM case_memory ORDER BY rowid DESC LIMIT ?)",
+            (keep,),
+        )
+        self._connection.commit()
 
     @_synchronized
     def relevant(

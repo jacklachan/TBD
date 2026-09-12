@@ -219,20 +219,3 @@ def review(
     )
 
 
-def marginal_clearances(validation: ValidationResult, policy: Policy) -> list[dict]:
-    """Encounters that clear the floor but not by much.
-
-    Offered so a reviewer block on 'marginal clearance' can be checked against
-    the numbers rather than taken on trust.
-    """
-    return [
-        {
-            "object_id": e.other_object_id,
-            "min_separation_m": e.min_separation_m,
-            "ratio_to_floor": e.min_separation_m / policy.min_separation_m,
-        }
-        for e in validation.encounters
-        if policy.min_separation_m
-        <= e.min_separation_m
-        < policy.min_separation_m * MARGINAL_CLEARANCE_RATIO
-    ]
