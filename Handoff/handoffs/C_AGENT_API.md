@@ -247,3 +247,82 @@ Raising it rather than changing it silently. If B wants 1 s for the 3D scene spe
 ### Next concrete action
 
 Run `scripts/smoke_llm.py` with a real key, then point B at `uvicorn backend.api:app` and the bundle shape.
+
+---
+
+## [2026-09-12] — LIVE MODEL VERIFIED. Gate 3 met.
+
+The unverified caveat above is now resolved. Recorded here as the evidence STATE.md asked for.
+
+**Working model: `gemini-3.6-flash`.** Reached over the `generateContent` REST endpoint, `temperature=0`, no SDK.
+
+```
+$ python scripts/smoke_llm.py
+model      gemini-3.6-flash
+step 1     1609 ms   requested get_case_briefing({})
+step 2     6610 ms   continuation after the tool result
+PASS  request -> function call -> result -> continuation, 8219 ms total
+```
+
+### Two failures on the way, both worth recording
+
+**`gemini-2.5-flash` is retired.** HTTP 404: *"no longer available to new users... use models/gemini-3.6-flash"*. Model IDs written from memory are stale; the default now lives in `backend/config.py` and is overridable through `PLANNER_MODEL` in `.env`.
+
+**Gemini 3.x requires thought signatures.** Replaying a `functionCall` turn without one is HTTP 400, not a soft degradation:
+
+> *"Function call is missing a thought_signature in functionCall parts. This is required for tools to work correctly."*
+
+The published docs cover the Interactions API rather than `generateContent`, so the shape was read off an actual response: `thoughtSignature` is a **sibling key of `functionCall` on the same part**, and the call carries its own `id`. Both are captured on `ToolCall` and echoed back verbatim; `functionResponse` carries the matching `id`. Any provider adapter written against pre-3.x examples will hit this.
+
+**The flat handwritten schema was accepted first time.** `{"type": "object", "properties": {}}` — no `$ref`, no `anyOf`. That precaution was worth taking.
+
+### Live planner runs
+
+| Run | Result | Model calls | Wall clock |
+|---|---|---|---|
+| 1, before tuning | `UNRESOLVED` (model-call limit) | 8 | 16.4 s |
+| 2, richer rejection evidence | `PROPOSAL_READY`, `t30_ret_200` | 5 | 23.4 s |
+| 3, plus overlap and shorter answer | `PROPOSAL_READY`, `t30_ret_200` | 5 | **16.6 s** |
+
+Run 1 is the interesting one. The model validated `t30_ret_100`, saw it blocked, then validated `t15_ret_100` and `t45_ret_100` — three options from the same 0.10 m/s tier that the geometry compromises identically — and exhausted its budget. The bounds behaved exactly as designed and returned a named unresolved reason rather than a guess.
+
+Three changes fixed the strategy without staging the answer:
+
+- A `BLOCK` result now carries `blocked_by`: the object, the separation and the **shortfall** below the floor. "Rejected" became "rejected, 476.8 m short of DEB-2."
+- `already_rejected` carries each option's magnitude and burn time, so a shared cause is visible.
+- The prompt states the general fact that similar magnitude and burn time produce similar geometry, and that widening adds *smaller* magnitudes so it will not help a clearance failure. Domain guidance, not the answer.
+
+The model then went straight from the rejection to 0.20 m/s. Reasoning from evidence, not from a hint.
+
+Then two latency fixes: the reviewer starts the moment a validation passes and runs while the model writes its rationale, so it costs **0 ms** instead of 5.7 s; and the prompt asks for two or three plain sentences instead of a markdown report.
+
+### Gate 3 — live judge sentences
+
+| Sentence | Result | Time |
+|---|---|---|
+| "we lost a thruster, halve the fuel budget" | `READY` — `max_delta_v_mps: 0.2 → 0.1`, computed by the backend from `budget_scale=0.5` | 4.5 s |
+| "no burns during the ground station pass" | `READY` — `blocked_windows: [] → ['gs_pass_1']`, resolved against the scenario's known windows | 3.9 s |
+| "keep it under the aurora limit" | **`NEEDS_CLARIFICATION`** — refused to invent a constraint it does not support | 5.6 s |
+
+Confirming the halving bumped the policy to v2 and a fresh plan under it returned **`NO_APPROVABLE_OPTION`**.
+
+That is correct, and it is the strongest thing in the demo. The whole 0.10 m/s tier is unsafe against DEB-2, and 0.20 m/s is now over budget — so there is genuinely nothing left. The system says so instead of inventing an answer. Nobody staged that; it falls out of the geometry.
+
+### Measured latency, reported separately as the plan requires
+
+| Component | Time |
+|---|---|
+| Backend computation | ~1.2 s |
+| Model calls (5) | ~15.4 s |
+| **Full agent loop** | **~16.6 s** |
+| Backend only, repeat run with warm search cache | 0.155 s |
+| No-approvable-option path (more exploration) | ~30 s |
+
+**The ten-second target is not met and will not be with five sequential turns on this model.** Roughly 3 s per call is what it costs. Do not put ten seconds on a slide. Two honest options: report the real number and stream events into the trace so the screen is never dead, or cut a turn by merging the briefing into the first evaluate — worth about 2 s and the briefing is where memory surfaces, so it is a real trade.
+
+### Still not done
+
+- `backend/domain/models.py`. Still the three-way agreement.
+- Frontend. `contracts.ts` and `api.ts` exist for B to build against.
+- CORS is wide open for the dev server. Narrow it before anything leaves a laptop.
+- Live runs above were driven directly, not through the HTTP API. The API path uses the same planner and is covered by tests, but an end-to-end live run through `uvicorn` has not been timed.

@@ -46,8 +46,18 @@ class LLMError(RuntimeError):
 
 @dataclass(frozen=True)
 class ToolCall:
+    """A tool the model asked for.
+
+    ``call_id`` and ``thought_signature`` are provider bookkeeping that must be
+    echoed back verbatim when the turn is replayed in conversation history.
+    Gemini 3.x rejects a functionCall part that arrives without its signature.
+    Both default to empty so scripted tests can construct a call by name alone.
+    """
+
     name: str
     arguments: dict
+    call_id: str = ""
+    thought_signature: str = ""
 
 
 @dataclass(frozen=True)
@@ -76,6 +86,7 @@ class Message:
     tool_call: ToolCall | None = None
     name: str = ""
     result: dict | None = None
+    call_id: str = ""
 
 
 class Provider(Protocol):
@@ -131,28 +142,29 @@ class GeminiProvider:
                 if message.text:
                     parts.append({"text": message.text})
                 if message.tool_call is not None:
-                    parts.append(
-                        {
-                            "functionCall": {
-                                "name": message.tool_call.name,
-                                "args": message.tool_call.arguments,
-                            }
-                        }
-                    )
+                    call: dict = {
+                        "name": message.tool_call.name,
+                        "args": message.tool_call.arguments,
+                    }
+                    if message.tool_call.call_id:
+                        call["id"] = message.tool_call.call_id
+                    part: dict = {"functionCall": call}
+                    # Gemini 3.x requires the signature it issued to travel back
+                    # with the call, as a sibling key on the same part. Omitting
+                    # it is a 400, not a soft degradation.
+                    if message.tool_call.thought_signature:
+                        part["thoughtSignature"] = message.tool_call.thought_signature
+                    parts.append(part)
                 contents.append({"role": "model", "parts": parts})
             elif message.role == ROLE_TOOL:
+                response: dict = {
+                    "name": message.name,
+                    "response": message.result or {},
+                }
+                if message.call_id:
+                    response["id"] = message.call_id
                 contents.append(
-                    {
-                        "role": "user",
-                        "parts": [
-                            {
-                                "functionResponse": {
-                                    "name": message.name,
-                                    "response": message.result or {},
-                                }
-                            }
-                        ],
-                    }
+                    {"role": "user", "parts": [{"functionResponse": response}]}
                 )
             else:
                 raise LLMError(f"unsupported message role {message.role!r}")
@@ -213,7 +225,13 @@ class GeminiProvider:
             if "functionCall" in part:
                 call = part["functionCall"]
                 calls.append(
-                    ToolCall(name=call.get("name", ""), arguments=call.get("args") or {})
+                    ToolCall(
+                        name=call.get("name", ""),
+                        arguments=call.get("args") or {},
+                        call_id=call.get("id", ""),
+                        # Sibling of functionCall on the same part, not inside it.
+                        thought_signature=part.get("thoughtSignature", ""),
+                    )
                 )
 
         return LLMResponse(

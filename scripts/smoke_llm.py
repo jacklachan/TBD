@@ -86,7 +86,9 @@ def main() -> int:
         "policy": {"max_delta_v_mps": 0.2, "min_separation_m": 1000.0},
     }
     messages.append(Message(role="model", text=first.text, tool_call=call))
-    messages.append(Message(role="tool", name=call.name, result=fake_result))
+    messages.append(
+        Message(role="tool", name=call.name, result=fake_result, call_id=call.call_id)
+    )
 
     try:
         second = provider.call(SYSTEM, messages, tools)

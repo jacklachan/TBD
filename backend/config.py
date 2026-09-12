@@ -15,8 +15,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ENV_PATH = REPO_ROOT / ".env"
 
-DEFAULT_PLANNER_MODEL = "gemini-2.5-flash"
-DEFAULT_REVIEWER_MODEL = "gemini-2.5-flash"
+DEFAULT_PLANNER_MODEL = "gemini-3.6-flash"
+DEFAULT_REVIEWER_MODEL = "gemini-3.6-flash"
 DISPLAY_NAME = "Satellite Demo"
 
 

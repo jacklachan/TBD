@@ -380,7 +380,15 @@ def evaluate_all(session: CaseSession) -> dict:
         "qualified_count": len([e for e in result.qualified if not e.candidate.is_baseline]),
         "top_options": ranked,
         "excluded_reason_counts": excluded,
-        "already_rejected": session.rejected_candidate_ids,
+        "already_rejected": [
+            {
+                "candidate_id": e.candidate.candidate_id,
+                "delta_v_mps": e.candidate.delta_v_mps,
+                "burn_t_s": e.candidate.burn_t_s,
+            }
+            for e in result.evaluations
+            if e.candidate.candidate_id in session.rejected_candidate_ids
+        ],
         "from_cache": cached,
         "note": (
             "Provisional: screened against the primary threat only. Call "
@@ -418,6 +426,20 @@ def validate_one(session: CaseSession, candidate_id: str) -> dict:
     if result.status != STATUS_PASS and candidate.candidate_id not in session.rejected_candidate_ids:
         session.rejected_candidate_ids.append(candidate.candidate_id)
 
+    # Naming the object and the shortfall turns "rejected" into something the
+    # planner can act on: it is the difference between knowing an option failed
+    # and knowing how much more displacement is needed.
+    blocked_by = [
+        {
+            "object_id": e.other_object_id,
+            "min_separation_m": round(e.min_separation_m, 1),
+            "shortfall_m": round(session.policy.min_separation_m - e.min_separation_m, 1),
+            "tca_s": round(e.tca_s, 1),
+        }
+        for e in result.encounters
+        if e.min_separation_m < session.policy.min_separation_m
+    ]
+
     return {
         **session.version_stamp(),
         "candidate_id": result.candidate_id,
@@ -426,6 +448,9 @@ def validate_one(session: CaseSession, candidate_id: str) -> dict:
         "reason_codes": list(result.reason_codes),
         "screened_objects": list(result.evaluated_object_ids),
         "encounters": [_summarize_encounter(e) for e in result.encounters],
+        "blocked_by": blocked_by,
+        "delta_v_mps": candidate.delta_v_mps,
+        "burn_t_s": candidate.burn_t_s,
         "approvable": result.approvable,
         "note": (
             "Independent recomputation against every object over the full "

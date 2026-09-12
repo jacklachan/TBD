@@ -96,6 +96,20 @@ def values_from_validation(validation) -> set[float]:
     return supported_values(values)
 
 
+def values_from_shortfalls(validation, policy) -> set[float]:
+    """How far each violating encounter fell below the floor.
+
+    Surfaced to the planner in `blocked_by`, so a rationale that explains a
+    rejection legitimately quotes it. Derived rather than stored, which is why
+    it needs its own helper.
+    """
+    return supported_values(
+        policy.min_separation_m - e.min_separation_m
+        for e in validation.encounters
+        if e.min_separation_m < policy.min_separation_m
+    )
+
+
 def values_from_policy(policy) -> set[float]:
     return supported_values(
         [policy.max_delta_v_mps, policy.min_separation_m]

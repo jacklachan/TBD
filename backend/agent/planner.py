@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -57,13 +58,18 @@ results cover only the object that triggered the case, so an option that looks
 good there can still be unsafe against something else -- validation is what
 settles it.
 
-If validation rejects your choice, read why, then pick a different option and
-validate that. You may widen the search once, after a rejection.
+If validation rejects your choice, read `blocked_by`: it names the object and how
+far short of the floor the option fell. Options with a similar magnitude and burn
+time move the satellite to a similar place, so they tend to fail the same way --
+after a rejection, try one that differs materially in magnitude rather than the
+next one along. You may widen the search once, and widening adds SMALLER
+magnitudes, so it does not help when you were rejected for being too close to
+something.
 
-When you are done, reply with a short plain-language explanation of what you
-recommend and why, mentioning any option you rejected and the reason. Refer to
-options by their ID. Do not state distances or times you were not given by a
-tool, and do not compute anything yourself."""
+When you are done, reply with two or three plain sentences: what you recommend,
+what you rejected and why. Plain prose only -- no headings, no bullet lists, no
+markdown. Refer to options by their ID. Do not state distances or times you were
+not given by a tool, and do not compute anything yourself."""
 
 POLICY_SYSTEM_PROMPT = """You turn an operator's instruction into a proposed constraint change.
 
@@ -79,9 +85,9 @@ time window."""
 
 @dataclass
 class PlannerLimits:
-    max_model_calls: int = 8
-    max_tool_calls: int = 12
-    max_validations: int = 3
+    max_model_calls: int = 10
+    max_tool_calls: int = 14
+    max_validations: int = 4
     deadline_s: float = 60.0
 
 
@@ -196,6 +202,13 @@ def plan_case(
     final_text = ""
     unresolved = ""
 
+    # The reviewer reads one passing validation and nothing else, so it does not
+    # have to wait for the model to finish writing. Starting it the moment a
+    # validation passes overlaps it with the final turn instead of adding to it.
+    review_pool = ThreadPoolExecutor(max_workers=1) if reviewer_provider else None
+    review_future: Future | None = None
+    reviewed_validation_id = ""
+
     while True:
         if time.perf_counter() - started > limits.deadline_s:
             unresolved = UNRESOLVED_DEADLINE
@@ -256,7 +269,11 @@ def plan_case(
                 0.0,
                 tool=call.name,
             )
-            messages.append(Message(role="tool", name=call.name, result=result))
+            messages.append(
+                Message(
+                    role="tool", name=call.name, result=result, call_id=call.call_id
+                )
+            )
             tool_calls += 1
             continue
 
@@ -272,6 +289,17 @@ def plan_case(
 
         if call.name == "validate_proposal" and not failed:
             validations_run += 1
+            passing = session.validations.get(result.get("candidate_id", ""))
+            if (
+                review_pool is not None
+                and passing is not None
+                and passing.status == STATUS_PASS
+                and passing.validation_id != reviewed_validation_id
+            ):
+                reviewed_validation_id = passing.validation_id
+                review_future = review_pool.submit(
+                    review, reviewer_provider, passing, session.policy
+                )
 
         recorder.add(
             "tool_error" if failed else "tool_result",
@@ -281,7 +309,17 @@ def plan_case(
             arguments=call.arguments,
             result=_compact(result),
         )
-        messages.append(Message(role="tool", name=call.name, result=_compact(result)))
+        messages.append(
+            Message(
+                role="tool",
+                name=call.name,
+                result=_compact(result),
+                call_id=call.call_id,
+            )
+        )
+
+    if review_pool is not None:
+        review_pool.shutdown(wait=False)
 
     elapsed = time.perf_counter() - started
 
@@ -350,6 +388,7 @@ def plan_case(
     allowed_values = guards.values_from_policy(session.policy)
     for other_id, other_validation in session.validations.items():
         allowed_values |= guards.values_from_validation(other_validation)
+        allowed_values |= guards.values_from_shortfalls(other_validation, session.policy)
         try:
             allowed_values |= guards.values_from_candidate(
                 session.candidate_by_id(other_id)
@@ -375,7 +414,10 @@ def plan_case(
     verdict: ReviewerVerdict | None = None
     if reviewer_provider is not None:
         review_started = time.perf_counter()
-        verdict = review(reviewer_provider, validation, session.policy)
+        if review_future is not None and reviewed_validation_id == validation.validation_id:
+            verdict = review_future.result()
+        else:
+            verdict = review(reviewer_provider, validation, session.policy)
         recorder.add(
             "reviewer",
             f"Safety reviewer returned {verdict.decision}.",
@@ -383,6 +425,7 @@ def plan_case(
             decision=verdict.decision,
             reason_codes=list(verdict.reason_codes),
             rationale=verdict.rationale,
+            overlapped=review_future is not None,
         )
 
     # Approvability is read off typed results. The model's text is attached as
@@ -504,7 +547,9 @@ def interpret_instruction(
             arguments=call.arguments,
             result=result,
         )
-        messages.append(Message(role="tool", name=call.name, result=result))
+        messages.append(
+            Message(role="tool", name=call.name, result=result, call_id=call.call_id)
+        )
 
         if call.name == TOOL_PROPOSE_POLICY and not failed:
             diff_result = result

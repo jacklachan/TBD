@@ -11,9 +11,9 @@ Revision 3, 12 September 2026. Revisions 1-2 recorded documentation decisions on
 | Current package | Complete. Entry files, plan, engineering spec, contracts, updated data and dashboard specs, and all three role handoffs are written. Nothing further is required before implementation begins |
 | Application source, dependencies, deployment | `backend/core/`, `backend/planning/`, `backend/agent/`, `backend/api.py`, `backend/store.py`, `backend/visualization.py`, `scenarios/`, `scripts/`. Serves with `uvicorn backend.api:app`. `domain/models.py` and `frontend/` do not exist. Nothing is deployed |
 | Numerical tests and generated scenarios | Gate 1 and Gate 2 passing. Candidate grid, primary search and four fixtures exist and are tested from disk. **Verifier not written** -- nothing is approvable yet |
-| Gemini key, model availability, tool call | **Still not verified.** The agent layer is built and tested against a scripted provider; `GeminiProvider` has never called a live endpoint. Run `scripts/smoke_llm.py` with a key |
+| Gemini key, model availability, tool call | **Verified.** `gemini-3.6-flash` over the generateContent REST endpoint. Full tool round trip passes; live planner reaches PROPOSAL_READY in 5 model calls, 16.6 s |
 | TLE and SOCRATES data snapshots | Both downloaded and committed. Seed: NOAA 20 (JPSS-1), NORAD 43013, epoch 2026-09-11T21:51:16Z. Context: 25 real conjunctions from SOCRATES Plus |
-| Numerical accuracy and runtime latency | Acceptance targets only |
+| Numerical accuracy and runtime latency | Measured. Gate 1 to 1.155e-06 m; verifier agrees with the search to 3.6e-08 m. Live loop 16.6 s of which ~15.4 s is model time and ~1.2 s compute. **The 10 s target is not met** |
 | 3D model and animation | Specified, not built |
 | GitHub destination | jacklachan/TBD; documentation commit requested under Auenchanters |
 
@@ -176,3 +176,32 @@ Two bugs found while testing and fixed: a background run could hang in `RUNNING`
 **One deliberate contract deviation, flagged for the team:** CONTRACTS asks for one-second visualization samples, which is ~11 MB of JSON per request over a six-hour horizon. The default is now 10 s with the step reported and `?sample_step_s=` available; the grid still always includes both horizon ends, every burn epoch and every refined encounter time, which is what the requirement was actually protecting.
 
 Gate 3 remains unmet — it needs a working key.
+
+
+## Gate 3 — met 12 September 2026, live model
+
+Working model **`gemini-3.6-flash`** over the `generateContent` REST endpoint. Full evidence in [handoffs/C_AGENT_API.md](handoffs/C_AGENT_API.md).
+
+Two failures on the way, both recorded there: `gemini-2.5-flash` is retired (404, model IDs written from memory go stale), and Gemini 3.x rejects a replayed `functionCall` that arrives without its `thoughtSignature` — a 400, not a soft degradation. The signature is a sibling key of `functionCall` on the same part; the shape was read off a real response because the published docs cover the Interactions API instead.
+
+The handwritten flat tool schema was accepted first time.
+
+### Live judge sentences
+
+| Sentence | Result | Time |
+|---|---|---|
+| "we lost a thruster, halve the fuel budget" | `READY` — 0.2 → 0.1 m/s, computed by the backend | 4.5 s |
+| "no burns during the ground station pass" | `READY` — blocks `gs_pass_1` from the scenario's windows | 3.9 s |
+| "keep it under the aurora limit" | **`NEEDS_CLARIFICATION`** — refused to invent an unsupported constraint | 5.6 s |
+
+Confirming the halving bumped the policy to v2, and a fresh plan under it returned **`NO_APPROVABLE_OPTION`** — correctly. The whole 0.10 m/s tier is unsafe against DEB-2 and 0.20 m/s is now over budget, so nothing is left. That falls out of the geometry; it was not staged.
+
+### The first live run failed, and fixing it improved the product
+
+The model validated three options from the same 0.10 m/s tier and exhausted its budget. The bounds returned a named unresolved reason rather than a guess, which is what they are for. The fix was better evidence, not a better hint: a `BLOCK` now carries the object and the **shortfall** below the floor, rejected options carry their magnitude, and the prompt states the general fact that similar magnitudes produce similar geometry. The model then went straight from the rejection to 0.20 m/s — 8 calls and unresolved became 5 calls and the right answer.
+
+### Latency, reported separately as the plan requires
+
+Backend ~1.2 s, model ~15.4 s, full loop **~16.6 s**. Repeat backend runs are 0.155 s with the warm search cache. The infeasible path explores more and takes ~30 s.
+
+**The ten-second target is not met and will not be with five sequential turns on this model.** Report the measured number and stream events so the screen is never dead, or merge the briefing into the first evaluate for about 2 s. Do not put ten seconds on a slide.
