@@ -25,6 +25,7 @@ pinned: false
 | Name | Value |
 |---|---|
 | `GEMINI_API_KEY` | your key |
+| `DESK_ACCESS_TOKEN` | a long random operator token; required for remote API access |
 
 Secrets arrive as environment variables. `backend/config.py` reads the environment first and only falls back to `.env`, so a Space secret wins and no code changes.
 
@@ -73,5 +74,5 @@ Twenty checks covering create, plan, visualization, a plain-English constraint c
 ## Before this is public
 
 - **CORS is already narrowed.** Unset, it permits local dev servers only. Serving the frontend from the same Space? Set `ALLOWED_ORIGINS=none` and no CORS headers are sent at all. Calling from somewhere else? Name that origin explicitly. There is no wildcard option, on purpose: this API spends a paid model quota.
-- **There is no auth and no rate limiting.** Anyone with the URL can spend your Gemini quota. For a judged demo that is usually fine; know that it is true.
+- **API access uses `Authorization: Bearer <DESK_ACCESS_TOKEN>`.** Remote API requests fail closed when no token is configured. Health and static assets remain public. Use TLS; share the operator token only with your team. Model operations are capped at four concurrent requests, one plan per case, and request bodies at 16 KiB. These bounds are not a per-user quota or a time-based rate limiter.
 - Model calls dominate latency — around 15 s for a full plan. Stream events into the trace so the page is never blank.

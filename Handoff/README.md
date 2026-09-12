@@ -2,7 +2,7 @@
 
 **Temporary project name:** Satellite Demo. Rename the display name later; keep module and file names descriptive.
 
-**Package revision:** 1 — 12 September 2026. **Status:** documentation only; implementation has not started.
+**Package revision:** 4 — 12 September 2026. **Status:** backend implemented, branch merged, security fixes verified. Frontend implementation is next. Start with the current summary at the top of STATE.md; older entries are historical evidence.
 
 **Repository:** [jacklachan/TBD](https://github.com/jacklachan/TBD). Three builders, twenty hours, one satellite, two synthetic debris objects, six simulated hours.
 

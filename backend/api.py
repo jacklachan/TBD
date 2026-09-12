@@ -19,10 +19,12 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import re
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,9 +32,9 @@ from typing import Callable
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend import store as store_module
 from backend.agent.llm import GeminiProvider, LLMError, Provider
@@ -43,8 +45,9 @@ from backend.planning.candidates import Candidate, generate_candidates
 from backend.planning.policy import STATUS_READY as DIFF_READY
 from backend.planning.policy import Policy, policy_from_document
 from backend.planning.verifier import MODEL_VERSION, STATUS_PASS, reconstruct
-from backend.store import IdempotencyConflict, Store, StoreError
-from backend.visualization import DEFAULT_SAMPLE_STEP_S, build_bundle
+from backend.store import CapacityError, IdempotencyConflict, Store, StoreError
+from backend.visualization import DEFAULT_SAMPLE_STEP_S, MIN_SAMPLE_STEP_S, build_bundle
+from backend.security import APIGuard
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCENARIOS_DIR = REPO_ROOT / "scenarios"
@@ -63,6 +66,7 @@ SCENARIO_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 # registry is in memory and a long-lived demo would otherwise grow without
 # bound. Oldest finished runs are dropped first; a running one is never evicted.
 MAX_TRACKED_RUNS = 200
+MAX_CASES = 200
 
 RUN_RUNNING = "RUNNING"
 RUN_DONE = "DONE"
@@ -79,16 +83,18 @@ def _now() -> str:
 
 
 class VersionedRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     expected_scenario_version: int = Field(..., ge=0)
     expected_policy_version: int = Field(..., ge=0)
 
 
 class CreateCaseRequest(BaseModel):
-    scenario_id: str = "primary"
+    model_config = ConfigDict(extra="forbid")
+    scenario_id: str = Field("primary", max_length=64)
 
 
 class PlanRequest(VersionedRequest):
-    instruction: str = ""
+    instruction: str = Field("", max_length=2000)
 
 
 class PolicyPreviewRequest(VersionedRequest):
@@ -96,11 +102,11 @@ class PolicyPreviewRequest(VersionedRequest):
 
 
 class PolicyConfirmRequest(VersionedRequest):
-    diff_id: str
+    diff_id: str = Field(..., min_length=1, max_length=100)
 
 
 class ApproveRequest(VersionedRequest):
-    proposal_id: str
+    proposal_id: str = Field(..., min_length=1, max_length=100)
     idempotency_key: str = Field(..., min_length=1, max_length=200)
 
 
@@ -147,6 +153,7 @@ class AppState:
         self.runs: dict[str, RunState] = {}
         self.executor = ThreadPoolExecutor(max_workers=4)
         self.lock = threading.Lock()
+        self.model_slots = threading.BoundedSemaphore(4)
 
     def scenario_path(self, scenario_id: str) -> Path:
         """Resolve a fixture name to a file inside ``scenarios_dir``.
@@ -171,6 +178,11 @@ class AppState:
 
     def register_run(self, run: "RunState") -> None:
         with self.lock:
+            active = [r for r in self.runs.values() if r.status == RUN_RUNNING]
+            if any(r.case_id == run.case_id for r in active):
+                raise HTTPException(409, {"error": "CASE_BUSY", "message": "This case already has an active run."})
+            if len(active) >= 4:
+                raise HTTPException(429, {"error": "CAPACITY", "message": "Four runs are active. Try again shortly."}, headers={"Retry-After": "5"})
             self.runs[run.run_id] = run
             if len(self.runs) > MAX_TRACKED_RUNS:
                 finished = [
@@ -238,7 +250,7 @@ def _persist_run(state: AppState, case_row, session: CaseSession, outcome, run_i
         store.save_validation(case_row.case_id, validation)
     if outcome.proposal is not None:
         store.save_proposal(case_row.case_id, outcome.proposal)
-    store.set_grid_revision(case_row.case_id, session.grid_revision)
+    store.set_grid_revision(case_row.case_id, session.grid_revision, expected_policy_version=case_row.policy_version)
 
 
 def _snapshot(state: AppState, case_id: str) -> dict:
@@ -283,6 +295,8 @@ def _snapshot(state: AppState, case_id: str) -> dict:
         "validations": [
             {
                 "validation_id": v.validation_id,
+                "scenario_version": v.scenario_version,
+                "policy_version": v.policy_version,
                 "candidate_id": v.candidate_id,
                 "status": v.status,
                 "reason_codes": list(v.reason_codes),
@@ -324,8 +338,20 @@ def create_app(
     memory: CaseMemory | None = None,
     scenarios_dir: Path | None = None,
     limits: PlannerLimits | None = None,
+    require_remote_token: bool = False,
 ) -> FastAPI:
-    app = FastAPI(title="Satellite Demo", version="0.1.0")
+    @asynccontextmanager
+    async def lifespan(application):
+        yield
+        state = application.state.desk
+        state.executor.shutdown(wait=True, cancel_futures=True)
+        state.store.close()
+
+    app = FastAPI(title="Satellite Demo", version="0.1.0", lifespan=lifespan)
+
+    @app.exception_handler(CapacityError)
+    async def capacity_error(request, exc):
+        return JSONResponse({"detail": {"error": "CAPACITY", "message": str(exc)}}, status_code=429)
 
     # Named origins only, and none at all when the frontend ships from the same
     # origin. A wildcard would let any page the operator has open spend the
@@ -339,9 +365,13 @@ def create_app(
             allow_origins=origins,
             allow_credentials=False,
             allow_methods=["GET", "POST", "OPTIONS"],
-            allow_headers=["Content-Type"],
+            allow_headers=["Content-Type", "Authorization"],
             max_age=600,
         )
+
+    access_token = os.environ.get("DESK_ACCESS_TOKEN", "").strip()
+    app.add_middleware(APIGuard, token=access_token, origins=origins,
+                       require_remote_token=require_remote_token)
 
     app.state.desk = AppState(
         store=store or Store(":memory:"),
@@ -359,7 +389,7 @@ def create_app(
         state = _state(request)
         path = state.scenario_path(payload.scenario_id)
         document = json.loads(path.read_text(encoding="utf-8"))
-        case_row = state.store.create_case(document, policy_from_document(document))
+        case_row = state.store.create_case(document, policy_from_document(document), max_cases=MAX_CASES)
         return _snapshot(state, case_row.case_id)
 
     @app.get("/cases/{case_id}")
@@ -373,9 +403,17 @@ def create_app(
         state = _state(request)
         case_row = _case_or_404(state, case_id)
         _check_versions(case_row, payload.expected_scenario_version, payload.expected_policy_version)
+        if state.store.execution_for_case(case_id) is not None:
+            raise HTTPException(409, {"error": "CASE_EXECUTED", "message": "Reset to start another simulated decision."})
 
         run = RunState(run_id=f"run_{uuid.uuid4().hex[:10]}", case_id=case_id, kind="plan")
-        state.register_run(run)
+        if not state.model_slots.acquire(blocking=False):
+            raise HTTPException(429, {"error": "CAPACITY", "message": "The model is busy. Try again shortly."})
+        try:
+            state.register_run(run)
+        except Exception:
+            state.model_slots.release()
+            raise
 
         def work() -> None:
             try:
@@ -414,6 +452,7 @@ def create_app(
                 run.status = RUN_FAILED
             finally:
                 run.finished_at_utc = _now()
+                state.model_slots.release()
 
         state.executor.submit(work)
         return {"run_id": run.run_id, "status": run.status, "case_id": case_id}
@@ -436,12 +475,16 @@ def create_app(
         _check_versions(case_row, payload.expected_scenario_version, payload.expected_policy_version)
 
         session = _session_for(case_row)
+        if not state.model_slots.acquire(blocking=False):
+            raise HTTPException(429, {"error": "CAPACITY", "message": "The model is busy. Try again shortly."})
         try:
             diff, events, model_calls = interpret_instruction(
                 state.provider_factory(), session, payload.text
             )
         except LLMError as exc:
             raise HTTPException(503, {"error": "PROVIDER_ERROR", "message": str(exc)}) from exc
+        finally:
+            state.model_slots.release()
 
         state.store.append_events(case_id, None, events)
         if session.pending_diff is not None:
@@ -494,6 +537,8 @@ def create_app(
         pending = case_row.pending_diff
         if pending is None or pending["diff_id"] != payload.diff_id:
             raise HTTPException(404, f"no pending policy change with id {payload.diff_id!r}")
+        if pending.get("base_policy_version") != case_row.policy_version:
+            raise HTTPException(409, {"error": "STALE_DIFF", "message": "Preview the change again against the current policy."})
         if pending["status"] != DIFF_READY:
             raise HTTPException(
                 409,
@@ -520,7 +565,10 @@ def create_app(
                 for w in after.get("blocked_windows", ())
             ),
         )
-        state.store.update_policy(case_id, new_policy)
+        try:
+            state.store.update_policy(case_id, new_policy, expected_policy_version=case_row.policy_version)
+        except StoreError as exc:
+            raise HTTPException(409, {"error": "STALE_VERSION", "message": str(exc)}) from exc
         return {
             "case_id": case_id,
             "policy_version": new_policy.policy_version,
@@ -545,7 +593,7 @@ def create_app(
         candidate_ids: str = Query(..., description="Comma-separated, at most three"),
         expected_scenario_version: int = Query(...),
         expected_policy_version: int = Query(...),
-        sample_step_s: float = Query(DEFAULT_SAMPLE_STEP_S, gt=0.0, le=600.0),
+        sample_step_s: float = Query(DEFAULT_SAMPLE_STEP_S, ge=MIN_SAMPLE_STEP_S, le=600.0, allow_inf_nan=False),
     ) -> dict:
         state = _state(request)
         case_row = _case_or_404(state, case_id)
@@ -643,6 +691,8 @@ def create_app(
             )
         except IdempotencyConflict as exc:
             raise HTTPException(409, {"error": "IDEMPOTENCY_CONFLICT", "message": str(exc)}) from exc
+        except StoreError as exc:
+            raise HTTPException(409, {"error": "EVIDENCE_CONFLICT", "message": str(exc)}) from exc
 
         return {
             "execution": asdict(record),
@@ -662,7 +712,7 @@ def create_app(
 
         document = json.loads(state.scenario_path(case_row.scenario_id).read_text(encoding="utf-8"))
         fresh = state.store.create_case(
-            document, policy_from_document(document), parent_case_id=case_id
+            document, policy_from_document(document), parent_case_id=case_id, max_cases=MAX_CASES
         )
         return _snapshot(state, fresh.case_id)
 
@@ -717,6 +767,7 @@ def create_app(
             # Surfaced so a deployment without a key is obvious from /health
             # rather than only from the first failed run.
             "model_access": has_model_access(),
+            "access_token_required": bool(access_token),
         }
 
     # A built frontend is served from the same origin when present, so one
@@ -870,6 +921,7 @@ def _default_app() -> FastAPI:
             (lambda: GeminiProvider(model=reviewer_model())) if has_model_access() else None
         ),
         memory=CaseMemory(database_path()) if database_path() != ":memory:" else CaseMemory(),
+        require_remote_token=True,
     )
 
 

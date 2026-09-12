@@ -18,6 +18,7 @@ enough to decide and a handle to cite.
 
 from __future__ import annotations
 
+import math
 import threading
 import uuid
 from dataclasses import dataclass, field
@@ -503,7 +504,7 @@ def propose_policy_change(
             scale = float(budget_scale)
         except (TypeError, ValueError):
             scale = float("nan")
-        if not (scale == scale) or scale <= 0.0 or scale > 10.0:
+        if not math.isfinite(scale) or scale <= 0.0 or scale > 10.0:
             clarification = f"budget_scale must be a positive number no greater than 10; got {budget_scale!r}."
         else:
             new_budget = round(before.max_delta_v_mps * scale, 6)
@@ -521,7 +522,7 @@ def propose_policy_change(
             absolute = float(max_delta_v_mps)
         except (TypeError, ValueError):
             absolute = float("nan")
-        if not (absolute == absolute) or absolute < 0.0:
+        if not math.isfinite(absolute) or absolute < 0.0:
             clarification = f"max_delta_v_mps must be a non-negative number; got {max_delta_v_mps!r}."
         else:
             new_budget = round(absolute, 6)

@@ -11,3 +11,7 @@ dist/
 *.sqlite3
 *.db
 Handoff.zip
+.coverage
+htmlcov/
+test-results/
+playwright-report/

@@ -1,6 +1,6 @@
 # Satellite Demo — current state and decisions
 
-Revision 3, 12 September 2026. Revisions 1-2 recorded documentation decisions only. This revision adds the first measured numerical results.
+Revision 4, 12 September 2026. **Current summary:** the branch `claude/focused-brown-5r09go` is merged locally into main. Physics, verifier, agent, API and storage exist. The browser currently has contract/client files only; the requested 3D frontend is next. The security/reliability pass has 186 passing tests and 91% coverage. See [REVIEW.md](REVIEW.md) for fixes, commands and limitations. Earlier entries below preserve historical measurements and are superseded where they describe missing files. No deployment or fresh live-model run was performed in this review.
 
 ## Current state
 

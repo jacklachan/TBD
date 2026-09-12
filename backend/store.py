@@ -130,6 +130,10 @@ class IdempotencyConflict(StoreError):
     """The same idempotency key was reused for different content."""
 
 
+class CapacityError(StoreError):
+    """The demo's bounded case store is full."""
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
@@ -247,7 +251,12 @@ class Store:
         policy: Policy,
         parent_case_id: str | None = None,
         case_id: str | None = None,
+        max_cases: int | None = None,
     ) -> CaseRow:
+        if max_cases is not None:
+            count = self._connection.execute("SELECT COUNT(*) FROM cases").fetchone()[0]
+            if count >= max_cases:
+                raise CapacityError("The demo has reached its case limit. Archive the store before starting another session.")
         row_id = case_id or f"case_{uuid.uuid4().hex[:10]}"
         created = _now()
         self._connection.execute(
@@ -302,7 +311,7 @@ class Store:
         )
 
     @_synchronized
-    def update_policy(self, case_id: str, policy: Policy) -> None:
+    def update_policy(self, case_id: str, policy: Policy, expected_policy_version: int | None = None) -> None:
         """Apply a confirmed policy and stand down everything computed under the old one.
 
         Pending proposals become STALE rather than disappearing, so the trace
@@ -310,6 +319,11 @@ class Store:
         happened stays happened.
         """
         with self._connection:
+            current = self.get_case(case_id)
+            if expected_policy_version is not None and current.policy_version != expected_policy_version:
+                raise StoreError("The policy changed while this request was running.")
+            if policy.policy_version != current.policy_version + 1:
+                raise StoreError("A policy change must advance the current version exactly once.")
             self._connection.execute(
                 "UPDATE cases SET policy_json = ?, policy_version = ?,"
                 " pending_diff_json = NULL, grid_revision = 1 WHERE case_id = ?",
@@ -329,7 +343,9 @@ class Store:
         self._connection.commit()
 
     @_synchronized
-    def set_grid_revision(self, case_id: str, grid_revision: int) -> None:
+    def set_grid_revision(self, case_id: str, grid_revision: int, expected_policy_version: int | None = None) -> None:
+        if expected_policy_version is not None and self.get_case(case_id).policy_version != expected_policy_version:
+            return
         self._connection.execute(
             "UPDATE cases SET grid_revision = ? WHERE case_id = ?",
             (grid_revision, case_id),
@@ -427,6 +443,10 @@ class Store:
 
     @_synchronized
     def save_proposal(self, case_id: str, proposal) -> None:
+        case = self.get_case(case_id)
+        status = proposal.status
+        if (case.scenario_version, case.policy_version) != (proposal.scenario_version, proposal.policy_version):
+            status = PROPOSAL_STALE
         self._connection.execute(
             "INSERT OR REPLACE INTO proposals (proposal_id, case_id, scenario_version,"
             " policy_version, candidate_id, validation_id, status, payload_json,"
@@ -438,7 +458,7 @@ class Store:
                 proposal.policy_version,
                 proposal.candidate_id,
                 proposal.validation_id,
-                proposal.status,
+                status,
                 json.dumps(_encode(proposal)),
                 _now(),
             ),
@@ -458,10 +478,11 @@ class Store:
 
     @_synchronized
     def latest_proposal(self, case_id: str) -> dict | None:
+        case = self.get_case(case_id)
         row = self._connection.execute(
-            "SELECT * FROM proposals WHERE case_id = ? ORDER BY created_at_utc DESC,"
+            "SELECT * FROM proposals WHERE case_id = ? ORDER BY (policy_version = ?) DESC, created_at_utc DESC,"
             " rowid DESC LIMIT 1",
-            (case_id,),
+            (case_id, case.policy_version),
         ).fetchone()
         if row is None:
             return None
@@ -486,6 +507,14 @@ class Store:
         candidate_id: str,
         idempotency_key: str,
     ) -> tuple[ExecutionRecord, bool]:
+        """Recheck evidence and record the single case execution atomically."""
+        with self._connection:
+            self._connection.execute("BEGIN IMMEDIATE")
+            return self._record_execution_locked(case_id, proposal_id, candidate_id, idempotency_key)
+
+    def _record_execution_locked(
+        self, case_id: str, proposal_id: str, candidate_id: str, idempotency_key: str
+    ) -> tuple[ExecutionRecord, bool]:
         """Insert exactly one execution. Returns (record, created).
 
         A repeat with the same key and the same proposal returns the existing
@@ -505,6 +534,35 @@ class Store:
                     f"different proposal in this case"
                 )
             return self._execution_from_row(existing), False
+
+        prior_execution = self.execution_for_case(case_id)
+        if prior_execution is not None:
+            if (prior_execution.proposal_id, prior_execution.candidate_id) == (proposal_id, candidate_id):
+                return prior_execution, False
+            raise StoreError("This case has already executed. Reset to start a new simulation.")
+
+        case = self.get_case(case_id)
+        proposal = self.get_proposal(proposal_id)
+        evidence_row = self._connection.execute(
+            "SELECT case_id FROM validations WHERE validation_id = ?", (proposal["validation_id"],)
+        ).fetchone()
+        validation = self.get_validation(proposal["validation_id"])
+        if proposal["case_id"] != case_id or proposal["candidate_id"] != candidate_id:
+            raise StoreError("Proposal identity does not match the requested execution.")
+        if proposal["status"] != PROPOSAL_READY:
+            raise StoreError("Only a ready proposal can be executed.")
+        if (proposal["scenario_version"], proposal["policy_version"]) != (case.scenario_version, case.policy_version):
+            raise StoreError("The proposal is stale.")
+        if (evidence_row is None or evidence_row["case_id"] != case_id
+                or validation.candidate_id != candidate_id
+                or validation.scenario_id != case.scenario_id
+                or validation.scenario_version != case.scenario_version
+                or validation.policy_version != case.policy_version
+                or validation.status != "PASS"):
+            raise StoreError("Validation evidence does not match this case, candidate and policy.")
+        verdict = proposal.get("reviewer_verdict")
+        if verdict is None or verdict.get("decision") != "ALLOW":
+            raise StoreError("An allowing reviewer verdict is required.")
 
         record = ExecutionRecord(
             execution_id=f"exec_{uuid.uuid4().hex[:12]}",

@@ -31,9 +31,9 @@ No collision probability is computed anywhere. Separations are deterministic val
 ## Running it
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt  # Python 3.12+
 cp .env.example .env          # then put your GEMINI_API_KEY in it
-python -m pytest tests/ -q    # 168 tests
+python -m pytest tests/ -q    # 186 tests at the backend review checkpoint
 ```
 
 ```bash

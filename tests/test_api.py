@@ -196,14 +196,14 @@ def test_approval_applies_once_and_repeats_return_the_same_record():
 
 
 def test_reusing_an_idempotency_key_for_another_proposal_is_a_conflict():
-    store = Store(":memory:")
-    document = json.loads(PRIMARY_PATH.read_text(encoding="utf-8"))
-    from backend.planning.policy import policy_from_document
-
-    case = store.create_case(document, policy_from_document(document))
-    store.record_execution(case.case_id, "prop_a", RESCUE, "same-key")
+    client = make_client()
+    case = new_case(client)
+    run_plan(client, case)
+    store = client.app.state.desk.store
+    proposal = store.latest_proposal(case["case_id"])
+    store.record_execution(case["case_id"], proposal["proposal_id"], RESCUE, "same-key")
     with pytest.raises(IdempotencyConflict):
-        store.record_execution(case.case_id, "prop_b", TRAP, "same-key")
+        store.record_execution(case["case_id"], "prop_b", TRAP, "same-key")
 
 
 def test_a_reviewer_block_prevents_approval():

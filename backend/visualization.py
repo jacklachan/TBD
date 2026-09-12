@@ -30,6 +30,7 @@ from backend.planning.search import apply_candidate
 from backend.planning.verifier import ReconstructedScenario
 
 DEFAULT_SAMPLE_STEP_S = 10.0
+MIN_SAMPLE_STEP_S = 1.0
 MAX_VARIANTS = 3
 POSITION_DECIMALS = 2
 # Encounter times and grid times must round identically, or a reported
@@ -73,8 +74,10 @@ def build_bundle(
         raise ValueError("at least one candidate is required")
     if len(candidates) > MAX_VARIANTS:
         raise ValueError(f"at most {MAX_VARIANTS} variants per bundle, got {len(candidates)}")
-    if sample_step_s <= 0.0:
-        raise ValueError("sample_step_s must be positive")
+    if not np.isfinite(sample_step_s) or not MIN_SAMPLE_STEP_S <= sample_step_s <= 600.0:
+        raise ValueError("sample_step_s must be finite and between 1 and 600 seconds")
+    if scenario.horizon_s / sample_step_s > 21600:
+        raise ValueError("visualization exceeds the 21601-sample base-grid budget")
 
     trajectories = {
         candidate.candidate_id: apply_candidate(scenario.satellite, candidate)

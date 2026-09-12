@@ -3,14 +3,22 @@ name = "satellite-demo"
 version = "0.1.0"
 description = "Satellite close-approach maneuver decision demo"
 requires-python = ">=3.11"
-dependencies = [
-    "numpy>=2.0",
-    "scipy>=1.13",
-]
+dynamic = ["dependencies"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools.packages.find]
+include = ["backend*", "scenarios*", "scripts*"]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "httpx>=0.28",
 ]
 
 [tool.pytest.ini_options]
