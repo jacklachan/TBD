@@ -59,7 +59,7 @@ No collision probability is computed anywhere. Separations are deterministic val
 ```bash
 pip install -r requirements-dev.txt  # Python 3.12+
 cp .env.example .env          # then put your GEMINI_API_KEY in it
-python -m pytest tests/ -q    # 254 tests
+python -m pytest tests/ -q    # 264 tests
 ```
 
 ```bash
@@ -97,7 +97,7 @@ Open **http://127.0.0.1:8000**. The server serves both the API and the productio
 The workspace includes a rotatable 3D globe, an inspectable procedural spacecraft, exact encounter jumps, shared-clock playback, a separation chart, a 25-option comparison table, manual budget changes, AI restriction preview/confirmation, reviewed simulated approval, reset and evidence export. The numerical comparison works without an API key and is labeled separately from AI runs. Set `GEMINI_API_KEY` on the backend to use the real planner. Remote access also requires `DESK_ACCESS_TOKEN`; the browser asks for the operator token and keeps it in memory only.
 
 ```bash
-python -m pytest tests -q                    # 254 tests
+python -m pytest tests -q                    # 264 tests
 npm --prefix frontend test                  # 7 unit tests
 npm --prefix frontend run test:browser      # running API + Vite; Chrome installed
 ```
@@ -106,14 +106,24 @@ The browser suite includes four real numerical-workflow checks and an optional s
 
 ## Verified
 
+Every figure below is printed by a test or a script in this repository, not quoted from memory.
+
 | | |
 |---|---|
 | Propagation vs an independent DOP853 reference | 1.155e-06 m over one orbit |
+| Six hours backward then forward again | 8.2e-07 m from where it started |
 | Energy and angular-momentum drift over six hours | below 4.1e-14 relative |
-| Independent verifier vs the search path | agree to 3.4e-08 m and 1.4e-08 s |
-| Live planner | `PROPOSAL_READY` in 5 model calls, 14.6 s through the API |
+| Independent verifier vs the search path, 6 options | agree to 2.5e-08 m and 1.4e-08 s |
+| The same check on a burn the planner designed | 1.5e-09 m and 5.2e-09 s |
+| A conjunction record recomputed by its receiver | 2 claims, worst disagreement 1.1e-03 m |
+| The same record with its clearance overstated | rejected: claims 9,999 m, recomputes to 2,491.9 m |
+| Live planner, signature case | `PROPOSAL_READY` in 5 model calls, 14.6 s through the API |
+| Live planner, collision case | designs past the grid's 11.4 m margin to 1,375–1,990 m, reviewer ALLOW, 22–45 s over five runs |
 | Live constraint change | "halve the fuel budget" → 0.2 to 0.1 m/s, computed by the backend |
 | Whole decision chain, no model | 1.24 s for 25 options, five validations and a verified answer |
+| Ten people opening the workspace at once | every request served, nothing refused |
+
+264 Python tests, 9 browser tests, 7 frontend unit tests. `python scripts/diagnose.py` runs the pre-demo gate and exits non-zero if anything is broken.
 
 Full evidence, including what is still unverified, is in [Handoff/STATE.md](Handoff/STATE.md).
 
