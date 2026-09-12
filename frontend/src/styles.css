@@ -2394,3 +2394,19 @@ td .subtle-button {
   letter-spacing: 0.02em;
   color: var(--secondary);
 }
+
+/* Marks an option the planner specified itself, in the table where every
+   option appears and the decision cards' longer note would not fit. */
+.designed-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border: 1px solid var(--divider);
+  border-radius: 999px;
+  font-size: 10px;
+  font-style: normal;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--secondary);
+  vertical-align: 1px;
+}

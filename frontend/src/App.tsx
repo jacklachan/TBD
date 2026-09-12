@@ -156,6 +156,8 @@ export default function App() {
   const status = option
     ? optionStatus(option)
     : { label: "Awaiting analysis", tone: "muted" };
+  const designedCount =
+    analysis?.options.filter((o) => o.designed).length ?? 0;
   const comparison = analysis
     ? comparisonIds(analysis, snapshot?.proposal?.candidate_id)
         .map((id) => analysis.options.find((o) => o.candidate_id === id))
@@ -1122,6 +1124,14 @@ export default function App() {
             {analysis?.candidate_count ?? 25} options include the no-burn
             baseline. The first screen considers the primary threat; independent
             verification checks both objects.
+            {designedCount > 0 && (
+              <>
+                {" "}
+                {designedCount} of them {designedCount === 1 ? "was" : "were"}{" "}
+                designed by the planner rather than taken from the grid, and{" "}
+                {designedCount === 1 ? "was" : "were"} verified the same way.
+              </>
+            )}
           </div>
           <div className="table-tools">
             <div className="segmented">
@@ -1183,6 +1193,9 @@ export default function App() {
                       >
                         <td>
                           {optionName(o)}
+                          {/* This table is titled "every manoeuvre", so it has
+                              to say which ones were never on the menu. */}
+                          {o.designed && <em className="designed-tag">designed</em>}
                           <small>{o.candidate_id}</small>
                         </td>
                         <td>{o.delta_v_mps.toFixed(3)} m/s</td>
