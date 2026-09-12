@@ -12,9 +12,7 @@ runs its own detection -- can clear a proposal.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
-
-import numpy as np
+from dataclasses import dataclass, replace
 
 from backend.core.encounters import Encounter, closest_encounter, find_encounters
 from backend.core.trajectory import Trajectory, impulse_vector
@@ -24,6 +22,10 @@ from backend.planning.candidates import (
     generate_candidates,
 )
 
+# Re-exported so existing callers keep working; the definitions live in
+# policy.py so verifier.py can read them without importing this module.
+from backend.planning.policy import BurnWindow, Policy  # noqa: F401
+
 REASON_OK = "OK"
 REASON_OVER_BUDGET = "OVER_BUDGET"
 REASON_BURN_IN_BLOCKED_WINDOW = "BURN_IN_BLOCKED_WINDOW"
@@ -32,29 +34,6 @@ REASON_NO_ENCOUNTER_FOUND = "NO_ENCOUNTER_FOUND"
 
 STATUS_OPTIONS_AVAILABLE = "OPTIONS_AVAILABLE"
 STATUS_NO_PRIMARY_QUALIFIED_OPTION = "NO_PRIMARY_QUALIFIED_OPTION"
-
-
-@dataclass(frozen=True)
-class BurnWindow:
-    """A closed interval during which burns are prohibited."""
-
-    window_id: str
-    label: str
-    start_s: float
-    end_s: float
-
-    def contains(self, t_s: float) -> bool:
-        return self.start_s <= t_s <= self.end_s
-
-
-@dataclass(frozen=True)
-class Policy:
-    """Operator constraints. Mirrors Handoff/CONTRACTS.md."""
-
-    policy_version: int = 1
-    max_delta_v_mps: float = 0.20
-    min_separation_m: float = 1000.0
-    blocked_windows: tuple[BurnWindow, ...] = ()
 
 
 @dataclass(frozen=True)

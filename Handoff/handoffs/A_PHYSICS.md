@@ -265,3 +265,86 @@ The debris velocity is the target velocity *rotated about the radial direction*,
 **Next concrete action**
 
 `backend/planning/verifier.py`: rebuild from raw scenario JSON, own 1 s scan, screen both debris objects, compare against the search within 1 m / 0.1 s, block on any disagreement.
+
+---
+
+## [2026-09-12] — Builder A — independent verifier
+
+**Changed paths**
+
+- `backend/planning/policy.py` — `Policy`, `BurnWindow`, `policy_from_document` moved here
+- `backend/planning/search.py` — re-exports them; no behaviour change
+- `backend/planning/verifier.py` — reconstruction, independent screening, `ValidationResult`
+- `tests/test_verifier.py` — 22 tests
+
+**Commands run**
+
+```
+$ python -m pytest tests/ -q
+66 passed in 36.22s
+```
+
+**Why `policy.py` exists**
+
+`Policy` and `BurnWindow` previously lived in `search.py`. The verifier needs the active policy but must not import the search path, so the shared types moved to a neutral module. `search.py` re-exports them, so nothing else changed.
+
+**How the verifier is independent**
+
+| | Search | Verifier |
+|---|---|---|
+| Input | live `Trajectory` objects | raw scenario JSON, rebuilt here |
+| Scan | 5 s | 1 s |
+| Refinement | `brentq` on the range rate | bounded minimisation of squared distance |
+| Scope | primary threat only | every debris object |
+| Detection code | `core/encounters.py` | its own, in `verifier.py` |
+
+Shared and disclosed: the Kepler propagator and trajectory primitives in `core/`. Writing the physics twice would test nothing useful — Gate 1 already checks the propagator against an independent integrator, and independence here is at the reconstruction and screening layer. `test_verifier_does_not_import_the_search_path` parses the module with `ast` and fails if anyone wires them together later.
+
+**Agreement — measured**
+
+Six candidates, both methods, against tolerances of 1 m and 0.1 s:
+
+| Candidate | Search (m) | Verifier (m) | Δ distance | Δ time |
+|---|---|---|---|---|
+| `t30_ret_100` | 2016.926285 | 2016.926285 | 3.559e-08 m | 3.369e-09 s |
+| `t15_ret_100` | 1982.268976 | 1982.268976 | 8.937e-09 m | 4.013e-09 s |
+| `t45_ret_100` | 1852.899645 | 1852.899645 | 1.900e-08 m | 5.635e-09 s |
+| `t60_ret_100` | 1448.447776 | 1448.447776 | 2.018e-08 m | 1.328e-08 s |
+| `t30_ret_200` | 2491.888034 | 2491.888034 | 1.264e-09 m | 4.857e-09 s |
+
+Roughly seven orders of margin inside the tolerance.
+
+**The veto now happens in the right place**
+
+`t30_ret_100` is ranked first by the search and clears the primary threat at 2016.9 m. The verifier screens `['DEB-1', 'DEB-2']`, finds DEB-2 at **523.2 m at 20313 s**, and returns `BLOCK`. `t30_ret_200` returns `PASS` with its closest approach to any object at 2491.9 m. Previously this rejection came from the generator and the tests; it now comes from the path that actually gates approval.
+
+**A finding worth keeping**
+
+`t30_ret_200` and `t45_ret_200` report *identical* separations. That looked wrong and is not: for a 0.20 m/s burn the constructed 16234 s conjunction is pushed far enough away that an earlier crossing at **t = 999 s** becomes the closest approach over the horizon — and 999 s precedes both burns, on the arc every candidate shares with the baseline. No manoeuvre can change it, so both candidates report the same number.
+
+Two consequences:
+
+- The metric is right. "Closest approach to this object over the horizon" is what matters, and it is correct for a strong burn to be limited by something the burn cannot affect.
+- **For B:** the annotated dip is not always the headline conjunction. Label it with the time and object actually found, never with an assumed one.
+
+`test_a_strong_burn_can_make_a_pre_burn_encounter_the_binding_one` pins this down so nobody "fixes" it later.
+
+**Also verified**
+
+- `no_feasible` variant: 0 approvable options across the full widened 33-option grid.
+- Over-budget, blocked-window, beyond-horizon and malformed candidates all rejected, with the policy re-checked here rather than trusted from the search.
+- Six malformed-scenario mutations (missing objects, unknown IDs, negative horizon, short vector, NaN velocity) all return `ERROR`, never `PASS`.
+- A fabricated search result (claiming 99000 m where the verifier measures 2016.9 m) is caught as `SEARCH_DISAGREEMENT`.
+- Stale `scenario_version` blocks.
+- `ERROR` vs `BLOCK` is a real distinction: `ERROR` means the candidate could not be evaluated, `BLOCK` means it was evaluated and rejected. The UI should show these differently.
+
+**Not verified / not run**
+
+- No `domain/models.py`, no API, no agent, no frontend. Gate 3 untouched.
+- `scripts/demo_pipeline.py` does not exist yet, so Gate 2 has no single command that prints the chain end to end.
+- No caching anywhere. A 25-option search plus one validation is comfortable now; revisit if the agent loop makes it hot.
+- The verifier's own 1 s scan is validated against a 4 s scan on this fixture family only, same caveat as the search grid.
+
+**Next concrete action**
+
+`scripts/demo_pipeline.py`: scenario → 25 options → top-ranked provisional pick → verifier veto → verified alternative, printed on stdout as the Gate 2 artifact.
