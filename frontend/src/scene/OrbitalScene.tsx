@@ -52,9 +52,9 @@ export function OrbitalScene(props: Props) {
     controls.dampingFactor = 0.1;
     controls.enablePan = false;
     controls.rotateSpeed = 0.6;
-    const ambient = new THREE.HemisphereLight("#dfe4ea", "#0a0a0c", 1.1);
+    const ambient = new THREE.HemisphereLight("#cdd9e6", "#080d14", 1.05);
     scene.add(ambient);
-    const sunlight = new THREE.DirectionalLight("#ffffff", 3.6);
+    const sunlight = new THREE.DirectionalLight("#f6f1e6", 3.5);
     sunlight.position.set(-3, 5, 4);
     scene.add(sunlight);
     let disposed = false;
@@ -77,12 +77,15 @@ export function OrbitalScene(props: Props) {
         "#include <map_fragment>",
         `#include <map_fragment>
          float lum = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-         // A quiet desaturation rather than a tint. The globe is context, not
-         // the subject, so it holds a little of its own colour and stays out
-         // of the way of the status colours that carry meaning.
-         float lum2 = clamp(lum, 0.0, 1.0);
-         diffuseColor.rgb = mix(vec3(lum2), diffuseColor.rgb, 0.22) *
-                            mix(0.34, 1.05, pow(lum2, 0.85));`,
+         // Engraved rather than photographed: land is lifted out of the water
+         // by tone, not by colour. A deep prussian shadow through steel to a
+         // warm ivory highlight keeps the globe in the same palette as the type
+         // and stops it competing with the status colours that carry meaning.
+         float t = pow(clamp(lum, 0.0, 1.0), 0.9);
+         vec3 tone = mix(vec3(0.031, 0.055, 0.086), vec3(0.30, 0.38, 0.46),
+                         smoothstep(0.0, 0.62, t));
+         tone = mix(tone, vec3(0.949, 0.929, 0.890), smoothstep(0.58, 1.0, t));
+         diffuseColor.rgb = mix(tone, diffuseColor.rgb, 0.08);`,
       );
     };
     const earth = new THREE.Mesh(
@@ -98,7 +101,7 @@ export function OrbitalScene(props: Props) {
         transparent: true,
         depthWrite: false,
         side: THREE.BackSide,
-        uniforms: { tint: { value: new THREE.Color("#7aa2c8") } },
+        uniforms: { tint: { value: new THREE.Color("#9db6cf") } },
         vertexShader:
           "varying vec3 n; varying vec3 v; void main(){vec4 p=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);v=normalize(-p.xyz);gl_Position=projectionMatrix*p;}",
         fragmentShader:
@@ -109,7 +112,7 @@ export function OrbitalScene(props: Props) {
     const satellite = makeSatellite();
     scene.add(satellite);
     const debrisMaterial = new THREE.MeshStandardMaterial({
-      color: "#8a8a93",
+      color: "#7d8894",
       metalness: 0.8,
       roughness: 0.5,
     });
@@ -128,7 +131,7 @@ export function OrbitalScene(props: Props) {
       new THREE.Float32BufferAttribute(new Float32Array(6), 3),
     );
     const lineMaterial = new THREE.LineBasicMaterial({
-      color: "#fafafa",
+      color: "#c9a56b",
       transparent: true,
       opacity: 0.9,
     });

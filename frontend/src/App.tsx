@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowRight,
@@ -25,7 +25,7 @@ import {
   OptionGrid,
   separationGauge,
 } from "./components/Telemetry";
-import { revealWorkspace } from "./motion";
+import { countTo, revealWorkspace } from "./motion";
 import { useWorkspace } from "./useWorkspace";
 import {
   currentVariant,
@@ -71,15 +71,26 @@ function Status({
 function Metric({
   value,
   unit,
+  metres,
   className = "",
 }: {
   value: string;
   unit: string;
+  /** Raw metres. When supplied the figure counts to its new value instead of
+      snapping, and is re-formatted every frame so the units stay honest. */
+  metres?: number;
   className?: string;
 }) {
+  const figure = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (metres === undefined || !Number.isFinite(metres)) return;
+    countTo(figure.current, metres, (n) => distance(n)[0]);
+  }, [metres]);
   return (
     <div className={`metric ${className}`}>
-      {value}
+      <span className="metric-figure" ref={figure}>
+        {value}
+      </span>
       <span>{unit}</span>
     </div>
   );
@@ -383,7 +394,7 @@ export default function App() {
                   <ArrowUpRight size={20} />
                 </button>
               </div>
-              <Metric value={minValue} unit={minUnit} />
+              <Metric value={minValue} unit={minUnit} metres={worst?.value} />
               <p className="caption">
                 Minimum to either object · 6-hour horizon
               </p>
@@ -581,7 +592,7 @@ export default function App() {
               </div>
               <div className="live-reading">
                 <div>
-                  <Metric value={liveValue} unit={liveUnit} />
+                  <Metric value={liveValue} unit={liveUnit} metres={liveDistance} />
                   <span>Separation at the shared clock</span>
                 </div>
                 <button
