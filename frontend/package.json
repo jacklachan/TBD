@@ -11,14 +11,8 @@
     "test:browser": "playwright test"
   },
   "dependencies": {
-    "@fontsource/ibm-plex-mono": "^5.3.0",
-    "@fontsource/ibm-plex-sans": "^5.3.0",
-    "@fontsource/ibm-plex-sans-condensed": "^5.3.0",
-    "@fontsource/instrument-serif": "^5.3.0",
     "@fontsource/inter": "5.3.0",
     "@phosphor-icons/react": "2.1.10",
-    "@types/animejs": "^3.1.13",
-    "animejs": "^4.5.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "three": "0.186.0"

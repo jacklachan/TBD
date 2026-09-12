@@ -16,6 +16,32 @@ The interesting part is what happens next. The cheapest manoeuvre that clears th
 
 **Temporary name.** "Satellite Demo" is a placeholder, not a brand.
 
+## Against the problem statement
+
+> *Space Tech & Orbital Sustainability: Build autonomous agents to track space debris, optimize satellite maneuver planning, or coordinate open-source orbital traffic management to protect global communication infrastructure.*
+
+| Clause | Where it lives | How far it goes |
+|---|---|---|
+| **Autonomous agents** | `backend/agent/` | A bounded planner with five tools, a safety reviewer that can veto, case memory, and plain-English constraint interpretation. Approvability is read off typed results, so the model cannot approve anything — that is enforced in code, not in a prompt. |
+| **Track space debris** | `data/context/`, the Real-world context panel | A frozen CelesTrak SOCRATES snapshot: 25 real predicted conjunctions with real object names, times and miss distances. It is displayed and dated, and it drives nothing. We do not run a catalogue screen of our own. |
+| **Optimize satellite manoeuvre planning** | `backend/planning/`, `backend/core/` | The core. 25 options screened against the primary threat, then independently re-verified against every object over the full horizon by a separate code path at a finer step. The two paths agree to 3.6e-08 m. |
+| **Coordinate open-source orbital traffic management** | `GET /cases/{id}/export?format=cdm` | The decision leaves in a CCSDS-shaped Conjunction Data Message, which is the format the question already has an answer in, plus JSON and Markdown carrying provenance, versions and evidence. The repository is open and the numbers are reproducible from it. |
+| **Protect global communication infrastructure** | The same SOCRATES snapshot | **19 of the 25 real conjunctions we ship involve a communications satellite** — Starlink, Iridium, Kinéis — mostly against Fengyun 1C and Cosmos break-up debris. The constellations carrying global connectivity share these shells with the debris. |
+
+### What we did not build, and why
+
+The statement offers three tracks joined by *or*. We went deep on manoeuvre planning rather than wide across all three, and the gaps are worth naming rather than glossing:
+
+- **No catalogue screening.** We screen three objects, not eighteen thousand. Public element sets are roughly a kilometre accurate at epoch, which is the same order as the clearance floor we enforce — a screen built on them would produce confident numbers we could not defend.
+- **No multi-operator negotiation.** One operator, one spacecraft. Coordination here means an interoperable record another operator can read, not an automated protocol between agents.
+- **No collision probability, anywhere.** A conforming CDM carries a covariance for each object and public element sets do not have one. We report deterministic simulated separation and say what was screened. The CDM export states this in its own header.
+
+### The argument connecting the slice to the whole
+
+Orbital traffic management does not usually fail for want of a protocol. It fails because one operator cannot tell whether another operator's proposed manoeuvre is safe — and the expensive part of answering that is verification, not messaging.
+
+This is the demonstration: the cheapest manoeuvre that fixes the original encounter puts the satellite 523 m from a second object, an independent check catches it, and the option that survives costs twice the fuel. A record of that, in a format someone else can read, is the unit of work traffic coordination is actually made of.
+
 ## What is real and what is not
 
 | | |
@@ -41,6 +67,9 @@ python scripts/demo_pipeline.py       # the whole decision chain, no UI, no mode
 uvicorn backend.api:app --port 8000   # the API
 python scripts/live_api_check.py      # 20 checks end to end against the live model
 ```
+
+Export a decision as JSON, Markdown or a CCSDS-shaped CDM:
+`GET /cases/{id}/export?format=cdm`.
 
 Deployment to Hugging Face Spaces: [DEPLOY.md](DEPLOY.md).
 

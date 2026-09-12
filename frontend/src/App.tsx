@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   ArrowDown,
   ArrowRight,
@@ -18,14 +18,6 @@ import {
   Sun,
   WarningCircle,
 } from "@phosphor-icons/react";
-import {
-  EventTrack,
-  Gauge,
-  MissionClock,
-  OptionGrid,
-  separationGauge,
-} from "./components/Telemetry";
-import { countTo, revealWorkspace } from "./motion";
 import { useWorkspace } from "./useWorkspace";
 import {
   currentVariant,
@@ -68,99 +60,18 @@ function Status({
     </span>
   );
 }
-/**
- * The one line that says what is happening.
- *
- * The workspace showed a distance and left the reader to work out whether it
- * was bad, and showed nothing at all about what a manoeuvre changed. This
- * states the situation, and once an option is selected, states the before and
- * after as a single comparison.
- */
-function Verdict({
-  baselineMetres,
-  currentMetres,
-  floor,
-  isBaseline,
-  cleared,
-  breachedObject,
-  executed,
-}: {
-  baselineMetres?: number;
-  currentMetres?: number;
-  floor: number;
-  isBaseline: boolean;
-  cleared: boolean;
-  breachedObject?: { object_id: string; min_separation_m: number };
-  executed: boolean;
-}) {
-  if (baselineMetres === undefined || currentMetres === undefined) return null;
-  const [baseValue, baseUnit] = distance(baselineMetres);
-  const [nowValue, nowUnit] = distance(currentMetres);
-  const atRisk = currentMetres < floor;
-  const tone = atRisk ? "risk" : cleared ? "clear" : "watch";
-
-  return (
-    <div className={`verdict verdict-${tone} glass`}>
-      <span className="verdict-state">
-        {atRisk
-          ? "Collision risk"
-          : executed
-            ? "Manoeuvre applied"
-            : cleared
-              ? "Cleared"
-              : "Screened"}
-      </span>
-      {isBaseline ? (
-        <p className="verdict-line">
-          Doing nothing brings the satellite within{" "}
-          <b>
-            {baseValue} {baseUnit}
-          </b>{" "}
-          — inside the {floor.toLocaleString()} m floor.
-        </p>
-      ) : (
-        <p className="verdict-line">
-          <span className="verdict-change">
-            <b className="was">
-              {baseValue} {baseUnit}
-            </b>
-            <span aria-hidden="true">→</span>
-            <b className="now">
-              {nowValue} {nowUnit}
-            </b>
-          </span>
-          {atRisk && breachedObject
-            ? ` still inside the floor — ${breachedObject.object_id} at ${distance(breachedObject.min_separation_m)[0]} ${distance(breachedObject.min_separation_m)[1]}.`
-            : " clear of every tracked object."}
-        </p>
-      )}
-    </div>
-  );
-}
-
 function Metric({
   value,
   unit,
-  metres,
   className = "",
 }: {
   value: string;
   unit: string;
-  /** Raw metres. When supplied the figure counts to its new value instead of
-      snapping, and is re-formatted every frame so the units stay honest. */
-  metres?: number;
   className?: string;
 }) {
-  const figure = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
-    if (metres === undefined || !Number.isFinite(metres)) return;
-    countTo(figure.current, metres, (n) => distance(n)[0]);
-  }, [metres]);
   return (
     <div className={`metric ${className}`}>
-      <span className="metric-figure" ref={figure}>
-        {value}
-      </span>
+      {value}
       <span>{unit}</span>
     </div>
   );
@@ -191,13 +102,6 @@ export default function App() {
   const [budget, setBudget] = useState("0.20");
   const [filter, setFilter] = useState("all");
   const variant = currentVariant(bundle, selected);
-  // One entrance, the first time there is something to show.
-  const [revealed, setRevealed] = useState(false);
-  useEffect(() => {
-    if (!bundle || revealed) return;
-    setRevealed(true);
-    requestAnimationFrame(() => revealWorkspace());
-  }, [bundle, revealed]);
   const option = analysis?.options.find((o) => o.candidate_id === selected);
   const worst = useMemo(
     () => (variant ? minimum(variant.min_to_any_m) : null),
@@ -206,30 +110,7 @@ export default function App() {
   const [minValue, minUnit] = distance(worst?.value);
   const liveDistance = variant?.pair_separations_m[debrisId]?.[sample];
   const [liveValue, liveUnit] = distance(liveDistance);
-  const baselineVariant = bundle?.variants.find((v) => v.kind === "NO_BURN");
-  const baselineWorst = useMemo(
-    () => (baselineVariant ? minimum(baselineVariant.min_to_any_m) : null),
-    [baselineVariant],
-  );
   const policy = snapshot?.policy;
-  // Open on the encounter. At t+0 the objects are thousands of kilometres
-  // apart and nothing looks wrong, so the case opened on its quietest moment.
-  const [framed, setFramed] = useState(false);
-  useEffect(() => {
-    if (!bundle || !variant || framed) return;
-    setFramed(true);
-    setView("approach");
-    const worstEncounter = variant.encounters.reduce(
-      (best, e) =>
-        !best || e.min_separation_m < best.min_separation_m ? e : best,
-      variant.encounters[0],
-    );
-    if (worstEncounter) {
-      setDebrisId(worstEncounter.object_id);
-      desk.setTime(worstEncounter.tca_s);
-    }
-  }, [bundle, variant, framed, desk]);
-
   const status = option
     ? optionStatus(option)
     : { label: "Awaiting analysis", tone: "muted" };
@@ -398,8 +279,8 @@ export default function App() {
         <div className="page-heading">
           <div>
             <div className="eyebrow">MISSION CONTROL / SIMULATION</div>
-            <h1>Every option, checked twice.</h1>
-            <p>Two independent paths. One answer.</p>
+            <h1>A safer way around.</h1>
+            <p>One orbit. Every consequence.</p>
           </div>
           <div className="provenance-tag">
             <span className="tiny-orbit" />
@@ -457,15 +338,6 @@ export default function App() {
 
         <div className="workspace-grid">
           <aside className="left-stack" id="decision-controls">
-            <Verdict
-              baselineMetres={baselineWorst?.value}
-              currentMetres={worst?.value}
-              floor={policy?.min_separation_m ?? 1000}
-              isBaseline={!variant || variant.kind === "NO_BURN"}
-              cleared={option?.validation?.status === "PASS"}
-              breachedObject={variant?.encounters.find((e) => e.below_floor)}
-              executed={!!snapshot?.execution}
-            />
             <div className="scenario-switch glass">
               <span className="eyebrow">SCENARIO</span>
               <select
@@ -496,7 +368,7 @@ export default function App() {
                   <ArrowUpRight size={20} />
                 </button>
               </div>
-              <Metric value={minValue} unit={minUnit} metres={worst?.value} />
+              <Metric value={minValue} unit={minUnit} />
               <p className="caption">
                 Minimum to either object · 6-hour horizon
               </p>
@@ -694,7 +566,7 @@ export default function App() {
               </div>
               <div className="live-reading">
                 <div>
-                  <Metric value={liveValue} unit={liveUnit} metres={liveDistance} />
+                  <Metric value={liveValue} unit={liveUnit} />
                   <span>Separation at the shared clock</span>
                 </div>
                 <button
@@ -802,9 +674,7 @@ export default function App() {
               {snapshot?.execution && (
                 <p className="execution-note">
                   <Check size={16} />
-                  {baselineWorst && worst
-                    ? `Applied in simulation. Closest approach ${distance(baselineWorst.value)[0]} ${distance(baselineWorst.value)[1]} → ${distance(worst.value)[0]} ${distance(worst.value)[1]}.`
-                    : "Applied in simulation."}
+                  Recorded in simulation
                 </p>
               )}
             </section>
@@ -815,31 +685,7 @@ export default function App() {
           className="timeline-panel glass"
           aria-label="Simulation timeline"
         >
-          <div className="playback-row telemetry">
-            <div className="telemetry-cluster left">
-              {(() => {
-                const sep = separationGauge(variant, sample, policy);
-                return (
-                  <>
-                    <Gauge
-                      label="Separation"
-                      value={sep.value}
-                      unit={sep.unit}
-                      fill={sep.fill}
-                      tone={sep.tone}
-                    />
-                    <Gauge
-                      label="Clearance"
-                      value={sep.ratio ? sep.ratio.toFixed(1) : "—"}
-                      unit="× floor"
-                      fill={Math.min(1, sep.ratio / 3)}
-                      tone={sep.ratio && sep.ratio < 1 ? "danger" : "normal"}
-                    />
-                  </>
-                );
-              })()}
-            </div>
-            <div className="telemetry-centre">
+          <div className="playback-row">
             <div className="playback-controls">
               <button
                 className="play-button"
@@ -856,6 +702,12 @@ export default function App() {
                   <Play size={20} weight="fill" />
                 )}
               </button>
+              <div className="time-readout">
+                <span>SIMULATION CLOCK</span>
+                <time data-testid="simulation-clock">
+                  T+ {clockText(bundle?.t_s[sample] ?? 0)}
+                </time>
+              </div>
               <select
                 className="speed-control"
                 aria-label="Playback speed"
@@ -869,17 +721,6 @@ export default function App() {
                 ))}
               </select>
             </div>
-            <MissionClock
-              time={bundle?.t_s[sample] ?? 0}
-              scenario={snapshot?.scenario_id ?? "—"}
-            />
-            {bundle && (
-              <EventTrack
-                bundle={bundle}
-                variant={variant}
-                time={bundle.t_s[sample] ?? 0}
-              />
-            )}
             <div className="scrubber">
               <input
                 aria-label="Simulation time"
@@ -901,25 +742,6 @@ export default function App() {
             >
               Closest approach <ArrowDown size={16} />
             </button>
-            </div>
-            <div className="telemetry-cluster right">
-              <Gauge
-                label="Delta-v"
-                value={(variant?.delta_v_mps ?? 0).toFixed(3)}
-                unit="m/s"
-                fill={
-                  policy?.max_delta_v_mps
-                    ? (variant?.delta_v_mps ?? 0) / policy.max_delta_v_mps
-                    : 0
-                }
-                tone="chrome"
-              />
-              <OptionGrid
-                analysis={analysis}
-                selected={selected}
-                onSelect={choose}
-              />
-            </div>
           </div>
           {bundle && variant ? (
             <SeparationChart
@@ -1272,6 +1094,21 @@ export default function App() {
               <p className="caption">
                 Retrieved {desk.context.retrieved_at_utc}. These records do not
                 drive this simulation.
+              </p>
+              <p className="caption">
+                Most of these involve a communications satellite —{" "}
+                {
+                  desk.context.rows.filter((row) =>
+                    /STARLINK|ONEWEB|IRIDIUM|GLOBALSTAR|INTELSAT|KUIPER|KINEIS/i.test(
+                      `${row.OBJECT_NAME_1} ${row.OBJECT_NAME_2}`,
+                    ),
+                  ).length
+                }{" "}
+                of {desk.context.rows.length} shown, against debris from the
+                Fengyun 1C and Cosmos break-ups. The constellations that carry
+                global connectivity share these shells with the debris, which is
+                what makes one operator&rsquo;s manoeuvre everyone&rsquo;s
+                problem.
               </p>
               <div className="table-scroll context-table">
                 <table>

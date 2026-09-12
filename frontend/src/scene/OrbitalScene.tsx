@@ -52,9 +52,9 @@ export function OrbitalScene(props: Props) {
     controls.dampingFactor = 0.1;
     controls.enablePan = false;
     controls.rotateSpeed = 0.6;
-    const ambient = new THREE.HemisphereLight("#cdd9e6", "#080d14", 1.05);
+    const ambient = new THREE.HemisphereLight("#bedcf1", "#101822", 1.35);
     scene.add(ambient);
-    const sunlight = new THREE.DirectionalLight("#f6f1e6", 3.5);
+    const sunlight = new THREE.DirectionalLight("#fff4db", 3.8);
     sunlight.position.set(-3, 5, 4);
     scene.add(sunlight);
     let disposed = false;
@@ -63,34 +63,13 @@ export function OrbitalScene(props: Props) {
     });
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-    const earthMaterial = new THREE.MeshStandardMaterial({
-      map: texture,
-      roughness: 1,
-      metalness: 0,
-    });
-    // The globe is printed in the same three inks as the interface rather
-    // than tinted. A colour multiply leaves the oceans muddy; mapping luminance
-    // through a crimson-to-paper ramp makes the planet part of the same press
-    // sheet. Appearance only -- geometry is untouched.
-    earthMaterial.onBeforeCompile = (shader) => {
-      shader.fragmentShader = shader.fragmentShader.replace(
-        "#include <map_fragment>",
-        `#include <map_fragment>
-         float lum = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-         // Engraved rather than photographed: land is lifted out of the water
-         // by tone, not by colour. A deep prussian shadow through steel to a
-         // warm ivory highlight keeps the globe in the same palette as the type
-         // and stops it competing with the status colours that carry meaning.
-         float t = pow(clamp(lum, 0.0, 1.0), 0.9);
-         vec3 tone = mix(vec3(0.031, 0.055, 0.086), vec3(0.30, 0.38, 0.46),
-                         smoothstep(0.0, 0.62, t));
-         tone = mix(tone, vec3(0.949, 0.929, 0.890), smoothstep(0.58, 1.0, t));
-         diffuseColor.rgb = mix(tone, diffuseColor.rgb, 0.08);`,
-      );
-    };
     const earth = new THREE.Mesh(
       new THREE.SphereGeometry(1, 96, 64),
-      earthMaterial,
+      new THREE.MeshStandardMaterial({
+        map: texture,
+        roughness: 1,
+        metalness: 0,
+      }),
     );
     earth.rotation.y = 1.25; // Illustrative orientation, no geographic ground-track claim.
     scene.add(earth);
@@ -101,7 +80,7 @@ export function OrbitalScene(props: Props) {
         transparent: true,
         depthWrite: false,
         side: THREE.BackSide,
-        uniforms: { tint: { value: new THREE.Color("#9db6cf") } },
+        uniforms: { tint: { value: new THREE.Color("#62a4c9") } },
         vertexShader:
           "varying vec3 n; varying vec3 v; void main(){vec4 p=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);v=normalize(-p.xyz);gl_Position=projectionMatrix*p;}",
         fragmentShader:
@@ -112,7 +91,7 @@ export function OrbitalScene(props: Props) {
     const satellite = makeSatellite();
     scene.add(satellite);
     const debrisMaterial = new THREE.MeshStandardMaterial({
-      color: "#7d8894",
+      color: "#9f9990",
       metalness: 0.8,
       roughness: 0.5,
     });
@@ -131,7 +110,7 @@ export function OrbitalScene(props: Props) {
       new THREE.Float32BufferAttribute(new Float32Array(6), 3),
     );
     const lineMaterial = new THREE.LineBasicMaterial({
-      color: "#c9a56b",
+      color: "#ddac6c",
       transparent: true,
       opacity: 0.9,
     });
@@ -210,15 +189,13 @@ export function OrbitalScene(props: Props) {
       ) {
         disposeScene(paths);
         paths.clear();
-        // Hoisted: the ghost baseline below spans the same window as the
-        // object paths, so the two are directly comparable.
-        const lower = next.view === "orbit" ? 0 : Math.max(0, s - 4);
-        const upper =
-          next.view === "orbit"
-            ? next.bundle.t_s.length
-            : Math.min(next.bundle.t_s.length, s + 5);
         for (const id of next.bundle.object_ids) {
           const points: THREE.Vector3[] = [];
+          const lower = next.view === "orbit" ? 0 : Math.max(0, s - 4);
+          const upper =
+            next.view === "orbit"
+              ? next.bundle.t_s.length
+              : Math.min(next.bundle.t_s.length, s + 5);
           for (let i = lower; i < upper; i++)
             points.push(display(vector(variant.positions_m[id][i])));
           const material = new THREE.LineBasicMaterial({
@@ -237,28 +214,6 @@ export function OrbitalScene(props: Props) {
               material,
             ),
           );
-        }
-
-        // The path the satellite would have flown. Without it the manoeuvre is
-        // a number that changed; with it the change is the thing you can see.
-        const baseline = next.bundle.variants.find((v) => v.kind === "NO_BURN");
-        if (baseline && baseline.candidate_id !== variant.candidate_id) {
-          const ghost: THREE.Vector3[] = [];
-          const track = baseline.positions_m[next.bundle.satellite_id];
-          for (let i = lower; i < upper && i < track.length; i++)
-            ghost.push(display(vector(track[i])));
-          if (ghost.length > 1) {
-            paths.add(
-              new THREE.Line(
-                new THREE.BufferGeometry().setFromPoints(ghost),
-                new THREE.LineBasicMaterial({
-                  color: "#e0705e",
-                  opacity: 0.55,
-                  transparent: true,
-                }),
-              ),
-            );
-          }
         }
       }
       if (

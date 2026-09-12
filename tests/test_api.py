@@ -683,3 +683,76 @@ def test_the_run_reason_is_readable_the_moment_the_run_reads_failed():
 
     assert run["status"] == "FAILED"
     assert "provider construction blew up" in run["error"]
+
+
+# --------------------------------------------------------------------------
+# CDM export — interoperability
+# --------------------------------------------------------------------------
+
+
+def test_cdm_export_is_shaped_for_another_operator():
+    """Coordinating traffic means the result has to mean something elsewhere."""
+    client = make_client()
+    case = new_case(client)
+    run_plan(client, case)
+
+    text = client.get(
+        f"/cases/{case['case_id']}/export", params={"format": "cdm"}
+    ).text
+
+    for field in (
+        "CCSDS_CDM_VERS",
+        "CREATION_DATE",
+        "ORIGINATOR",
+        "TCA",
+        "MISS_DISTANCE",
+        "RELATIVE_SPEED",
+        "OBJECT = OBJECT1",
+        "OBJECT = OBJECT2",
+        "REF_FRAME",
+    ):
+        assert field in text, field
+
+    # Both screened objects appear, not just the one that triggered the case.
+    assert "DEB-1" in text and "DEB-2" in text
+
+
+def test_cdm_export_refuses_to_imply_a_probability():
+    """A conforming CDM carries covariance; public element sets do not have one.
+    Saying so is the difference between interoperable and misleading."""
+    client = make_client()
+    case = new_case(client)
+    run_plan(client, case)
+    text = client.get(
+        f"/cases/{case['case_id']}/export", params={"format": "cdm"}
+    ).text
+
+    assert "NOT a conforming CDM" in text
+    assert "no covariance" in text
+    assert "COVARIANCE_METHOD = NONE" in text
+    assert "synthetic" in text.lower()
+    # No probability field anywhere, under any spelling.
+    lowered = text.lower()
+    assert "probability" not in lowered.replace(
+        "no collision probability is stated", ""
+    )
+
+
+def test_cdm_export_before_any_screening_says_so():
+    client = make_client()
+    case = new_case(client)
+    text = client.get(
+        f"/cases/{case['case_id']}/export", params={"format": "cdm"}
+    ).text
+    assert "No validated screening exists" in text
+
+
+def test_export_rejects_an_unknown_format():
+    client = make_client()
+    case = new_case(client)
+    assert (
+        client.get(
+            f"/cases/{case['case_id']}/export", params={"format": "pdf"}
+        ).status_code
+        == 422
+    )
