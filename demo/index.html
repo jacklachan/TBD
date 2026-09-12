@@ -1,0 +1,923 @@
+<title>Right of Way</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   RIGHT OF WAY — collision avoidance, explained by doing it.
+
+   One hue in the entire palette. Safety is quiet; danger is loud.
+   Structure comes from hairlines and space, never from cards.
+   ═══════════════════════════════════════════════════════════════ */
+:root{
+  --black:#08090B;
+  --panel:#0D0F12;
+  --line:#1B1F25;
+  --line-2:#2A3038;
+  --white:#F4F5F7;
+  --grey:#8A9099;
+  --dim:#565D67;
+  --signal:#FF4222;
+  --signal-ink:#FF6B50;
+
+  --gut:clamp(20px,4vw,56px);
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --step:clamp(13px,.9vw,14px);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:var(--black);color:var(--white);
+  font-family:Archivo,ui-sans-serif,system-ui,sans-serif;
+  font-size:var(--step);line-height:1.6;-webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.03em;line-height:1.02;text-wrap:balance}
+p{margin:0}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--signal);outline-offset:3px}
+
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.tag{
+  font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--dim);
+}
+.sig{color:var(--signal-ink)}
+
+/* ─────────────────────────────────────────────── chrome */
+.topbar{
+  position:fixed;top:0;left:0;right:0;z-index:40;
+  display:flex;align-items:center;gap:14px;
+  padding:0 var(--gut);height:54px;
+  background:rgba(8,9,11,.82);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.mark{display:flex;align-items:baseline;gap:9px;margin-right:auto}
+.mark b{font-weight:700;font-size:14px;letter-spacing:-.02em}
+.progress{position:absolute;left:0;bottom:-1px;height:1px;background:var(--signal);width:0}
+.topnav{display:flex;gap:2px}
+.topnav a{
+  font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dim);text-decoration:none;padding:7px 10px;transition:color .2s var(--ease);
+}
+.topnav a:hover,.topnav a[aria-current="true"]{color:var(--white)}
+@media(max-width:860px){.topnav{display:none}}
+
+/* ─────────────────────────────────────────────── hero */
+.hero{
+  min-height:min(690px,84vh);padding:calc(54px + 4vh) var(--gut) 0;
+  display:grid;grid-template-columns:1fr;align-content:center;position:relative;
+}
+.hero-inner{max-width:1500px;margin:0 auto;width:100%;display:grid;gap:26px}
+.hero h1{font-size:clamp(38px,7.2vw,104px)}
+.hero h1 .ln{display:block;overflow:hidden}
+.hero h1 .ln>span{display:block;animation:rise 1s var(--ease) backwards}
+.hero h1 .ln:nth-child(2)>span{animation-delay:.09s}
+.hero h1 .ln:nth-child(3)>span{animation-delay:.18s}
+@keyframes rise{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,420px);gap:clamp(24px,5vw,80px);align-items:end}
+.hero-lede{color:var(--grey);font-size:clamp(15px,1.35vw,18px);max-width:46ch}
+.hero-lede b{color:var(--white);font-weight:500}
+.hero-facts{display:grid;gap:1px;background:var(--line);border-block:1px solid var(--line)}
+.fact{background:var(--black);padding:13px 0;display:flex;align-items:baseline;gap:14px}
+.fact dt{flex:1;color:var(--dim);font-size:12px}
+.fact dd{margin:0;font-family:"JetBrains Mono",monospace;font-size:14px}
+.cta-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding-top:6px}
+.cta{
+  display:inline-flex;align-items:center;gap:11px;padding:13px 22px;
+  background:var(--white);color:var(--black);font-weight:600;font-size:13.5px;
+  letter-spacing:-.01em;transition:transform .2s var(--ease),background .2s var(--ease);
+}
+.cta{text-decoration:none}
+.cta:hover{transform:translateX(3px);background:#fff}
+.cta svg{width:13px;height:13px;fill:currentColor}
+.cta-note{color:var(--dim);font-size:12px}
+
+/* ─────────────────────────────────────────────── story + globe */
+.story{position:relative;max-width:1500px;margin:0 auto;padding:0 var(--gut)}
+.story-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:clamp(28px,5vw,76px);align-items:start}
+
+.stage{position:sticky;top:54px;height:calc(100vh - 54px);display:flex;flex-direction:column;justify-content:center}
+.canvas-hold{position:relative;width:100%;aspect-ratio:1;max-height:74vh;margin-inline:auto}
+#gl{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#gl:active{cursor:grabbing}
+.gl-fallback{
+  position:absolute;inset:0;display:none;place-content:center;text-align:center;
+  padding:30px;border:1px solid var(--line);color:var(--grey);
+}
+.gl-fallback.on{display:grid}
+
+.hud{position:absolute;inset:0;pointer-events:none}
+.hud-tl{position:absolute;top:0;left:0}
+.hud-br{position:absolute;bottom:0;right:0;text-align:right}
+.hud-bl{position:absolute;bottom:0;left:0}
+.hud-read{font-family:"JetBrains Mono",monospace;font-size:clamp(20px,2.4vw,30px);letter-spacing:-.02em;display:block;line-height:1.1}
+.hud-read.breach{color:var(--signal)}
+.loading{
+  position:absolute;inset:0;display:grid;place-content:center;gap:12px;justify-items:center;
+  background:var(--black);transition:opacity .5s var(--ease);
+}
+.loading.done{opacity:0;pointer-events:none}
+.load-bar{width:150px;height:1px;background:var(--line);position:relative;overflow:hidden}
+.load-bar i{position:absolute;inset:0;background:var(--white);transform:translateX(-100%);animation:sweep 1.1s var(--ease) infinite}
+@keyframes sweep{to{transform:translateX(100%)}}
+
+.steps{display:grid;gap:0}
+.step{min-height:88vh;display:flex;flex-direction:column;justify-content:center;padding-block:6vh;gap:18px}
+.step-no{display:flex;align-items:center;gap:12px}
+.step-no i{display:block;width:26px;height:1px;background:var(--line-2)}
+.step h2{font-size:clamp(26px,3.3vw,46px)}
+.step p{color:var(--grey);font-size:15px;max-width:48ch}
+.step p b{color:var(--white);font-weight:500}
+.step p + p{margin-top:12px}
+
+.readout{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);margin-top:4px}
+.readout-row{background:var(--black);padding:14px 16px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+.readout-row dt{flex:1;min-width:150px;color:var(--grey);font-size:12.5px}
+.readout-row dd{margin:0;font-family:"JetBrains Mono",monospace;font-size:16px;letter-spacing:-.01em}
+.readout-row dd small{font-size:11px;color:var(--dim);margin-left:5px}
+.readout-row.hot dd{color:var(--signal)}
+.readout-row.hot{background:#120B09}
+
+.verdict{display:inline-flex;align-items:center;gap:9px;padding:7px 13px;border:1px solid var(--line-2);font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.13em;text-transform:uppercase;width:fit-content}
+.verdict.bad{border-color:var(--signal);color:var(--signal)}
+.verdict i{width:6px;height:6px;background:currentColor;flex:none}
+
+/* real-world scale block */
+.scale-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);margin-top:6px}
+.scale-cell{background:var(--black);padding:16px 15px}
+.scale-cell b{display:block;font-family:"JetBrains Mono",monospace;font-size:clamp(20px,2.1vw,27px);font-weight:400;letter-spacing:-.02em}
+.scale-cell span{display:block;color:var(--dim);font-size:11.5px;margin-top:5px;line-height:1.45}
+.src{color:var(--dim);font-size:11px;margin-top:10px}
+.src a{color:var(--grey);text-decoration:none;border-bottom:1px solid var(--line-2)}
+.src a:hover{color:var(--white)}
+
+/* ─────────────────────────────────────────────── console */
+.console{border-top:1px solid var(--line);margin-top:8vh;padding-block:clamp(48px,7vw,92px)}
+.console-head{max-width:1500px;margin:0 auto;padding:0 var(--gut) 30px;display:grid;gap:14px}
+.console-head h2{font-size:clamp(26px,3.3vw,46px)}
+.console-head p{color:var(--grey);max-width:54ch;font-size:15px}
+.console-body{max-width:1500px;margin:0 auto;padding:0 var(--gut);display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:1px;background:var(--line);border:1px solid var(--line)}
+.chart-cell{background:var(--black);padding:18px 20px 10px;min-height:320px;display:flex;flex-direction:column;gap:12px}
+.chart-hold{flex:1;position:relative;min-height:230px}
+#chart{width:100%;height:100%;display:block}
+.opt-cell{background:var(--black);display:grid;gap:1px;background:var(--line);align-content:start}
+
+.opt{
+  background:var(--black);padding:15px 16px;display:grid;gap:7px;text-align:left;
+  transition:background .18s var(--ease);position:relative;
+}
+.opt:hover{background:var(--panel)}
+.opt[aria-pressed="true"]{background:var(--panel)}
+.opt[aria-pressed="true"]::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--white)}
+.opt.bad[aria-pressed="true"]::before{background:var(--signal)}
+.opt-h{display:flex;align-items:baseline;gap:10px}
+.opt-h b{font-size:13.5px;font-weight:600;letter-spacing:-.01em}
+.opt-h span{margin-left:auto;font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--dim)}
+.opt-m{font-family:"JetBrains Mono",monospace;font-size:11.5px;color:var(--grey)}
+.opt-v{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--dim)}
+.opt-v em{font-style:normal;letter-spacing:.1em;text-transform:uppercase}
+.opt.bad .opt-v{color:var(--signal-ink)}
+
+.transport{
+  max-width:1500px;margin:0 auto;padding:16px var(--gut) 0;
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+}
+.tbtn{
+  width:40px;height:40px;border:1px solid var(--line-2);display:grid;place-items:center;
+  transition:border-color .18s var(--ease),background .18s var(--ease);flex:none;
+}
+.tbtn:hover{border-color:var(--white)}
+.tbtn svg{width:13px;height:13px;fill:var(--white)}
+.clockread{display:grid;gap:2px;min-width:112px}
+.clockread .mono{font-size:19px;letter-spacing:-.01em}
+.scrubhold{flex:1 1 240px;min-width:180px}
+input[type=range]{width:100%;-webkit-appearance:none;appearance:none;background:none;margin:0;cursor:pointer;display:block}
+input[type=range]::-webkit-slider-runnable-track{height:1px;background:var(--line-2)}
+input[type=range]::-moz-range-track{height:1px;background:var(--line-2)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:3px;height:19px;background:var(--white);margin-top:-9px;border-radius:0}
+input[type=range]::-moz-range-thumb{width:3px;height:19px;background:var(--white);border:0;border-radius:0}
+.ticks{display:flex;justify-content:space-between;margin-top:7px;font-family:"JetBrains Mono",monospace;font-size:9.5px;color:var(--dim)}
+.jumps{display:flex;gap:0;border:1px solid var(--line-2)}
+.jumps button{padding:10px 14px;font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey);transition:background .18s var(--ease),color .18s var(--ease);white-space:nowrap}
+.jumps button + button{border-left:1px solid var(--line-2)}
+.jumps button:hover{background:var(--panel);color:var(--white)}
+.jumps button.hot{color:var(--signal-ink)}
+.jumps button.hot:hover{background:#140B08}
+
+.legend{display:flex;gap:18px;flex-wrap:wrap}
+.lg{display:flex;align-items:center;gap:8px;font-family:"JetBrains Mono",monospace;font-size:10.5px;color:var(--grey)}
+.lg i{width:16px;height:2px;flex:none}
+
+/* ─────────────────────────────────────────────── method */
+.method{border-top:1px solid var(--line);padding-block:clamp(48px,7vw,92px)}
+.method-in{max-width:1500px;margin:0 auto;padding:0 var(--gut);display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:clamp(28px,5vw,76px)}
+.method h2{font-size:clamp(24px,2.8vw,38px)}
+.mrows{display:grid;gap:1px;background:var(--line);border-block:1px solid var(--line)}
+.mrow{background:var(--black);padding:17px 0;display:grid;grid-template-columns:96px 1fr;gap:20px;align-items:start}
+.mrow .tag{padding-top:3px}
+.mrow b{display:block;font-weight:600;font-size:14px;margin-bottom:4px}
+.mrow p{color:var(--grey);font-size:13px}
+.mrow.real .tag{color:var(--white)}
+.mrow.sim .tag{color:var(--signal-ink)}
+
+footer{border-top:1px solid var(--line);padding:26px var(--gut);max-width:1500px;margin:0 auto;display:flex;gap:18px;flex-wrap:wrap;color:var(--dim);font-size:11.5px}
+footer span:last-child{margin-left:auto}
+
+/* ─────────────────────────────────────────────── responsive */
+@media(max-width:980px){
+  .hero-grid{grid-template-columns:1fr;gap:28px}
+  .story-grid{grid-template-columns:1fr;gap:0}
+  .stage{position:sticky;top:54px;height:auto;padding-block:10px;background:var(--black);z-index:20;border-bottom:1px solid var(--line)}
+  .canvas-hold{aspect-ratio:16/11;max-height:42vh}
+  .step{min-height:auto;padding-block:34px;border-bottom:1px solid var(--line)}
+  .console-body{grid-template-columns:1fr}
+  .method-in{grid-template-columns:1fr;gap:24px}
+}
+@media(max-width:560px){
+  .transport{gap:12px}
+  .jumps{width:100%}
+  .jumps button{flex:1;padding:10px 6px}
+  .mrow{grid-template-columns:1fr;gap:6px}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+}
+</style>
+
+<header class="topbar">
+  <div class="mark"><b>Right of Way</b><span class="tag">Conjunction avoidance</span></div>
+  <nav class="topnav" aria-label="Sections">
+    <a href="#s1">Threat</a><a href="#s2">Scale</a><a href="#s3">Options</a>
+    <a href="#s4">Trap</a><a href="#s5">Answer</a><a href="#console">Console</a><a href="#method">Method</a>
+  </nav>
+  <div class="progress" id="prog"></div>
+</header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <span class="tag">Simulated decision · real orbit · 6-hour horizon</span>
+    <h1>
+      <span class="ln"><span>Two objects.</span></span>
+      <span class="ln"><span>Six hours.</span></span>
+      <span class="ln"><span>One decision.</span></span>
+    </h1>
+    <div class="hero-grid">
+      <div style="display:grid;gap:22px">
+        <p class="hero-lede">
+          A weather satellite is on course to pass <b>134 metres</b> from a piece of debris at
+          <b>8 kilometres per second</b>. Something has to move. This walks through how that
+          call gets made — and why the obvious answer is the wrong one.
+        </p>
+        <div class="cta-row">
+          <a class="cta" href="#s1">Run the scenario
+            <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
+          </a>
+          <span class="cta-note">Six steps · about two minutes</span>
+        </div>
+      </div>
+      <dl class="hero-facts">
+        <div class="fact"><dt>Spacecraft</dt><dd>NOAA 20 (JPSS-1)</dd></div>
+        <div class="fact"><dt>Catalogue number</dt><dd class="mono" id="f-norad">43013</dd></div>
+        <div class="fact"><dt>Orbit</dt><dd class="mono">824 km · 98.8°</dd></div>
+        <div class="fact"><dt>Closest approach</dt><dd class="mono sig" id="f-min">133.7 m</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<div class="story">
+  <div class="story-grid">
+
+    <div class="stage">
+      <div class="canvas-hold">
+        <canvas id="gl" aria-label="Orbital view of the spacecraft and two debris objects"></canvas>
+        <div class="gl-fallback" id="glfall">
+          <div>
+            <p style="color:var(--white);font-weight:600;margin-bottom:8px">3D view unavailable</p>
+            <p style="font-size:13px">Your browser could not start WebGL. Every number and chart below still works.</p>
+          </div>
+        </div>
+        <div class="loading" id="load">
+          <span class="tag">Building trajectories</span>
+          <div class="load-bar"><i></i></div>
+        </div>
+        <div class="hud">
+          <div class="hud-tl"><span class="tag" id="hud-view">Earth-centred</span></div>
+          <div class="hud-bl"><span class="tag" id="hud-opt">Do nothing</span></div>
+          <div class="hud-br">
+            <span class="tag" id="hud-label">Nearest object</span>
+            <span class="hud-read mono" id="hud-val">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="steps">
+
+      <section class="step" id="s1" data-step="0">
+        <div class="step-no"><span class="tag">Step 01</span><i></i><span class="tag">The threat</span></div>
+        <h2>Nothing is on fire. That is the problem.</h2>
+        <p>Two objects in low Earth orbit do not drift together. They arrive, at a combined
+           <b>8,252 metres per second</b>, and pass in under a second. There is no alarm, no impact
+           you could react to. The only warning is arithmetic done hours in advance.</p>
+        <p>Propagating NOAA 20 forward six hours puts it <b>133.7 metres</b> from a tracked fragment.
+           Nobody would fly that.</p>
+        <dl class="readout">
+          <div class="readout-row hot"><dt>Closest approach · DEB-1</dt><dd id="r1-sep">133.7 m</dd></div>
+          <div class="readout-row"><dt>Time of closest approach</dt><dd id="r1-tca">T+ 04:30:34</dd></div>
+          <div class="readout-row"><dt>Relative speed</dt><dd id="r1-vel">8,252 m/s</dd></div>
+          <div class="readout-row"><dt>Clearance floor in force</dt><dd>1,000 m</dd></div>
+        </dl>
+      </section>
+
+      <section class="step" id="s2" data-step="1">
+        <div class="step-no"><span class="tag">Step 02</span><i></i><span class="tag">The scale</span></div>
+        <h2>There are a lot of things up there.</h2>
+        <p>The scenario below is simulated, but the situation is not. These are the tracked and
+           estimated populations operators actually screen against every day.</p>
+        <div class="scale-grid">
+          <div class="scale-cell"><b>~40,000</b><span>Objects tracked by surveillance networks</span></div>
+          <div class="scale-cell"><b>~11,000</b><span>Of those, active payloads</span></div>
+          <div class="scale-cell"><b>~1.2 M</b><span>Estimated objects 1–10 cm — too small to track, large enough to destroy</span></div>
+          <div class="scale-cell"><b>1 in 10,000</b><span>Collision probability at which the ISS manoeuvres</span></div>
+        </div>
+        <p class="src">Populations: ESA Space Debris Office. Manoeuvre threshold: NASA conjunction
+           assessment practice. Figures are real; the encounter modelled here is not.</p>
+      </section>
+
+      <section class="step" id="s3" data-step="2">
+        <div class="step-no"><span class="tag">Step 03</span><i></i><span class="tag">The options</span></div>
+        <h2>Twenty-five ways to not be there.</h2>
+        <p>You cannot steer out of the way. You change your orbit slightly, hours ahead, and
+           arrive somewhere else. The grid is four burn times, two directions, three magnitudes —
+           <b>24 burns, plus doing nothing</b>.</p>
+        <p>Each is propagated and screened against the object that triggered the alert.
+           <b>Twelve</b> clear the floor. Rank them by fuel and the cheapest survivor is a
+           0.10 m/s retrograde burn thirty minutes in.</p>
+        <dl class="readout">
+          <div class="readout-row"><dt>Options evaluated</dt><dd>25</dd></div>
+          <div class="readout-row"><dt>Clear the primary threat</dt><dd id="r3-q">12</dd></div>
+          <div class="readout-row"><dt>Ranked first</dt><dd>0.10 m/s <small>retrograde · T+30 min</small></dd></div>
+          <div class="readout-row"><dt>Screening time</dt><dd id="r3-t">0.35 s</dd></div>
+        </dl>
+      </section>
+
+      <section class="step" id="s4" data-step="3">
+        <div class="step-no"><span class="tag sig">Step 04</span><i></i><span class="tag sig">The trap</span></div>
+        <h2>It works. Then it doesn’t.</h2>
+        <p>Against the object that raised the alarm, the burn is a clean success: 133.7 m becomes
+           <b>2,016.9 m</b>. Every check it was asked to pass, it passes.</p>
+        <p>But it was only ever screened against <b>one</b> object. Ninety minutes after the
+           encounter it was meant to fix, the same burn brings the spacecraft to
+           <b class="sig">523.2 metres</b> from a second object — closer than the floor it was
+           trying to protect.</p>
+        <span class="verdict bad"><i></i>Rejected by independent check</span>
+        <dl class="readout">
+          <div class="readout-row"><dt>DEB-1 · the original threat</dt><dd id="r4-a">2,016.9 m</dd></div>
+          <div class="readout-row hot"><dt>DEB-2 · never screened</dt><dd id="r4-b">523.2 m</dd></div>
+          <div class="readout-row"><dt>Time of second encounter</dt><dd id="r4-t">T+ 05:38:33</dd></div>
+          <div class="readout-row"><dt>Relative speed</dt><dd id="r4-v">10,093 m/s</dd></div>
+        </dl>
+      </section>
+
+      <section class="step" id="s5" data-step="4">
+        <div class="step-no"><span class="tag">Step 05</span><i></i><span class="tag">The answer</span></div>
+        <h2>Spend more fuel. Check everything.</h2>
+        <p>Doubling the burn to <b>0.20 m/s</b> moves the spacecraft far enough that both
+           encounters open up. A second, independent pass rebuilds the trajectory from the raw
+           scenario, scans five times finer, and screens <b>every</b> object over the whole
+           horizon — not just the one that raised the alarm.</p>
+        <p>That is the entire point. The cheapest option that satisfies the question you asked
+           is not the same as the option that is safe.</p>
+        <span class="verdict"><i></i>Verified clear</span>
+        <dl class="readout">
+          <div class="readout-row"><dt>DEB-1</dt><dd id="r5-a">2,491.9 m</dd></div>
+          <div class="readout-row"><dt>DEB-2</dt><dd id="r5-b">2,569.0 m</dd></div>
+          <div class="readout-row"><dt>Fuel spent</dt><dd>0.20 m/s <small>of 0.20 budget</small></dd></div>
+          <div class="readout-row"><dt>Objects screened</dt><dd>2 of 2 <small>full horizon</small></dd></div>
+        </dl>
+      </section>
+
+      <section class="step" id="s6" data-step="5">
+        <div class="step-no"><span class="tag">Step 06</span><i></i><span class="tag">Your turn</span></div>
+        <h2>Take the controls.</h2>
+        <p>The console below runs the same computed trajectories. Scrub the six hours, switch
+           between the three options, and watch the distance to the nearest object change.</p>
+        <p>Drag the globe to look around. Everything you see is read from the same time grid —
+           the scene, the chart and the numbers cannot disagree.</p>
+        <div class="cta-row"><a class="cta" href="#console">Open the console
+          <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></a></div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<section class="console" id="console">
+  <div class="console-head">
+    <span class="tag">Console</span>
+    <h2>Six hours, three choices.</h2>
+    <p>Closest object at each instant, logarithmic. Anything touching the dashed line is
+       inside the clearance floor and cannot be flown.</p>
+  </div>
+  <div class="console-body">
+    <div class="chart-cell">
+      <div class="chart-hold"><canvas id="chart" aria-label="Separation to the nearest object over six hours for three options"></canvas></div>
+      <div class="legend">
+        <span class="lg"><i style="background:#565D67"></i>Do nothing</span>
+        <span class="lg"><i style="background:#FF4222"></i>Rejected burn</span>
+        <span class="lg"><i style="background:#F4F5F7"></i>Verified burn</span>
+        <span class="lg"><i style="background:#2A3038"></i>1,000 m floor</span>
+      </div>
+    </div>
+    <div class="opt-cell" id="opts"></div>
+  </div>
+  <div class="console-body" style="border-top:0">
+    <div class="chart-cell" style="min-height:0;padding-block:14px 16px">
+      <span class="tag">At the cursor</span>
+      <dl class="readout" id="live" style="margin-top:0;border:0"></dl>
+    </div>
+    <div class="opt-cell"><div class="opt" style="cursor:default">
+      <span class="opt-h"><b>Reading the chart</b></span>
+      <span class="opt-m" style="line-height:1.6">Every dip is a close approach.
+      Depth is how near it came. The dashed line is the floor no option may cross.</span>
+    </div></div>
+  </div>
+  <div class="transport">
+    <button class="tbtn" id="play" aria-label="Play"><svg id="pico" viewBox="0 0 12 12"><path d="M2 1l8 5-8 5z"/></svg></button>
+    <div class="clockread"><span class="tag">Mission time</span><span class="mono" id="tread">T+ 00:00:00</span></div>
+    <div class="scrubhold">
+      <input type="range" id="scrub" min="0" max="760" value="0" step="1" aria-label="Scrub mission time">
+      <div class="ticks"><span>T+00:00</span><span>T+03:00</span><span>T+06:00</span></div>
+    </div>
+    <div class="jumps">
+      <button id="j-veto" class="hot">Replay the trap</button>
+      <button id="j-min">Closest</button>
+      <button id="j-burn">Burn</button>
+      <button id="j-reset">Reset</button>
+    </div>
+  </div>
+</section>
+
+<section class="method" id="method">
+  <div class="method-in">
+    <div>
+      <span class="tag">Method</span>
+      <h2 style="margin-top:12px">What is real, and what is not.</h2>
+      <p style="color:var(--grey);margin-top:14px;font-size:14px">
+        A demo that blurs this line is worthless. Every figure on this page is one of the four
+        things on the right, and nothing is dressed up as more than it is.</p>
+    </div>
+    <div class="mrows">
+      <div class="mrow real">
+        <span class="tag">Real</span>
+        <div><b>The orbit</b><p>NOAA 20 (JPSS-1), catalogue number 43013. The starting state is
+          derived from a published element set at its own epoch — not a plausible-looking orbit,
+          an actual one.</p></div>
+      </div>
+      <div class="mrow real">
+        <span class="tag">Real</span>
+        <div><b>The context figures</b><p>Tracked-object counts and the ISS manoeuvre threshold
+          come from ESA’s Space Debris Office and NASA conjunction assessment practice.</p></div>
+      </div>
+      <div class="mrow sim">
+        <span class="tag">Simulated</span>
+        <div><b>Both debris objects</b><p>Constructed backwards from an encounter we chose, then
+          verified by propagating forward again. No real conjunction is depicted, and none of
+          this is a prediction about any real object.</p></div>
+      </div>
+      <div class="mrow sim">
+        <span class="tag">Computed</span>
+        <div><b>Every distance on this page</b><p>Two-body propagation with instantaneous
+          impulses over a six-hour horizon. No drag, no oblateness, no finite burn duration, no
+          navigation uncertainty — and <b>no collision probability</b>, which needs covariance
+          data this model does not have.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span>Two-body simulation · 6-hour horizon · distances are centre-to-centre</span>
+  <span class="mono" id="foot-hash">—</span>
+  <span>Models enlarged for visibility. Positions and distances are computed.</span>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="data.js"></script>
+<script>
+(function(){
+"use strict";
+const D=window.ORBIT_DATA; if(!D) return;
+const T=D.t_s, N=T.length, META=D.meta, FLOOR=META.min_separation_m;
+const BASE="baseline", TRAP="t30_ret_100", RESC="t30_ret_200";
+const ORDER=[BASE,TRAP,RESC];
+const HUE={[BASE]:0x565D67,[TRAP]:0xFF4222,[RESC]:0xF4F5F7};
+const CSS={[BASE]:"#565D67",[TRAP]:"#FF4222",[RESC]:"#F4F5F7"};
+const NAME={[BASE]:"Do nothing",[TRAP]:"0.10 m/s retrograde",[RESC]:"0.20 m/s retrograde"};
+const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+let idx=0, active=TRAP, playing=false, speed=200, stopAt=null, approach=false;
+
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const hms=s=>{s=Math.max(0,Math.round(s));
+  return "T+ "+[s/3600|0,(s%3600)/60|0,s%60].map(n=>String(n|0).padStart(2,"0")).join(":");};
+const fmt=m=> m>=1e5 ? (m/1000).toFixed(0)+" km"
+            : m>=1e4 ? (m/1000).toFixed(1)+" km"
+            : m.toLocaleString("en-US",{minimumFractionDigits:1,maximumFractionDigits:1})+" m";
+function idxAt(t){let lo=0,hi=N-1;while(lo<hi){const m=(lo+hi)>>1;T[m]<t?lo=m+1:hi=m;}
+  return lo>0&&Math.abs(T[lo-1]-t)<Math.abs(T[lo]-t)?lo-1:lo;}
+function worst(cid){const s=D.variants[cid].min_to_any_m;let b=0;
+  for(let i=1;i<N;i++) if(s[i]<s[b]) b=i; return b;}
+function nearest(){const p=D.variants[active].pair_m;let id=null,sep=Infinity;
+  for(const k in p){ if(p[k][idx]<sep){sep=p[k][idx];id=k;} } return {id,sep};}
+
+/* ════════════════════════════════════════════════ WEBGL
+   Everything is allocated once. The frame loop writes three
+   vectors and a camera matrix, and allocates nothing.
+   ═══════════════════════════════════════════════════════ */
+const cv=document.getElementById("gl");
+let R3=null, ok=false;
+
+function buildGL(){
+  if(!window.THREE) return false;
+  try{
+    const test=document.createElement("canvas");
+    if(!(test.getContext("webgl")||test.getContext("experimental-webgl"))) return false;
+  }catch(e){ return false; }
+
+  const ER=6.371, S=1/1000;
+  const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:window.devicePixelRatio<2,alpha:true,powerPreference:"high-performance"});
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.75));
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(38,1,.05,3000);
+
+  // opaque body, so the far side of every line is correctly hidden
+  const earth=new THREE.Mesh(new THREE.SphereGeometry(ER*.995,48,32),
+            new THREE.MeshBasicMaterial({color:0x0A0C10}));
+  scene.add(earth);
+
+  // graticule: one merged LineSegments, one draw call, no landmasses invented
+  const gp=[], SEG=64, STEP=15;
+  for(let lat=-75;lat<=75;lat+=STEP){
+    const p=lat*Math.PI/180, r=ER*Math.cos(p), y=ER*Math.sin(p);
+    for(let i=0;i<SEG;i++){
+      const a=i/SEG*6.2832, b=(i+1)/SEG*6.2832;
+      gp.push(r*Math.cos(a),y,r*Math.sin(a), r*Math.cos(b),y,r*Math.sin(b));
+    }
+  }
+  for(let lon=0;lon<360;lon+=STEP){
+    const t=lon*Math.PI/180, H=SEG>>1;
+    for(let i=0;i<H;i++){
+      const p0=-1.5708+i/H*3.1416, p1=-1.5708+(i+1)/H*3.1416;
+      gp.push(ER*Math.cos(p0)*Math.cos(t),ER*Math.sin(p0),ER*Math.cos(p0)*Math.sin(t),
+              ER*Math.cos(p1)*Math.cos(t),ER*Math.sin(p1),ER*Math.cos(p1)*Math.sin(t));
+    }
+  }
+  const gg=new THREE.BufferGeometry();
+  gg.setAttribute("position",new THREE.Float32BufferAttribute(gp,3));
+  const grat=new THREE.LineSegments(gg,new THREE.LineBasicMaterial({color:0x232A33}));
+  scene.add(grat);
+
+  // the lit limb — the only light in the composition
+  const limb=new THREE.Mesh(new THREE.SphereGeometry(ER*1.035,48,32),
+            new THREE.MeshBasicMaterial({color:0x3E5568,transparent:true,opacity:.1,side:THREE.BackSide}));
+  scene.add(limb);
+
+  const V=p=>new THREE.Vector3(p[0]*S,p[2]*S,-p[1]*S);
+
+  const tracks={};
+  ORDER.forEach(cid=>{
+    const g=new THREE.BufferGeometry().setFromPoints(D.variants[cid].sat_km.map(V));
+    const l=new THREE.Line(g,new THREE.LineBasicMaterial({color:HUE[cid],transparent:true,opacity:.9}));
+    l.frustumCulled=false; scene.add(l); tracks[cid]=l;
+  });
+  const debTracks={}, debDots={};
+  Object.keys(D.debris).forEach(id=>{
+    const g=new THREE.BufferGeometry().setFromPoints(D.debris[id].map(V));
+    const l=new THREE.Line(g,new THREE.LineBasicMaterial({color:0x2A3038}));
+    l.frustumCulled=false; scene.add(l); debTracks[id]=l;
+    const d=new THREE.Mesh(new THREE.SphereGeometry(.085,10,8),new THREE.MeshBasicMaterial({color:0x8A9099}));
+    scene.add(d); debDots[id]=d;
+  });
+  const sat=new THREE.Mesh(new THREE.SphereGeometry(.115,12,10),new THREE.MeshBasicMaterial({color:0xF4F5F7}));
+  scene.add(sat);
+
+  const linkG=new THREE.BufferGeometry();
+  linkG.setAttribute("position",new THREE.Float32BufferAttribute(new Float32Array(6),3));
+  const link=new THREE.Line(linkG,new THREE.LineBasicMaterial({color:0xFF4222,transparent:true,opacity:.9}));
+  link.frustumCulled=false; scene.add(link);
+
+  // scratch objects — reused every frame so the loop never allocates
+  const _s=new THREE.Vector3(), _d=new THREE.Vector3(), _f=new THREE.Vector3(), _o=new THREE.Vector3(),
+        _mid=new THREE.Vector3(), _sa=new THREE.Vector3(), _da=new THREE.Vector3();
+  // The scene is measured in thousands of kilometres, so a 500 m encounter is
+  // 5e-4 units — under the near plane and invisible. The encounter view therefore
+  // recentres on the midpoint and magnifies, which is a change of frame, not of
+  // the numbers: the distance shown is always the computed one.
+  const K=8000, BASE_SAT=.115, BASE_DEB=.085;
+
+  const cam={th:.7,ph:1.12,dist:26,tth:.7,tph:1.12,tdist:26,vth:0,vph:0};
+
+  function setOpt(){ /* visibility is resolved per frame */ }
+
+  function frame(){
+    // damped camera — inertia without a physics library
+    if(!drag){ cam.th+=cam.vth; cam.ph=clamp(cam.ph+cam.vph,.2,2.94); cam.vth*=.93; cam.vph*=.93;
+               if(Math.abs(cam.vth)<1e-5) cam.vth=0; if(Math.abs(cam.vph)<1e-5) cam.vph=0; }
+    cam.th+=(cam.tth-cam.th)*.07; cam.ph+=(cam.tph-cam.ph)*.07; cam.dist+=(cam.tdist-cam.dist)*.08;
+
+    const p=D.variants[active].sat_km[idx];
+    _s.set(p[0]*S,p[2]*S,-p[1]*S);
+    const nr=nearest();
+    const q=D.debris[nr.id][idx]; _d.set(q[0]*S,q[2]*S,-q[1]*S);
+
+    const zoom=clamp(cam.dist/26,.35,3);
+    let dist;
+
+    if(approach){
+      // local frame, magnified: two points and the line between them
+      _mid.copy(_s).add(_d).multiplyScalar(.5);
+      _sa.copy(_s).sub(_mid).multiplyScalar(K);
+      _da.copy(_d).sub(_mid).multiplyScalar(K);
+      sat.position.copy(_sa);
+      debDots[nr.id].position.copy(_da);
+      dist=clamp(_sa.distanceTo(_da)*2.6*zoom,.9,900);
+      _f.set(0,0,0);
+    }else{
+      for(const id in debDots){ const r=D.debris[id][idx]; debDots[id].position.set(r[0]*S,r[2]*S,-r[1]*S); }
+      sat.position.copy(_s);
+      dist=cam.dist;
+      _f.set(0,0,0);
+    }
+
+    // only the encounter is meaningful at that magnification
+    earth.visible=grat.visible=limb.visible=!approach;
+    for(const c2 in tracks) tracks[c2].visible=(c2===active&&!approach);
+    for(const id in debTracks) debTracks[id].visible=!approach;
+    for(const id in debDots) debDots[id].visible=!approach||id===nr.id;
+
+    // markers hold a constant share of the frame at every zoom and in both frames
+    const mr=dist*.0072;
+    sat.scale.setScalar(mr/BASE_SAT);
+    for(const id in debDots) debDots[id].scale.setScalar(mr*.78/BASE_DEB);
+
+    const a=approach?_sa:_s, b=approach?_da:_d;
+    const lp=linkG.attributes.position;
+    lp.setXYZ(0,a.x,a.y,a.z); lp.setXYZ(1,b.x,b.y,b.z); lp.needsUpdate=true;
+    linkG.computeBoundingSphere();
+    link.material.color.setHex(nr.sep<FLOOR?0xFF4222:0x39414B);
+
+    const sp=Math.sin(cam.ph);
+    _o.set(dist*sp*Math.cos(cam.th),dist*Math.cos(cam.ph),dist*sp*Math.sin(cam.th));
+    camera.position.copy(_f).add(_o); camera.lookAt(_f);
+
+    renderer.render(scene,camera);
+  }
+
+  let drag=false,px=0,py=0;
+  cv.addEventListener("pointerdown",e=>{drag=true;px=e.clientX;py=e.clientY;cam.vth=cam.vph=0;cv.setPointerCapture(e.pointerId);});
+  cv.addEventListener("pointermove",e=>{
+    if(!drag) return;
+    const dx=(e.clientX-px)*.0065, dy=(e.clientY-py)*.0065;
+    cam.tth-=dx; cam.th-=dx; cam.vth=-dx*.55;
+    cam.tph=clamp(cam.tph-dy,.2,2.94); cam.ph=clamp(cam.ph-dy,.2,2.94); cam.vph=-dy*.55;
+    px=e.clientX;py=e.clientY;
+  });
+  const up=e=>{drag=false;try{cv.releasePointerCapture(e.pointerId);}catch(_){}};
+  cv.addEventListener("pointerup",up); cv.addEventListener("pointercancel",up);
+  cv.addEventListener("wheel",e=>{e.preventDefault();
+    cam.tdist=clamp(cam.tdist*(1+clamp(e.deltaY,-60,60)*.0016),9,90);},{passive:false});
+
+  function resize(){
+    const r=cv.getBoundingClientRect();
+    if(r.width<2||r.height<2) return;
+    renderer.setSize(r.width,r.height,false);
+    camera.aspect=r.width/r.height; camera.updateProjectionMatrix();
+  }
+  const ro=new ResizeObserver(()=>resize()); ro.observe(cv); resize();
+
+  return R3={frame,resize,setOpt,cam,
+    dispose(){ro.disconnect();renderer.dispose();scene.traverse(o=>{o.geometry&&o.geometry.dispose();o.material&&o.material.dispose();});}};
+}
+
+/* ════════════════════════════════════════════════ CHART */
+const chart=document.getElementById("chart");
+function drawChart(){
+  const r=chart.getBoundingClientRect(); if(r.width<2) return;
+  const dpr=Math.min(devicePixelRatio||1,2);
+  const w=Math.round(r.width*dpr), h=Math.round(r.height*dpr);
+  if(chart.width!==w||chart.height!==h){chart.width=w;chart.height=h;}
+  const c=chart.getContext("2d"); c.setTransform(dpr,0,0,dpr,0,0);
+  c.clearRect(0,0,r.width,r.height);
+
+  const L=76,RR=14,TP=10,B=24, iw=r.width-L-RR, ih=r.height-TP-B;
+  const lo=Math.log10(100), hi=Math.log10(2e7);
+  const X=i=>L+iw*i/(N-1);
+  const Y=m=>TP+ih*(1-(clamp(Math.log10(Math.max(m,1)),lo,hi)-lo)/(hi-lo));
+
+  c.font='400 9.5px "JetBrains Mono", monospace'; c.textBaseline="middle";
+  [[1e2,"100 m"],[1e3,"1 km"],[1e4,"10 km"],[1e5,"100 km"],[1e6,"1 000 km"],[1e7,"10 000 km"]].forEach(([m,t])=>{
+    const y=Y(m);
+    c.strokeStyle="#14181D"; c.lineWidth=1;
+    c.beginPath(); c.moveTo(L,y); c.lineTo(r.width-RR,y); c.stroke();
+    c.fillStyle="#565D67"; c.textAlign="right"; c.fillText(t,L-11,y);
+  });
+  c.textAlign="center"; c.textBaseline="top";
+  for(let k=0;k<=6;k++) c.fillText("T+"+k+"h", L+iw*k/6, r.height-B+6);
+
+  const yf=Y(FLOOR);
+  c.save(); c.setLineDash([3,4]); c.strokeStyle="#7A3A2C"; c.lineWidth=1;
+  c.beginPath(); c.moveTo(L,yf); c.lineTo(r.width-RR,yf); c.stroke(); c.restore();
+
+  // every option keeps its own colour; the inactive ones simply recede, so the
+  // three are still comparable at a glance — which is the point of the chart
+  const line=(cid,on)=>{
+    const s=D.variants[cid].min_to_any_m;
+    c.save(); c.globalAlpha=on?1:.34;
+    c.beginPath();
+    for(let i=0;i<N;i++){const x=X(i),y=Y(s[i]); i?c.lineTo(x,y):c.moveTo(x,y);}
+    c.strokeStyle=CSS[cid]; c.lineWidth=on?1.5:1; c.stroke(); c.restore();
+  };
+  ORDER.filter(c2=>c2!==active).forEach(c2=>line(c2,false));
+  line(active,true);
+
+  const b=worst(active), s=D.variants[active].min_to_any_m;
+  if(s[b]<FLOOR){
+    c.beginPath(); c.arc(X(b),Y(s[b]),3,0,6.2832); c.fillStyle="#FF4222"; c.fill();
+  }
+  const cx=X(idx);
+  c.strokeStyle="#39414B"; c.lineWidth=1;
+  c.beginPath(); c.moveTo(cx,TP); c.lineTo(cx,r.height-B); c.stroke();
+  c.beginPath(); c.arc(cx,Y(s[idx]),2.6,0,6.2832);
+  c.fillStyle=s[idx]<FLOOR?"#FF4222":CSS[active]; c.fill();
+}
+
+/* ════════════════════════════════════════════════ PAINT */
+const hudVal=document.getElementById("hud-val"), hudLab=document.getElementById("hud-label");
+const hudOpt=document.getElementById("hud-opt"), hudView=document.getElementById("hud-view");
+const liveEl=document.getElementById("live");
+function paintLive(){
+  const p=D.variants[active].pair_m, rows=[];
+  for(const id of Object.keys(p).sort()){
+    const v=p[id][idx], bad=v<FLOOR;
+    rows.push('<div class="readout-row'+(bad?' hot':'')+'"><dt>Separation · '+id+
+      '</dt><dd>'+fmt(v)+'</dd></div>');
+  }
+  const s=D.variants[active].min_to_any_m[idx];
+  rows.push('<div class="readout-row"><dt>Margin over the 1,000 m floor</dt><dd>'+
+    (s>=FLOOR?"+"+fmt(s-FLOOR):"−"+fmt(FLOOR-s))+'</dd></div>');
+  liveEl.innerHTML=rows.join("");
+}
+function paint(){
+  const n=nearest();
+  paintLive();
+  hudVal.textContent=fmt(n.sep);
+  hudVal.classList.toggle("breach",n.sep<FLOOR);
+  hudLab.textContent="Nearest · "+n.id;
+  hudOpt.textContent=NAME[active];
+  hudView.textContent=approach?"Encounter frame":"Earth-centred";
+  document.getElementById("tread").textContent=hms(T[idx]);
+  const sc=document.getElementById("scrub"); if(+sc.value!==idx) sc.value=idx;
+  drawChart();
+}
+
+/* ════════════════════════════════════════════════ CLOCK */
+let raf=0,last=0,visible=true;
+function loop(ms){
+  raf=requestAnimationFrame(loop);
+  if(!visible) return;
+  if(playing){
+    const dt=Math.min((ms-last)/1000,.1); last=ms;
+    let t=T[idx]+dt*speed;
+    if(stopAt!==null&&t>=stopAt){ idx=idxAt(stopAt); stop(); stopAt=null; paint(); }
+    else if(t>=T[N-1]){ idx=N-1; stop(); paint(); }
+    else { const ni=idxAt(t); if(ni!==idx){ idx=ni; paint(); } }
+  }
+  if(R3&&ok) R3.frame();
+}
+function play(){ if(playing) return; playing=true; last=performance.now();
+  document.getElementById("pico").innerHTML='<rect x="2" y="1.5" width="3" height="9"/><rect x="7" y="1.5" width="3" height="9"/>';
+  document.getElementById("play").setAttribute("aria-label","Pause"); }
+function stop(){ playing=false;
+  document.getElementById("pico").innerHTML='<path d="M2 1l8 5-8 5z"/>';
+  document.getElementById("play").setAttribute("aria-label","Play"); }
+function seek(i){ idx=clamp(Math.round(i),0,N-1); paint(); }
+
+/* ════════════════════════════════════════════════ OPTIONS */
+function buildOpts(){
+  const host=document.getElementById("opts"); host.textContent="";
+  ORDER.forEach(cid=>{
+    const v=D.variants[cid], val=v.validation, w=v.min_to_any_m[worst(cid)];
+    const pass=val.status==="PASS";
+    const b=document.createElement("button");
+    b.className="opt"+(pass?"":" bad");
+    b.setAttribute("aria-pressed",String(cid===active));
+    b.innerHTML='<span class="opt-h"><b>'+NAME[cid]+'</b><span>'+cid+'</span></span>'+
+      '<span class="opt-m">'+(v.kind==="NO_BURN"?"No manoeuvre":"T+"+Math.round(v.burn_t_s/60)+" min · retrograde")+'</span>'+
+      '<span class="opt-v"><em>'+(pass?"Verified clear":"Rejected")+'</em> · '+fmt(w)+'</span>';
+    b.addEventListener("click",()=>{ active=cid; if(R3) R3.setOpt(); buildOpts(); paint(); });
+    host.appendChild(b);
+  });
+}
+
+/* ════════════════════════════════════════════════ STORY */
+const STEPS=[
+  {v:BASE, t:()=>worst(BASE),                 ap:false, d:26},
+  {v:BASE, t:()=>0,                           ap:false, d:34},
+  {v:BASE, t:()=>idxAt(1800),                 ap:false, d:22},
+  {v:TRAP, t:()=>worst(TRAP),                 ap:true,  d:16},
+  {v:RESC, t:()=>worst(RESC),                 ap:false, d:20},
+  {v:RESC, t:()=>idxAt(0),                    ap:false, d:26}
+];
+let curStep=-1;
+function goStep(n){
+  if(n===curStep) return; curStep=n;
+  const s=STEPS[n]; if(!s) return;
+  active=s.v; approach=s.ap;
+  if(R3){ R3.setOpt(); R3.cam.tdist=s.d; }
+  stop(); stopAt=null; seek(s.t()); buildOpts();
+}
+
+/* ════════════════════════════════════════════════ WIRE */
+function boot(){
+  document.getElementById("scrub").max=String(N-1);
+  document.getElementById("scrub").addEventListener("input",e=>{stop();stopAt=null;seek(+e.target.value);});
+  document.getElementById("play").addEventListener("click",()=>{stopAt=null;playing?stop():play();});
+  document.getElementById("j-min").addEventListener("click",()=>{stop();stopAt=null;seek(worst(active));});
+  document.getElementById("j-burn").addEventListener("click",()=>{
+    stop();stopAt=null;const b=D.variants[active].burn_t_s;seek(b==null?0:idxAt(b));});
+  document.getElementById("j-reset").addEventListener("click",()=>{
+    stop();stopAt=null;approach=false;if(R3)R3.cam.tdist=26;seek(0);});
+  document.getElementById("j-veto").addEventListener("click",()=>{
+    stop(); active=TRAP; approach=true; if(R3){R3.setOpt();}
+    buildOpts();
+    const e=D.variants[TRAP].validation.encounters.filter(x=>x.min_separation_m<FLOOR)
+              .sort((a,b)=>a.min_separation_m-b.min_separation_m)[0];
+    seek(idxAt(e.tca_s-360)); speed=30; stopAt=e.tca_s; play();
+    document.getElementById("console").scrollIntoView({behavior:reduced?"auto":"smooth",block:"start"});
+  });
+
+  // step observer — the story drives the scene
+  const obs=new IntersectionObserver(es=>{
+    es.forEach(e=>{ if(e.isIntersecting) goStep(+e.target.dataset.step); });
+  },{rootMargin:"-42% 0px -42% 0px"});
+  document.querySelectorAll(".step").forEach(el=>obs.observe(el));
+
+  // pause the renderer when it is off screen or the tab is hidden
+  const vis=new IntersectionObserver(es=>{visible=es[0].isIntersecting;},{threshold:0});
+  vis.observe(document.querySelector(".canvas-hold"));
+  document.addEventListener("visibilitychange",()=>{ if(document.hidden) visible=false; });
+
+  // nav highlight + progress
+  const secs=[...document.querySelectorAll("section[id]")];
+  const links=[...document.querySelectorAll(".topnav a")];
+  const prog=document.getElementById("prog");
+  let ticking=false;
+  addEventListener("scroll",()=>{
+    if(ticking) return; ticking=true;
+    requestAnimationFrame(()=>{
+      ticking=false;
+      const max=document.body.scrollHeight-innerHeight;
+      prog.style.width=(max>0?scrollY/max*100:0)+"%";
+      let cur=null;
+      for(const s of secs){ if(s.getBoundingClientRect().top<innerHeight*.4) cur=s.id; }
+      links.forEach(a=>a.setAttribute("aria-current",String(a.getAttribute("href")==="#"+cur)));
+    });
+  },{passive:true});
+
+  addEventListener("resize",()=>{ clearTimeout(boot._r); boot._r=setTimeout(()=>{R3&&R3.resize();drawChart();},120); },{passive:true});
+
+  // facts from the data, not typed in twice
+  const tv=D.variants[TRAP].validation.encounters, rv=D.variants[RESC].validation.encounters;
+  const bv=D.variants[BASE].validation.encounters;
+  const pick=(a,id)=>a.find(e=>e.object_id===id);
+  const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v;};
+  set("f-norad",META.norad_id); set("f-min",fmt(pick(bv,"DEB-1").min_separation_m));
+  set("r1-sep",fmt(pick(bv,"DEB-1").min_separation_m));
+  set("r1-tca",hms(pick(bv,"DEB-1").tca_s));
+  set("r1-vel",pick(bv,"DEB-1").relative_speed_mps.toLocaleString("en-US")+" m/s");
+  set("r3-q",META.qualified); set("r3-t",META.search_seconds.toFixed(2)+" s");
+  set("r4-a",fmt(pick(tv,"DEB-1").min_separation_m));
+  set("r4-b",fmt(pick(tv,"DEB-2").min_separation_m));
+  set("r4-t",hms(pick(tv,"DEB-2").tca_s));
+  set("r4-v",pick(tv,"DEB-2").relative_speed_mps.toLocaleString("en-US")+" m/s");
+  set("r5-a",fmt(pick(rv,"DEB-1").min_separation_m));
+  set("r5-b",fmt(pick(rv,"DEB-2").min_separation_m));
+  set("foot-hash","scenario "+META.input_hash.slice(0,10));
+
+  buildOpts();
+  ok=!!buildGL();
+  if(!ok){ document.getElementById("glfall").classList.add("on"); cv.style.display="none"; }
+  seek(worst(BASE)); active=BASE; buildOpts(); paint();
+  if(R3) R3.setOpt();
+  requestAnimationFrame(t=>{last=t;loop(t);});
+  setTimeout(()=>document.getElementById("load").classList.add("done"),260);
+  addEventListener("pagehide",()=>{cancelAnimationFrame(raf);R3&&R3.dispose();});
+}
+boot();
+})();
+</script>
