@@ -1,0 +1,9 @@
+{
+  "source_kind": "CELESTRAK_GP_TLE",
+  "source_url": "https://celestrak.org/NORAD/elements/gp.php?CATNR=43013&FORMAT=TLE",
+  "retrieved_at_utc": "2026-09-12T06:49:13+00:00",
+  "source_sha256": "578842c4f5d62bf2e69dd723cfda769a64c891e08d6510bc4f76a7a73f55613c",
+  "object_name": "NOAA 20 (JPSS-1)",
+  "norad_id": 43013,
+  "note": "Seed for the satellite initial state only. Conjunction geometry in every scenario is synthetic. TLE accuracy is of order a kilometre at epoch, so the defensible claim is that the orbit is realistic, not that any conjunction is real."
+}

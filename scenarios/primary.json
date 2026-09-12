@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "scenario_id": "primary",
+  "scenario_version": 1,
+  "seed": 1001,
+  "description": "Primary close approach with a secondary conflict created by the highest-ranked option.",
+  "epoch_utc": "2026-09-11T21:51:16.570+00:00",
+  "horizon_s": 21600.0,
+  "objects": [
+    {
+      "object_id": "SAT-1",
+      "name": "NOAA 20 (JPSS-1) (seed orbit)",
+      "kind": "SATELLITE",
+      "maneuverable": true,
+      "initial_state": {
+        "r_m": [
+          -7004764.575802581,
+          -1696637.7398668586,
+          -5.2169016993524355
+        ],
+        "v_mps": [
+          -258.8102174325853,
+          1105.0075014262668,
+          7351.668502094822
+        ]
+      }
+    },
+    {
+      "object_id": "DEB-1",
+      "name": "Synthetic debris 1",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "initial_state": {
+        "r_m": [
+          -5216379.845690938,
+          4857771.626633755,
+          1061441.4903880763
+        ],
+        "v_mps": [
+          -1366.6017227316593,
+          -2942.7624452453283,
+          6694.526678310415
+        ]
+      }
+    },
+    {
+      "object_id": "DEB-2",
+      "name": "Synthetic debris 2",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "initial_state": {
+        "r_m": [
+          -619587.5510957798,
+          -6941288.120909575,
+          -1865437.2043188536
+        ],
+        "v_mps": [
+          3555.3211869681145,
+          -1983.0822261115711,
+          6217.76086393976
+        ]
+      }
+    }
+  ],
+  "satellite_id": "SAT-1",
+  "primary_threat_id": "DEB-1",
+  "known_windows": [
+    {
+      "window_id": "gs_pass_1",
+      "label": "Ground station pass",
+      "start_s": 1700.0,
+      "end_s": 1900.0
+    }
+  ],
+  "default_policy": {
+    "policy_version": 1,
+    "max_delta_v_mps": 0.2,
+    "min_separation_m": 1000.0,
+    "blocked_windows": []
+  },
+  "provenance": {
+    "source_kind": "CELESTRAK_GP_TLE",
+    "source_url": "https://celestrak.org/NORAD/elements/gp.php?CATNR=43013&FORMAT=TLE",
+    "source_sha256": "578842c4f5d62bf2e69dd723cfda769a64c891e08d6510bc4f76a7a73f55613c",
+    "norad_id": 43013,
+    "object_name": "NOAA 20 (JPSS-1)",
+    "tle_epoch_utc": "2026-09-11T21:51:16.570+00:00",
+    "frame": "SIM_ECI_TEME_SEEDED",
+    "model_version": "two-body-universal-variable-1",
+    "synthetic_conjunction": true,
+    "note": "Satellite initial state derived from a real catalogue TLE at its own epoch. Both debris objects and every close approach are synthetic. The orbit is realistic; no conjunction here is real."
+  },
+  "generation_evidence": {
+    "attempts_used": 57,
+    "baseline_vs_primary_m": 133.6982867181233,
+    "baseline_vs_primary_tca_s": 16234.332026053124,
+    "baseline_vs_secondary_m": 3704.354823315397,
+    "trap_candidate_id": "t30_ret_100",
+    "trap_vs_primary_m": 2016.926285040369,
+    "trap_vs_secondary_m": 523.1695206620863,
+    "trap_vs_secondary_tca_s": 20312.579929258216,
+    "rescue_candidate_id": "t30_ret_200",
+    "rescue_vs_primary_m": 2491.8880340011674,
+    "rescue_vs_secondary_m": 2568.9734357856732,
+    "qualified_against_primary": 12,
+    "candidate_count": 25,
+    "rejected_attempts": [
+      "attempt 51: baseline is not clearly safe from the second object",
+      "attempt 52: baseline is not clearly safe from the second object",
+      "attempt 53: baseline is not clearly safe from the second object",
+      "attempt 54: baseline is not clearly safe from the second object",
+      "attempt 55: baseline is not clearly safe from the second object"
+    ]
+  },
+  "input_hash": "f735736b45db5a33a239ee714d58fe6174cbbbfc378985c1f5696c48c2fcba21"
+}

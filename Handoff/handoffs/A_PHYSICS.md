@@ -192,3 +192,76 @@ A 25-option sweep against both debris objects takes 0.816 s today because `find_
 **Next concrete action**
 
 Fetch the seed TLE per DATA.md, write `scenarios/gen.py` backward construction with its assertions, and target the primary encounter at 16200 s.
+
+---
+
+## [2026-09-12] — Builder A — snapshots, candidate grid, search, scenario generator
+
+**Changed paths**
+
+- `scripts/fetch_snapshots.py` — once-only acquisition with overwrite guard, SHA-256 provenance, `--parse-only`
+- `scenarios/seed_tle.txt`, `scenarios/seed_provenance.json` — NOAA 20 (JPSS-1), NORAD 43013
+- `data/context/socrates_raw.html`, `socrates_snapshot.csv`, `socrates_provenance.json` — 25 real conjunctions
+- `backend/planning/candidates.py` — 25-option grid, stable IDs, revision-2 expansion to 33
+- `backend/planning/search.py` — primary screening, policy reasons, ranking, `Policy`/`BurnWindow`
+- `scenarios/gen.py` — backward construction, three-fact trap search, four fixtures
+- `scenarios/primary.json`, `scenarios/variants/*.json`
+- `tests/test_scenarios.py` — 15 tests
+
+**Commands run**
+
+```
+$ python scripts/fetch_snapshots.py --tle --socrates
+  NOAA 20 (JPSS-1) (NORAD 43013)
+  25 conjunctions -> data/context/socrates_snapshot.csv
+
+$ python scenarios/gen.py
+  primary  (seed 1001, 57 attempts)
+
+$ python -m pytest tests/ -q
+44 passed in 64.80s
+```
+
+**Seed orbit, parsed from the TLE**
+
+NOAA 20 (JPSS-1), NORAD 43013, epoch 2026-09-11T21:51:16Z. a = 7211.2 km, e = 0.001276, i = 98.78 deg, perigee altitude 823.9 km. Inside the supported family.
+
+**Gate 2 — signature case, recomputed from the serialized fixture**
+
+| Fact | Value |
+|---|---|
+| Baseline vs DEB-1 | **133.7 m** at 16234 s — below the 1000 m floor |
+| Baseline vs DEB-2 | 3704.4 m — clear, 3.7x the floor |
+| Top-ranked option | `t30_ret_100` (0.10 m/s retrograde at 30 min) |
+| That option vs DEB-1 | 2016.9 m — clears |
+| That option vs DEB-2 | **523.2 m** at 20313 s — violates |
+| Option that clears both | `t30_ret_200` (0.20 m/s retrograde, same epoch) |
+| Options clearing both | 8 of the 12 that qualify against the primary |
+| Attempts to find the case | 57 of 200 |
+
+The trade-off is legible: same burn time, same direction, twice the fuel to be actually safe. The trap is whatever the ranking puts first, not a candidate chosen for effect.
+
+**Construction note — a real bug found and fixed**
+
+The debris velocity is the target velocity *rotated about the radial direction*, which is a pure plane change: speed is preserved, no radial velocity is introduced, and eccentricity stays near the satellite's. The first implementation rolled the rotation axis toward the orbit normal, which injects `|v|*sin(theta)` of radial velocity — every attempt failed the `e < 0.05` check. Rotating about radial also puts the relative velocity in the plane perpendicular to it, so the range rate is exactly zero at the encounter and the miss distance is known independently of the detector.
+
+**Variants**
+
+- `no_encounter` — baseline clears at 9500 m.
+- `simple_conflict` — baseline 200 m, 15 manoeuvres qualify.
+- `no_feasible` — encounter at 1177 s, before most of the grid can act. 0 of 25 qualify, and **0 of 33 after widening**, so the agent's one permitted expansion cannot manufacture an answer.
+
+**Not verified / not run**
+
+- **`backend/planning/verifier.py` does not exist.** Nothing is approvable yet; `search.py` screens the primary threat only. This is the next and most important piece.
+- No `domain/models.py`, no API, no agent, no frontend. Gate 3 untouched.
+- `scenarios/variants/` holds three files; the fourth plan scenario (budget halved) is a runtime policy change against `primary.json`, not a separate fixture.
+- Suite runtime is 64.8 s, dominated by the determinism test rebuilding the signature case. Acceptable now; revisit if it slows the loop.
+
+**Contract changes**
+
+`Policy` and `BurnWindow` live in `planning/search.py` as frozen dataclasses with CONTRACTS field names, same pattern as `Encounter`. They move to `domain/models.py` when the three of you write it. Scenario JSON adds two fields beyond CONTRACTS: `default_policy` and `generation_evidence`. The latter is provenance, not input — `tests/test_scenarios.py::test_recorded_evidence_matches_recomputation` fails if code and record disagree.
+
+**Next concrete action**
+
+`backend/planning/verifier.py`: rebuild from raw scenario JSON, own 1 s scan, screen both debris objects, compare against the search within 1 m / 0.1 s, block on any disagreement.

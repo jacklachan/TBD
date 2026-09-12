@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "scenario_id": "no_feasible",
+  "scenario_version": 1,
+  "seed": 2003,
+  "description": "Close approach too early for the supported burn grid to fix; no option qualifies.",
+  "epoch_utc": "2026-09-11T21:51:16.570+00:00",
+  "horizon_s": 21600.0,
+  "objects": [
+    {
+      "object_id": "SAT-1",
+      "name": "NOAA 20 (JPSS-1) (seed orbit)",
+      "kind": "SATELLITE",
+      "maneuverable": true,
+      "initial_state": {
+        "r_m": [
+          -7004764.575802581,
+          -1696637.7398668586,
+          -5.2169016993524355
+        ],
+        "v_mps": [
+          -258.8102174325853,
+          1105.0075014262668,
+          7351.668502094822
+        ]
+      }
+    },
+    {
+      "object_id": "DEB-1",
+      "name": "Synthetic debris 1",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "initial_state": {
+        "r_m": [
+          1531162.323672737,
+          -6000130.9034435665,
+          3689190.843724627
+        ],
+        "v_mps": [
+          -3535.2372094759116,
+          2757.447679455021,
+          5934.706663132732
+        ]
+      }
+    },
+    {
+      "object_id": "DEB-2",
+      "name": "Synthetic debris 2",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "initial_state": {
+        "r_m": [
+          -6662333.838165161,
+          -2904497.041006438,
+          76291.83110115037
+        ],
+        "v_mps": [
+          2238.1538563720146,
+          -4782.477589744321,
+          5188.825253859559
+        ]
+      }
+    }
+  ],
+  "satellite_id": "SAT-1",
+  "primary_threat_id": "DEB-1",
+  "known_windows": [
+    {
+      "window_id": "gs_pass_1",
+      "label": "Ground station pass",
+      "start_s": 1700.0,
+      "end_s": 1900.0
+    }
+  ],
+  "default_policy": {
+    "policy_version": 1,
+    "max_delta_v_mps": 0.2,
+    "min_separation_m": 1000.0,
+    "blocked_windows": []
+  },
+  "provenance": {
+    "source_kind": "CELESTRAK_GP_TLE",
+    "source_url": "https://celestrak.org/NORAD/elements/gp.php?CATNR=43013&FORMAT=TLE",
+    "source_sha256": "578842c4f5d62bf2e69dd723cfda769a64c891e08d6510bc4f76a7a73f55613c",
+    "norad_id": 43013,
+    "object_name": "NOAA 20 (JPSS-1)",
+    "tle_epoch_utc": "2026-09-11T21:51:16.570+00:00",
+    "frame": "SIM_ECI_TEME_SEEDED",
+    "model_version": "two-body-universal-variable-1",
+    "synthetic_conjunction": true,
+    "note": "Satellite initial state derived from a real catalogue TLE at its own epoch. Both debris objects and every close approach are synthetic. The orbit is realistic; no conjunction here is real."
+  },
+  "generation_evidence": {
+    "attempts_used": 1,
+    "requirement": "NO_QUALIFIED_OPTION",
+    "baseline_vs_primary_m": 150.0000000015888,
+    "baseline_vs_primary_tca_s": 1176.777849737507,
+    "baseline_vs_secondary_m": 89106.3640483832,
+    "qualified_manoeuvres": 0,
+    "search_status": "NO_PRIMARY_QUALIFIED_OPTION",
+    "candidate_count": 25,
+    "rejected_attempts": []
+  },
+  "input_hash": "95737e06022a6fe919bf038834c33736138e0b40319d7e74aa99fc57c367b2e2"
+}

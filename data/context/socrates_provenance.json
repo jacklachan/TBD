@@ -1,0 +1,24 @@
+{
+  "source_kind": "CELESTRAK_SOCRATES_PLUS",
+  "source_url": "https://celestrak.org/socrates/table-socrates.php?NAME=,&ORDER=MINRANGE&MAX=25",
+  "retrieved_at_utc": "2026-09-12T06:51:15+00:00",
+  "raw_file": "socrates_raw.html",
+  "raw_sha256": "a546ab8589e32b444582b5427567306bebad8fa1e569f1ee53df8dacc6ace69e",
+  "normalized_file": "socrates_snapshot.csv",
+  "normalized_sha256": "8cbe98fa5eb7d76483d2f2f84a839fcbcc98f7fd6bc9760dfc8c4e59bbf94559",
+  "row_count": 25,
+  "columns": [
+    "NORAD_CAT_ID_1",
+    "OBJECT_NAME_1",
+    "DSE_1",
+    "NORAD_CAT_ID_2",
+    "OBJECT_NAME_2",
+    "DSE_2",
+    "TCA",
+    "TCA_RANGE_KM",
+    "TCA_RELATIVE_SPEED_KMS",
+    "MAX_PROB",
+    "DILUTION_KM"
+  ],
+  "note": "Real published close approaches, shown as context beside the simulation. Not an input to any computation and unrelated to the scenario objects. Served as HTML by CelesTrak and parsed here; the raw response is retained so the parser can be corrected without another request."
+}

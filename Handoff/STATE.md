@@ -9,10 +9,10 @@ Revision 3, 12 September 2026. Revisions 1-2 recorded documentation decisions on
 | Team and duration | Confirmed: three builders, twenty hours |
 | Placeholder name | Satellite Demo; repository name remains TBD |
 | Current package | Complete. Entry files, plan, engineering spec, contracts, updated data and dashboard specs, and all three role handoffs are written. Nothing further is required before implementation begins |
-| Application source, dependencies, deployment | `backend/core/` and `pyproject.toml` exist. `planning/`, `agent/`, `api.py`, `store.py`, `scenarios/` and `frontend/` do not. Nothing is deployed |
-| Numerical tests and generated scenarios | Gate 1 implemented and passing with recorded values; encounter detection tested. No scenario generator, candidate grid, search or verifier yet |
+| Application source, dependencies, deployment | `backend/core/`, `backend/planning/` (candidates, search), `scenarios/`, `scripts/` and `pyproject.toml` exist. `planning/verifier.py`, `agent/`, `api.py`, `store.py` and `frontend/` do not. Nothing is deployed |
+| Numerical tests and generated scenarios | Gate 1 and Gate 2 passing. Candidate grid, primary search and four fixtures exist and are tested from disk. **Verifier not written** -- nothing is approvable yet |
 | Gemini key, model availability, tool call | Not verified in this project |
-| TLE and SOCRATES data snapshots | Not downloaded; acquisition is a future build task |
+| TLE and SOCRATES data snapshots | Both downloaded and committed. Seed: NOAA 20 (JPSS-1), NORAD 43013, epoch 2026-09-11T21:51:16Z. Context: 25 real conjunctions from SOCRATES Plus |
 | Numerical accuracy and runtime latency | Acceptance targets only |
 | 3D model and animation | Specified, not built |
 | GitHub destination | jacklachan/TBD; documentation commit requested under Auenchanters |
@@ -61,7 +61,7 @@ All three builders agree on CONTRACTS.md and create `backend/domain/models.py` t
 ## Evidence to add during the build
 
 - ~~Gate 1: command, reference method/tolerances, actual maximum position error, test result.~~ **Recorded below.**
-- Gate 2: scenario seed/hash, actual candidate count, original threat result, secondary veto, verified alternative.
+- ~~Gate 2: scenario seed/hash, actual candidate count, original threat result, secondary veto, verified alternative.~~ **Recorded below.**
 - Gate 3: original policy, judge sentence, confirmed diff, changed policy version, new result, measured latency.
 - Final: five-scenario results, stale/injection/idempotency checks, second-machine result, demo URL, repository commit.
 
@@ -91,3 +91,31 @@ Threshold 0.001 m. Reference is DOP853 on the Cartesian two-body ODE at `rtol=1e
 Encounter detection: constructed encounters recovered to ≤ 3.5e-10 s and ≤ 4.3e-08 m; the 5 s search grid matches a 0.5 s grid to printed precision at relative speeds 90 / 400 / 1500 m/s **on this scenario family**, which is a validated sampling choice and not a general completeness claim; horizon and burn-epoch boundaries classified correctly; a burn was shown to create a 300 m encounter where the baseline is 10114.3 m.
 
 Gates 2 and 3 remain unmet. Detail and the untested surface are in [handoffs/A_PHYSICS.md](handoffs/A_PHYSICS.md).
+
+## Gate 2 — signature case verified 12 September 2026
+
+```
+$ python scenarios/gen.py
+primary  (seed 1001, 57 attempts)
+
+$ python -m pytest tests/ -q
+44 passed in 64.80s
+```
+
+Seed orbit: NOAA 20 (JPSS-1), NORAD 43013, epoch 2026-09-11T21:51:16Z, a = 7211.2 km, e = 0.001276, i = 98.78 deg. Parsed from `scenarios/seed_tle.txt`; nothing hardcodes it.
+
+25 options evaluated (24 burns plus the baseline), 12 qualify against the primary threat.
+
+| Fact | Value |
+|---|---|
+| Baseline vs DEB-1 | 133.7 m at 16234 s — below the 1000 m floor |
+| Baseline vs DEB-2 | 3704.4 m — clear |
+| Top-ranked option `t30_ret_100` vs DEB-1 | 2016.9 m — clears |
+| Top-ranked option vs DEB-2 | **523.2 m at 20313 s — violates** |
+| `t30_ret_200` vs DEB-1 / DEB-2 | 2491.9 m / 2569.0 m — clears both |
+
+`tests/test_scenarios.py` rebuilds the trajectories from the serialized JSON and recomputes all three facts, so the fixture is checked independently of the generator that wrote it.
+
+`no_feasible` variant: 0 of 25 options qualify, and 0 of 33 after grid widening — the agent's one permitted expansion cannot manufacture an answer.
+
+**Caveat:** the secondary veto is currently computed by the generator and by the tests. `backend/planning/verifier.py` — the independent reconstruction path that actually gates approval — is not written. Gate 3 is untouched.
