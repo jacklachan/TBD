@@ -331,6 +331,27 @@ export default function App() {
             onClick={() => setPanel("evidence")}
           >
             Evidence
+            {/* Prior cases live inside this panel, which is not mounted until
+                the tab is selected. Without a mark here an operator has no way
+                to know the run found any history at all. */}
+            {!!snapshot?.prior_cases?.length && (
+              <>
+                {" "}
+                <span
+                  className="nav-count"
+                  title={`${snapshot.prior_cases.length} earlier case${
+                    snapshot.prior_cases.length === 1 ? "" : "s"
+                  } on this scenario`}
+                >
+                  {snapshot.prior_cases.length}
+                </span>
+                <span className="sr-only">
+                  {" "}
+                  earlier case{snapshot.prior_cases.length === 1 ? "" : "s"} on
+                  this scenario
+                </span>
+              </>
+            )}
           </button>
         </nav>
         <div className="topbar-tools">
