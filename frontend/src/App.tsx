@@ -1551,6 +1551,17 @@ export default function App() {
                 what makes one operator&rsquo;s manoeuvre everyone&rsquo;s
                 problem.
               </p>
+              {/* These two features are one story, and a reader who does not
+                  connect them sees a table that does nothing. */}
+              <p className="caption">
+                Every row names both objects by catalogue number. Fetch those
+                two element sets from{" "}
+                <span className="mono">celestrak.org/NORAD/elements/</span> and
+                paste them into <em>Use real elements</em> to screen that
+                approach here — real orbits, the same two independent paths.
+                Nothing is fetched at runtime: this snapshot is committed, and
+                CelesTrak asks automated clients not to poll those pages.
+              </p>
               <div className="table-scroll context-table">
                 <table>
                   <thead>

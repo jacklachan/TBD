@@ -61,3 +61,25 @@ npx playwright test e2e/agent.spec.ts
 No live Gemini key was available, so the current change does not prove the under-ten-second target. There are four scenario fixtures, not five. Browser testing used Chrome on this Windows host and mobile emulation, not a second physical machine, Safari or every GPU. The Docker daemon was unavailable: the image definition is updated, but no Docker build/run is claimed. No public site was deployed.
 
 The app is a single-operator demo with a shared bearer token, bounded requests and one process. It is not a production satellite command system. Camera views and model sizes are explicitly illustrative; deterministic geometry is authoritative.
+
+## Update — later the same day
+
+Two statements above have since been overtaken, and one of them undersells what
+the product now does.
+
+**The running state is a real live trace.** The note above says agent events are
+persisted only at the end of a run, so the UI shows honest running state rather
+than a live one. The planner now reports each step as it completes, the run
+record carries the latest over HTTP, and the workspace shows it. It is the
+planner's own trace, not a fabricated one: a poller sees the most recent step
+rather than every one, because a fast run finishes several between polls, and
+the complete trace is still the persisted one.
+
+**Counts have moved.** 270 Python tests and 11 browser tests, with the browser
+suite now also covering the record exchange, pasted catalogue elements, the
+two-object case that used to crash the scene, recovery from a case the server
+has forgotten, and a scenario where the honest answer is that nothing works.
+
+Everything else in this handoff still holds, including the WebGL-failure path,
+the no-interpolation rule for exact minima, and approval staying disabled while
+the operator inspects a different trajectory.
