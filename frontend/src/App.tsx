@@ -567,6 +567,24 @@ export default function App() {
                   <p>{busy || "Load a scenario to compare options."}</p>
                 </div>
               )}
+              {/* A case with no answer showed one bad option and nothing else,
+                  which reads as a gap rather than as the result. Saying it
+                  plainly is the whole point of the scenario. */}
+              {analysis && !analysis.recommended_id && (
+                <div className="no-option glass" role="status">
+                  <WarningCircle size={19} weight="light" />
+                  <div>
+                    <strong>Nothing here clears the floor.</strong>
+                    <span>
+                      All {analysis.candidate_count} options were screened and
+                      none reaches{" "}
+                      {policy?.min_separation_m.toLocaleString() ?? "1,000"} m.
+                      That is the answer, not a missing one. Each option carries
+                      its own reason in the full list.
+                    </span>
+                  </div>
+                </div>
+              )}
             </section>
 
             <button

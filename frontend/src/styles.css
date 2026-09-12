@@ -2410,3 +2410,31 @@ td .subtle-button {
   color: var(--secondary);
   vertical-align: 1px;
 }
+
+/* Said when every option was screened and none qualifies. It is a result, not
+   an error, so it is toned as a caution rather than a failure. */
+.no-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border-left: 3px solid var(--warn, var(--danger));
+}
+.no-option svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--warn, var(--danger));
+}
+.no-option strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+.no-option span {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--secondary);
+}

@@ -149,3 +149,25 @@ test("WebGL failure preserves chart and numerical workflow", async ({
   await page.getByRole("button", { name: /The clear alternative/ }).click();
   await expect(page.locator(".metric-card .metric")).toContainText("2.492");
 });
+
+test("a case with no answer says so, and the others do not", async ({ page }) => {
+  // The scenario this exists for is the one where the honest result is "no
+  // option works". Showing a single failing option and nothing else reads as a
+  // gap in the product rather than as the finding.
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: /Do nothing/ })).toBeEnabled();
+
+  await page.locator(".scenario-switch select").selectOption("no_feasible");
+  await expect(page.locator(".no-option")).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator(".no-option")).toContainText(
+    "Nothing here clears the floor",
+  );
+  await expect(page.locator(".no-option")).toContainText("were screened");
+
+  // And it must not appear where an answer was found.
+  await page.locator(".scenario-switch select").selectOption("primary");
+  await expect(page.getByRole("button", { name: /The clear alternative/ })).toBeEnabled({
+    timeout: 60_000,
+  });
+  await expect(page.locator(".no-option")).toHaveCount(0);
+});
