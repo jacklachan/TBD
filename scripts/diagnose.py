@@ -143,6 +143,34 @@ for scenario, expected in (
     except Exception as exc:  # noqa: BLE001
         record(FAIL, f"variant {scenario}", str(exc))
 
+section("2b. Interoperability")
+
+try:
+    from backend.interop import parse_cdm, verify_cdm, write_cdm
+
+    from scripts.demo_pipeline import SCENARIO_PATHS
+
+    doc = json.loads(SCENARIO_PATHS["primary"].read_text(encoding="utf-8"))
+    # A minimal snapshot shaped like the API's, so this check needs no server.
+    snapshot = {
+        "case_id": "diagnostic",
+        "scenario": {
+            "epoch_utc": doc["epoch_utc"],
+            "horizon_s": doc["horizon_s"],
+            "satellite_id": doc["satellite_id"],
+            "objects": [
+                {"object_id": o["object_id"], "name": o["name"], "kind": o["kind"]}
+                for o in doc["objects"]
+            ],
+            "provenance": doc["provenance"],
+        },
+        "validations": [],
+    }
+    text = write_cdm(snapshot, doc)
+    record(OK, "CDM writer", f"{len(text.encode()):,} bytes")
+except Exception as exc:  # noqa: BLE001
+    record(FAIL, "CDM writer", f"{type(exc).__name__}: {exc}")
+
 # ------------------------------------------------------------ frontend
 
 section("3. Frontend build")

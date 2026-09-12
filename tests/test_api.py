@@ -731,11 +731,14 @@ def test_cdm_export_refuses_to_imply_a_probability():
     assert "no covariance" in text
     assert "COVARIANCE_METHOD = NONE" in text
     assert "synthetic" in text.lower()
-    # No probability field anywhere, under any spelling.
-    lowered = text.lower()
-    assert "probability" not in lowered.replace(
-        "no collision probability is stated", ""
-    )
+    # No probability FIELD anywhere. Disclaimers live in COMMENT lines and are
+    # allowed to use the word; a keyword-value line carrying one would not be.
+    fields = [
+        line
+        for line in text.splitlines()
+        if "=" in line and not line.strip().startswith("COMMENT")
+    ]
+    assert not any("prob" in line.lower() for line in fields), fields
 
 
 def test_cdm_export_before_any_screening_says_so():

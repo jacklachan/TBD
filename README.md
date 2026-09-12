@@ -25,7 +25,7 @@ The interesting part is what happens next. The cheapest manoeuvre that clears th
 | **Autonomous agents** | `backend/agent/` | A bounded planner with five tools, a safety reviewer that can veto, case memory, and plain-English constraint interpretation. Approvability is read off typed results, so the model cannot approve anything — that is enforced in code, not in a prompt. |
 | **Track space debris** | `data/context/`, the Real-world context panel | A frozen CelesTrak SOCRATES snapshot: 25 real predicted conjunctions with real object names, times and miss distances. It is displayed and dated, and it drives nothing. We do not run a catalogue screen of our own. |
 | **Optimize satellite manoeuvre planning** | `backend/planning/`, `backend/core/` | The core. 25 options screened against the primary threat, then independently re-verified against every object over the full horizon by a separate code path at a finer step. The two paths agree to 3.6e-08 m. |
-| **Coordinate open-source orbital traffic management** | `GET /cases/{id}/export?format=cdm` | The decision leaves in a CCSDS-shaped Conjunction Data Message, which is the format the question already has an answer in, plus JSON and Markdown carrying provenance, versions and evidence. The repository is open and the numbers are reproducible from it. |
+| **Coordinate open-source orbital traffic management** | `backend/interop.py`, `?format=cdm`, `POST /interop/verify-cdm` | A decision leaves as a CCSDS-shaped Conjunction Data Message **carrying the state vectors and the manoeuvre, not just the conclusion** — and the receiving endpoint throws the conclusions away and recomputes the encounter from those states with the same verifier that gates our own proposals. The receiver does not have to trust the sender. `python scripts/interop_demo.py` shows the exchange, including a tampered record being caught. |
 | **Protect global communication infrastructure** | The same SOCRATES snapshot | **19 of the 25 real conjunctions we ship involve a communications satellite** — Starlink, Iridium, Kinéis — mostly against Fengyun 1C and Cosmos break-up debris. The constellations carrying global connectivity share these shells with the debris. |
 
 ### What we did not build, and why
@@ -33,14 +33,16 @@ The interesting part is what happens next. The cheapest manoeuvre that clears th
 The statement offers three tracks joined by *or*. We went deep on manoeuvre planning rather than wide across all three, and the gaps are worth naming rather than glossing:
 
 - **No catalogue screening.** We screen three objects, not eighteen thousand. Public element sets are roughly a kilometre accurate at epoch, which is the same order as the clearance floor we enforce — a screen built on them would produce confident numbers we could not defend.
-- **No multi-operator negotiation.** One operator, one spacecraft. Coordination here means an interoperable record another operator can read, not an automated protocol between agents.
+- **No multi-operator negotiation.** One operator, one spacecraft, and no automated protocol between agents. Coordination here means a record another operator can independently *check* — which is the part that actually blocks trust — not a negotiation.
 - **No collision probability, anywhere.** A conforming CDM carries a covariance for each object and public element sets do not have one. We report deterministic simulated separation and say what was screened. The CDM export states this in its own header.
 
 ### The argument connecting the slice to the whole
 
 Orbital traffic management does not usually fail for want of a protocol. It fails because one operator cannot tell whether another operator's proposed manoeuvre is safe — and the expensive part of answering that is verification, not messaging.
 
-This is the demonstration: the cheapest manoeuvre that fixes the original encounter puts the satellite 523 m from a second object, an independent check catches it, and the option that survives costs twice the fuel. A record of that, in a format someone else can read, is the unit of work traffic coordination is actually made of.
+This is the demonstration: the cheapest manoeuvre that fixes the original encounter puts the satellite 523 m from a second object, an independent check catches it, and the option that survives costs twice the fuel.
+
+Then that decision leaves as a record another operator can verify for themselves — and if the record overstates its clearance, they find out by recomputing it, not by trusting it. A claim that can be checked is the unit of work traffic coordination is actually made of.
 
 ## What is real and what is not
 
