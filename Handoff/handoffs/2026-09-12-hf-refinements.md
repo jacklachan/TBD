@@ -44,7 +44,7 @@ preserved. Work is in `C:/Users/Utkarsh/Desktop/Project/TBD-refinements`, branch
   `tests/test_agent.py`, `tests/test_config.py`, `frontend/e2e/history.spec.ts`,
   `frontend/e2e/scripted_server.py`: new regressions and updated test fixtures.
 
-## Verification so far
+## Verification
 
 - Final backend suite: **322 tests passed, 93% coverage, 131.94 s**, including
   the hosted-workflow regressions. Two upstream Starlette/anyio deprecation warnings.
@@ -98,13 +98,13 @@ quality comparison was measured. Secret values are never in this packet.
 
 ## Deployment
 
-- Application source: GitHub `4d7c6639e4f18b79db389d09e19817668d68076b`.
-- Space revision: `b63a69ff03c8908ccce7c3c101f30a45032db25f`, observed RUNNING
+- Application source: GitHub `ea758d5c6b1f29ebb7d322bf0df32c7af3db0ed4`.
+- Space revision: `422033b6583114ca27381b9388ec21134cc4a942`, observed RUNNING
   on CPU Upgrade, one replica. Docker dependencies and frontend build succeeded.
 - App: https://auenchanters-tbh.hf.space
 - HF_TOKEN and DESK_ACCESS_TOKEN are Space secrets. The local ignored `.env`
   stores the operator password under DESK_ACCESS_TOKEN (line 29 in this checkout).
-- The first attempt on this revision encountered HF HTTP 429 before the first
+- The first attempt on the preceding 4d7c663 revision encountered HF HTTP 429 before the first
   model reply. The API returned unresolved with no proposal. The live checker
   now reports that cleanly rather than dereferencing a missing proposal.
 - After a pause the provider recovered. Initial plan took 7.2 s, but exposed
@@ -117,11 +117,28 @@ quality comparison was measured. Secret values are never in this packet.
   cause, not established from the earlier combined error message.
 - After these transport/guard edits: 106 affected agent, HF-provider and
   refinement tests passed in 14.71 s. The earlier full 322-test suite passed.
+- Final deployed workflow on `ea758d5`: **ALL CHECKS PASSED**. Initial reviewed
+  plan **4.7 s**, plain-English restriction preview **2.9 s**, reduced-budget
+  replan **86.3 s**. Replan ended NO_APPROVABLE_OPTION after the separately logged
+  independent grid audit. Case `case_f4bcfea6e8` (ephemeral runtime record).
+  Confirmed secondary veto, passing alternative, no unsupported numeric literals,
+  reviewer ALLOW, shared 2,201-sample trajectories, stale-approval rejection,
+  reset, idempotent simulated execution, evidence export and frozen context.
+  This is a functional pass, **not a pass of the ten-second replan target**.
+- Local HF requests stalled during the final upload/status check. IPv4 status
+  checks confirmed the upload landed; the final HTTP checker used IPv4 on the
+  local test client. No application network setting was changed.
+- Portable update: 84 source files from base `65ab3d1` to `ea758d5`; ZIP CRC,
+  every manifest SHA-256, and absence of configured secret values verified.
 
 ## Contract / next action
 
 No HTTP field was removed or renamed. Updated status/timing semantics and the
 read-only history behavior are recorded in CONTRACTS.md. Grid audit distinguishes
 model steps from automatic numerical checks; it cannot promote a passing option
-to a proposal. Next: finish final checks, commit/push as Auenchanters, deploy the
-committed application to TBH, and verify the real hosted workflow.
+to a proposal. Refinements are deployed and the hosted workflow is verified.
+Share the entire outer Handoff folder; the ZIP is an update to the manifest's
+base checkout. For the live demo use the DESK_ACCESS_TOKEN value from the ignored
+local .env at the operator prompt. The outstanding product limitation is long,
+variable replanning latency and occasional provider rate limits; allow time in
+the demo and do not advertise a guaranteed ten-second answer.

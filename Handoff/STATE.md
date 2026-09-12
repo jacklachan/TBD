@@ -7,7 +7,10 @@ Face / Baseten**, with no Gemini fallback. Earlier-case evidence is inspectable
 without changing the active case. Incomplete investigations cannot claim grid
 infeasibility; elapsed timings include final review and transport retries.
 Deployment target: **Auenchanters/TBH**, Docker, CPU Upgrade (8 vCPU / 32 GB).
-Docker build and hosted browser verification passed. Current live-model results and failed attempts:
+Docker build, hosted browser/security checks and the full live GLM workflow passed.
+Latest timing: 4.7 s initial plan, 86.3 s reduced-budget replan; the ten-second
+replan target is not met. Application source `ea758d5`, Space revision `422033b`.
+Current evidence and failed attempts:
 [refinement session](handoffs/2026-09-12-hf-refinements.md).
 
 Earlier dated sections are historical. Follow the current explicit user request.

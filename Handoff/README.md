@@ -2,7 +2,7 @@
 
 **Temporary display name:** Orion West, carried forward from the teammate's build. Keep module and file names descriptive when renaming it.
 
-**Package revision:** 6 — 13 September 2026. **Status:** HF/GLM runtime, decision-evidence refinements and interactive 3D frontend implemented. Start with STATE.md and [the current refinement session](handoffs/2026-09-12-hf-refinements.md) for verification and deployment results. Older dated entries are historical evidence.
+**Package revision:** 6 — 13 September 2026. **Status:** deployed on Auenchanters/TBH; HF/GLM workflow and interactive 3D verified. Initial plan 4.7 s, replan 86.3 s: the ten-second replan target is not met. Start with STATE.md and [the current refinement session](handoffs/2026-09-12-hf-refinements.md) for verification and deployment results. Older dated entries are historical evidence.
 
 **Repository:** [jacklachan/TBD](https://github.com/jacklachan/TBD). Three builders, twenty hours, one satellite, two synthetic debris objects, six simulated hours.
 
