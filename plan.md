@@ -1,6 +1,6 @@
 # Conjunction Decision Desk — Track Decision and Product Plan
 
-**Status:** Draft for team review. Research and planning only; implementation has not started.
+**Status:** Draft written before the build, kept for the reasoning it records. Implementation has since happened and diverged; see [IMPLEMENTATION.md](IMPLEMENTATION.md) for what was decided differently and [Handoff/STATE.md](Handoff/STATE.md) for what exists and was measured.
 
 **Updated:** 12 September 2026, after confirmation of three builders and a twenty-hour event.
 

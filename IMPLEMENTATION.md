@@ -1,5 +1,21 @@
 # Conjunction Decision Desk — Implementation Spec
 
+> **Planning document, superseded by the build.** Kept for the reasoning it
+> records, not as a description of what exists. Where it and the repository
+> disagree, the repository is right and [Handoff/STATE.md](Handoff/STATE.md) is
+> the record of what was actually built and measured. Known divergences:
+> - The 3D view was cut here and later built; the separation-vs-time chart
+>   remains the primary evidence and the scene is secondary, which is the
+>   substance of what this section argued for.
+> - The planner's bounds moved with measurement: 12 model calls, 18 tool calls,
+>   6 validations, 90 s, because the planner can now design burns of its own and
+>   a run that finds a marginal answer needs room to improve on it.
+> - The manoeuvre set is no longer the grid alone. `design_maneuver` lets the
+>   planner specify a burn the grid does not contain, gated by the same
+>   independent verifier.
+> - Five scenario behaviours became six, with a collision case added.
+
+
 Supersedes sections 8–11, 13 and 15 of `plan.md`. Sections 1–7, 12, 14, 16–18 stand.
 
 Track: Space Tech & Orbital Sustainability. Three builders, twenty hours.

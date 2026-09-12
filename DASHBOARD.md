@@ -1,5 +1,18 @@
 # Dashboard specification — information design
 
+> **Planning document, superseded by the build.** Kept for the reasoning it
+> records, not as a description of what exists. Where it and the repository
+> disagree, the repository is right and [Handoff/STATE.md](Handoff/STATE.md) is
+> the record of what was actually built and measured. Known divergences:
+> - The 3D scene was built after all, and this document argues against it. The
+>   argument still holds where it matters: the separation-over-time chart is the
+>   evidence, the scene is orientation, and the UI never uses drawn-orbit
+>   proximity as a claim about distance.
+> - Two panels here predate features that did not exist when it was written:
+>   exchanging a conjunction record with another operator, and screening
+>   catalogue element sets you paste in yourself.
+
+
 Written for a judge with **no orbital mechanics background** who will look at the screen for twenty seconds before deciding whether to engage.
 
 This is a content and layout spec, not an implementation. Build it however you like.
