@@ -9,7 +9,7 @@ Revision 3, 12 September 2026. Revisions 1-2 recorded documentation decisions on
 | Team and duration | Confirmed: three builders, twenty hours |
 | Placeholder name | Satellite Demo; repository name remains TBD |
 | Current package | Complete. Entry files, plan, engineering spec, contracts, updated data and dashboard specs, and all three role handoffs are written. Nothing further is required before implementation begins |
-| Application source, dependencies, deployment | `backend/core/`, `backend/planning/` (candidates, policy, search, verifier), `backend/agent/` (llm, tools, guards, memory, reviewer, planner), `scenarios/`, `scripts/` and `pyproject.toml` exist. `api.py`, `store.py`, `domain/models.py` and `frontend/` do not. Nothing is deployed |
+| Application source, dependencies, deployment | `backend/core/`, `backend/planning/`, `backend/agent/`, `backend/api.py`, `backend/store.py`, `backend/visualization.py`, `scenarios/`, `scripts/`. Serves with `uvicorn backend.api:app`. `domain/models.py` and `frontend/` do not exist. Nothing is deployed |
 | Numerical tests and generated scenarios | Gate 1 and Gate 2 passing. Candidate grid, primary search and four fixtures exist and are tested from disk. **Verifier not written** -- nothing is approvable yet |
 | Gemini key, model availability, tool call | **Still not verified.** The agent layer is built and tested against a scripted provider; `GeminiProvider` has never called a live endpoint. Run `scripts/smoke_llm.py` with a key |
 | TLE and SOCRATES data snapshots | Both downloaded and committed. Seed: NOAA 20 (JPSS-1), NORAD 43013, epoch 2026-09-11T21:51:16Z. Context: 25 real conjunctions from SOCRATES Plus |
@@ -153,3 +153,26 @@ What is demonstrated:
 Scripted happy path: 5 model calls, 4 tool calls, 2 validations, ~0.75 s, of which ~0.56 s is `evaluate_candidates`. Real model latency is on top and unmeasured.
 
 Gate 3 is not met: it requires a real judge sentence producing a confirmed diff and a fresh computation, which needs a working key.
+
+
+## API and store — 12 September 2026
+
+```
+$ python -m pytest tests/ -q
+140 passed in 66.12s
+
+$ uvicorn backend.api:app          # DESK_DB=desk.sqlite for a file-backed store
+```
+
+All ten CONTRACTS endpoints exist, plus `GET /runs/{run_id}` for polling and `GET /health`. Detail in [handoffs/C_AGENT_API.md](handoffs/C_AGENT_API.md).
+
+- **Approval re-reads the stored validation by ID** rather than trusting the proposal row. A test tampers with a proposal to point at the BLOCKED validation; approval still returns 409.
+- **Execution happens once**, guarded by a unique `(case_id, idempotency_key)`. Repeats return the same record; the same key for a different proposal is a conflict.
+- **Policy v1 → v2 marks pending proposals `STALE`** rather than deleting them, and approving one is a 409. Committed executions are never rewritten. Reset keeps the old case and its execution.
+- **Export** carries the seed NORAD ID and epoch, states the conjunction is synthetic, states that no collision probability is computed, and lists the model's limits.
+
+Two bugs found while testing and fixed: a background run could hang in `RUNNING` forever because the worker caught too few exception types and `CaseMemory` was not thread-safe; and a reported encounter time missed the sample grid by a rounding difference, breaking the invariant that an exact minimum is never interpolated. `build_bundle` now enforces that invariant itself.
+
+**One deliberate contract deviation, flagged for the team:** CONTRACTS asks for one-second visualization samples, which is ~11 MB of JSON per request over a six-hour horizon. The default is now 10 s with the step reported and `?sample_step_s=` available; the grid still always includes both horizon ends, every burn epoch and every refined encounter time, which is what the requirement was actually protecting.
+
+Gate 3 remains unmet — it needs a working key.

@@ -183,3 +183,67 @@ If latency disappoints, `evaluate_candidates` is the thing to cache, not the pro
 ### Next concrete action
 
 Run `scripts/smoke_llm.py` with a real key and record the result here. Until it passes, the agent layer is a well-tested loop with no proven model behind it.
+
+---
+
+## [2026-09-12] — API, store and visualization scaffolded by A
+
+**Changed paths**
+
+- `backend/store.py` — SQLite: cases, events, validations, proposals, executions
+- `backend/visualization.py` — `VisualizationBundle` builder
+- `backend/api.py` — all ten CONTRACTS endpoints plus `/runs/{id}` and `/health`
+- `tests/test_api.py` — 22 tests
+
+```
+$ python -m pytest tests/ -q
+140 passed in 66.12s
+```
+
+Run the server with `uvicorn backend.api:app`. Set `DESK_DB=desk.sqlite` for a file-backed store; it defaults to in-memory.
+
+### Endpoints
+
+All ten from CONTRACTS.md are implemented: `POST /cases`, `GET /cases/{id}`, `plan`, `policy-preview`, `policy-confirm`, `visualization`, `approve`, `reset`, `export`, `GET /context/socrates`. Added `GET /runs/{run_id}` for polling and `GET /health`.
+
+Errors are typed as specified: 422 validation, 404 unknown ID, 409 for stale versions, blocked approval and idempotency conflicts.
+
+### What the tests demonstrate
+
+**Approval is not the model's to give.** `approve` re-reads the stored `ValidationResult` by ID rather than trusting the proposal row. A test tampers with the proposal to point at the BLOCKED validation and approval still returns 409 `NOT_VALIDATED`.
+
+**Once means once.** Approval is guarded by a unique `(case_id, idempotency_key)`. A repeat with the same key returns the existing record with `created: false`; the same key against a different proposal raises `IdempotencyConflict` → 409. The impulse is never applied twice.
+
+**Policy change stales the old proposal.** v1 → v2 marks pending proposals `STALE` rather than deleting them, so the trace still shows what was superseded, and approving a stale proposal is a 409. Committed executions are untouched.
+
+**Reset keeps history.** A new case ID with `parent_case_id` set; the old case keeps its execution.
+
+**Reviewer blocks are enforced at the endpoint,** not only in the planner. Both `BLOCK` and `UNAVAILABLE` produce 409, with the decision in the payload so the UI can distinguish "found a problem" from "did not answer".
+
+**Export carries provenance and limitations.** Markdown states the seed NORAD ID and epoch, that the conjunction is synthetic, that no collision probability is computed, that execution is simulated only, and the model's limits. JSON export is byte-identical across calls apart from the run list.
+
+### Two real bugs found while testing
+
+**A background run could hang in `RUNNING` forever.** `work()` caught only `LLMError`, `ToolError`, `StoreError` and `ValueError`. `CaseMemory` opened its SQLite connection with the default `check_same_thread=True`, so using it from the executor thread raised `sqlite3.ProgrammingError`, the worker died, and the run never left `RUNNING` — the UI would poll a case that was never coming back. Fixed both: the connection is thread-safe, and `work()` now catches `Exception` deliberately, because a silent worker death is the same failure mode as returning a successful empty result.
+
+**A reported encounter time was not a real sample.** Encounter times were rounded to 3 dp for display while the grid rounded to 6 dp, so `999.262` did not match the sample at `999.262347`. That breaks precisely the invariant the scrubber relies on. Both now round identically, and `build_bundle` raises if any reported encounter time is absent from the grid — enforced in the producer rather than left to the caller.
+
+### Deliberate deviation from CONTRACTS.md — please review
+
+CONTRACTS asks for **one-second samples** in the `VisualizationBundle`. Over six hours that is 21,601 samples × 3 objects × 3 coordinates × 3 variants ≈ 583,000 floats, roughly **11 MB of JSON per request**.
+
+The contract's actual requirement is that an exact minimum is never displayed as an interpolated one, and the union grid satisfies that at any base step. So the default is **10 s (~700 KB)**, the step is reported in the bundle, and `?sample_step_s=` lets B ask for finer. The grid still always contains both horizon ends, every burn epoch and every refined encounter time.
+
+Raising it rather than changing it silently. If B wants 1 s for the 3D scene specifically, the honest fix is a separate positions-only endpoint, not an 11 MB bundle.
+
+### Not done
+
+- `backend/domain/models.py` still does not exist. `store.py` serializes the frozen dataclasses directly. The three of you still owe the shared Pydantic contract.
+- No frontend, no `contracts.ts`, no `api.ts`.
+- Still no live model call. Everything above runs on `ScriptedProvider`; `scripts/smoke_llm.py` remains the outstanding proof.
+- Runs are in-memory in `AppState.runs`, so a restart loses run status. Case data, events, validations, proposals and executions are all persisted.
+- No auth, no rate limiting, no CORS configuration — add CORS when B starts calling from a dev server.
+
+### Next concrete action
+
+Run `scripts/smoke_llm.py` with a real key, then point B at `uvicorn backend.api:app` and the bundle shape.
