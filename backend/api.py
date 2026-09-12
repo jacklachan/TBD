@@ -29,7 +29,8 @@ from typing import Callable
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from backend import store as store_module
@@ -667,7 +668,30 @@ def create_app(
 
     @app.get("/health")
     def health() -> dict:
-        return {"status": "ok", "model_version": MODEL_VERSION}
+        from backend.config import has_model_access, planner_model
+
+        return {
+            "status": "ok",
+            "model_version": MODEL_VERSION,
+            "planner_model": planner_model(),
+            # Surfaced so a deployment without a key is obvious from /health
+            # rather than only from the first failed run.
+            "model_access": has_model_access(),
+        }
+
+    # A built frontend is served from the same origin when present, so one
+    # container is the whole app. Mounted last so it cannot shadow an API route.
+    dist = REPO_ROOT / "frontend" / "dist"
+    if dist.is_dir():
+        app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        def spa(full_path: str):
+            """Serve the SPA, letting the client router own unknown paths."""
+            candidate = (dist / full_path).resolve()
+            if full_path and candidate.is_file() and dist.resolve() in candidate.parents:
+                return FileResponse(candidate)
+            return FileResponse(dist / "index.html")
 
     return app
 
@@ -784,12 +808,29 @@ def _markdown_report(snapshot: dict) -> str:
 def _default_app() -> FastAPI:
     """Module-level app for `uvicorn backend.api:app`.
 
-    The provider is constructed lazily per run, so importing this without a key
-    is fine -- the failure surfaces on the first plan, as an unresolved case.
-    """
-    import os
+    Providers are constructed lazily per run, so importing this without a key is
+    fine -- the failure surfaces on the first plan as an unresolved case rather
+    than as an import error.
 
-    return create_app(store=Store(os.environ.get("DESK_DB", ":memory:")))
+    The reviewer is wired only when a key is present. Wiring it without one would
+    make every proposal UNAVAILABLE, which blocks approval and reads as a safety
+    finding rather than a missing credential.
+    """
+    from backend.config import (
+        database_path,
+        has_model_access,
+        planner_model,
+        reviewer_model,
+    )
+
+    return create_app(
+        store=Store(database_path()),
+        provider_factory=lambda: GeminiProvider(model=planner_model()),
+        reviewer_factory=(
+            (lambda: GeminiProvider(model=reviewer_model())) if has_model_access() else None
+        ),
+        memory=CaseMemory(database_path()) if database_path() != ":memory:" else CaseMemory(),
+    )
 
 
 app = _default_app()

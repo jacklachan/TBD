@@ -1,0 +1,8 @@
+# Pinned loosely: these are the majors the code was written and tested against.
+numpy>=2.0
+scipy>=1.13
+sgp4>=2.23
+requests>=2.31
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
