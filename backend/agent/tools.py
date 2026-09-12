@@ -58,6 +58,28 @@ DIMENSION_SMALLER_MAGNITUDES = "SMALLER_MAGNITUDES"
 
 MAX_LISTED_OPTIONS = 8
 
+# Screening 25 options takes about half a second, and it is deterministic for a
+# given scenario, policy and grid. Reset mints a new case ID from the same
+# fixture, so without this every demo reset pays that cost again. Keyed on
+# content, never on case ID.
+#
+# The verifier is deliberately NOT cached here. Its whole value is recomputing
+# independently, and serving it from the search's memo would defeat that.
+_SEARCH_CACHE: dict[tuple, SearchResult] = {}
+_SEARCH_CACHE_LIMIT = 32
+
+
+def _search_cache_key(session: "CaseSession") -> tuple:
+    policy = session.policy
+    return (
+        session.document.get("input_hash", ""),
+        session.scenario_version,
+        policy.max_delta_v_mps,
+        policy.min_separation_m,
+        tuple(sorted(w.window_id for w in policy.blocked_windows)),
+        session.grid_revision,
+    )
+
 
 class ToolError(Exception):
     """A tool call that cannot be honoured. Returned to the model as an error
@@ -311,15 +333,24 @@ def get_case_briefing(session: CaseSession) -> dict:
 
 
 def evaluate_all(session: CaseSession) -> dict:
-    scenario = reconstruct(session.document)
-    result = evaluate_candidates(
-        scenario.satellite,
-        scenario.debris[scenario.primary_threat_id],
-        scenario.primary_threat_id,
-        session.policy,
-        scenario.horizon_s,
-        candidates=session.candidates(),
-    )
+    key = _search_cache_key(session)
+    result = _SEARCH_CACHE.get(key)
+    cached = result is not None
+
+    if result is None:
+        scenario = reconstruct(session.document)
+        result = evaluate_candidates(
+            scenario.satellite,
+            scenario.debris[scenario.primary_threat_id],
+            scenario.primary_threat_id,
+            session.policy,
+            scenario.horizon_s,
+            candidates=session.candidates(),
+        )
+        if len(_SEARCH_CACHE) >= _SEARCH_CACHE_LIMIT:
+            _SEARCH_CACHE.pop(next(iter(_SEARCH_CACHE)))
+        _SEARCH_CACHE[key] = result
+
     session.search_result = result
 
     ranked = [
@@ -350,6 +381,7 @@ def evaluate_all(session: CaseSession) -> dict:
         "top_options": ranked,
         "excluded_reason_counts": excluded,
         "already_rejected": session.rejected_candidate_ids,
+        "from_cache": cached,
         "note": (
             "Provisional: screened against the primary threat only. Call "
             "validate_proposal before treating any option as safe."

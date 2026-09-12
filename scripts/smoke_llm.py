@@ -25,6 +25,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from backend.agent.llm import GeminiProvider, LLMError, Message  # noqa: E402
+from backend.config import planner_model  # noqa: E402
 from backend.agent.tools import DECLARATIONS, TOOL_BRIEFING  # noqa: E402
 
 SYSTEM = (
@@ -35,18 +36,19 @@ SYSTEM = (
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", default="gemini-2.5-flash")
+    parser.add_argument("--model", default=None, help="defaults to PLANNER_MODEL or gemini-2.5-flash")
     parser.add_argument("--temperature", type=float, default=0.0)
     args = parser.parse_args()
+    model = args.model or planner_model()
 
     try:
-        provider = GeminiProvider(model=args.model, temperature=args.temperature)
+        provider = GeminiProvider(model=model, temperature=args.temperature)
     except LLMError as exc:
         print(f"FAIL  {exc}")
         return 2
 
     tools = [DECLARATIONS[TOOL_BRIEFING]]
-    print(f"model      {args.model}")
+    print(f"model      {model}")
     print(f"tool       {TOOL_BRIEFING}")
     print(f"schema     {json.dumps(tools[0]['parameters'])}")
     print()
@@ -105,7 +107,7 @@ def main() -> int:
     total = first.latency_ms + second.latency_ms
     print()
     print(f"PASS  request -> function call -> result -> continuation, {total:.0f} ms total")
-    print(f"      Record model={args.model}, latency={total:.0f} ms in C_AGENT_API.md.")
+    print(f"      Record model={model}, latency={total:.0f} ms in C_AGENT_API.md.")
     return 0
 
 

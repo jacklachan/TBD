@@ -26,6 +26,8 @@ from typing import Protocol
 
 import requests
 
+from backend.config import gemini_api_key, planner_model
+
 DEFAULT_TIMEOUT_S = 30
 DEFAULT_TEMPERATURE = 0.0
 
@@ -100,20 +102,22 @@ class GeminiProvider:
 
     def __init__(
         self,
-        model: str = "gemini-2.5-flash",
+        model: str | None = None,
         api_key: str | None = None,
         temperature: float = DEFAULT_TEMPERATURE,
         timeout_s: int = DEFAULT_TIMEOUT_S,
     ) -> None:
+        model = model or planner_model()
         self.name = f"gemini:{model}"
         self.model = model
         self.temperature = temperature
         self.timeout_s = timeout_s
-        self._api_key = api_key or os.environ.get("GEMINI_API_KEY", "")
+        self._api_key = api_key or gemini_api_key()
         if not self._api_key:
             raise LLMError(
-                "GEMINI_API_KEY is not set. Export it, or use ScriptedProvider "
-                "for tests. Keys never belong in the repository."
+                "GEMINI_API_KEY is not set. Put it in the .env file at the "
+                "repository root (copy .env.example), or export it. Keys never "
+                "belong in the repository."
             )
 
     @staticmethod

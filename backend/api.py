@@ -27,7 +27,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from fastapi import Body, FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
@@ -293,6 +294,16 @@ def create_app(
     limits: PlannerLimits | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Satellite Demo", version="0.1.0")
+
+    # Open during the event so the Vite dev server can call this directly.
+    # Narrow it before anything is exposed beyond a laptop.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     app.state.desk = AppState(
         store=store or Store(":memory:"),
         provider_factory=provider_factory or _default_provider_factory,
