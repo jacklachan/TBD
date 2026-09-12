@@ -18,6 +18,14 @@ import {
   Sun,
   WarningCircle,
 } from "@phosphor-icons/react";
+import {
+  EventTrack,
+  Gauge,
+  MissionClock,
+  OptionGrid,
+  separationGauge,
+} from "./components/Telemetry";
+import { revealWorkspace } from "./motion";
 import { useWorkspace } from "./useWorkspace";
 import {
   currentVariant,
@@ -102,6 +110,13 @@ export default function App() {
   const [budget, setBudget] = useState("0.20");
   const [filter, setFilter] = useState("all");
   const variant = currentVariant(bundle, selected);
+  // One entrance, the first time there is something to show.
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    if (!bundle || revealed) return;
+    setRevealed(true);
+    requestAnimationFrame(() => revealWorkspace());
+  }, [bundle, revealed]);
   const option = analysis?.options.find((o) => o.candidate_id === selected);
   const worst = useMemo(
     () => (variant ? minimum(variant.min_to_any_m) : null),
@@ -279,8 +294,8 @@ export default function App() {
         <div className="page-heading">
           <div>
             <div className="eyebrow">MISSION CONTROL / SIMULATION</div>
-            <h1>A safer way around.</h1>
-            <p>One orbit. Every consequence.</p>
+            <h1>Every option, checked twice.</h1>
+            <p>Two independent paths. One answer.</p>
           </div>
           <div className="provenance-tag">
             <span className="tiny-orbit" />
@@ -685,7 +700,31 @@ export default function App() {
           className="timeline-panel glass"
           aria-label="Simulation timeline"
         >
-          <div className="playback-row">
+          <div className="playback-row telemetry">
+            <div className="telemetry-cluster left">
+              {(() => {
+                const sep = separationGauge(variant, sample, policy);
+                return (
+                  <>
+                    <Gauge
+                      label="Separation"
+                      value={sep.value}
+                      unit={sep.unit}
+                      fill={sep.fill}
+                      tone={sep.tone}
+                    />
+                    <Gauge
+                      label="Clearance"
+                      value={sep.ratio ? sep.ratio.toFixed(1) : "—"}
+                      unit="× floor"
+                      fill={Math.min(1, sep.ratio / 3)}
+                      tone={sep.ratio && sep.ratio < 1 ? "danger" : "normal"}
+                    />
+                  </>
+                );
+              })()}
+            </div>
+            <div className="telemetry-centre">
             <div className="playback-controls">
               <button
                 className="play-button"
@@ -702,12 +741,6 @@ export default function App() {
                   <Play size={20} weight="fill" />
                 )}
               </button>
-              <div className="time-readout">
-                <span>SIMULATION CLOCK</span>
-                <time data-testid="simulation-clock">
-                  T+ {clockText(bundle?.t_s[sample] ?? 0)}
-                </time>
-              </div>
               <select
                 className="speed-control"
                 aria-label="Playback speed"
@@ -721,6 +754,17 @@ export default function App() {
                 ))}
               </select>
             </div>
+            <MissionClock
+              time={bundle?.t_s[sample] ?? 0}
+              scenario={snapshot?.scenario_id ?? "—"}
+            />
+            {bundle && (
+              <EventTrack
+                bundle={bundle}
+                variant={variant}
+                time={bundle.t_s[sample] ?? 0}
+              />
+            )}
             <div className="scrubber">
               <input
                 aria-label="Simulation time"
@@ -742,6 +786,25 @@ export default function App() {
             >
               Closest approach <ArrowDown size={16} />
             </button>
+            </div>
+            <div className="telemetry-cluster right">
+              <Gauge
+                label="Delta-v"
+                value={(variant?.delta_v_mps ?? 0).toFixed(3)}
+                unit="m/s"
+                fill={
+                  policy?.max_delta_v_mps
+                    ? (variant?.delta_v_mps ?? 0) / policy.max_delta_v_mps
+                    : 0
+                }
+                tone="chrome"
+              />
+              <OptionGrid
+                analysis={analysis}
+                selected={selected}
+                onSelect={choose}
+              />
+            </div>
           </div>
           {bundle && variant ? (
             <SeparationChart

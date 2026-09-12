@@ -4,28 +4,28 @@ import * as THREE from "three";
 export function makeSatellite(): THREE.Group {
   const group = new THREE.Group();
   const gold = new THREE.MeshStandardMaterial({
-    color: "#c7a05a",
+    color: "#c9cbd2",
     metalness: 0.78,
     roughness: 0.36,
   });
   const silver = new THREE.MeshStandardMaterial({
-    color: "#c3ced4",
+    color: "#e8e9ed",
     metalness: 0.65,
     roughness: 0.28,
   });
   const dark = new THREE.MeshStandardMaterial({
-    color: "#131b24",
+    color: "#17171b",
     metalness: 0.6,
     roughness: 0.4,
   });
   const solar = new THREE.MeshStandardMaterial({
-    color: "#163b63",
+    color: "#23262e",
     metalness: 0.8,
     roughness: 0.25,
     side: THREE.DoubleSide,
   });
   const cell = new THREE.LineBasicMaterial({
-    color: "#6488a5",
+    color: "#4a5160",
     transparent: true,
     opacity: 0.66,
   });

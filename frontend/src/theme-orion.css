@@ -1,0 +1,748 @@
+/* Orion West — the finished surface.
+ *
+ * The register is a modern operations product: true neutral near-black, a large
+ * tightly-tracked display face, generous space, hairline borders, and colour
+ * used ONLY to carry status. Nothing is decorated. What makes this read as
+ * premium is restraint and spacing, not effects.
+ *
+ * The one rule everything follows: white is emphasis, red means an option
+ * breaches the clearance floor, green means the verifier cleared it, and
+ * nothing else is coloured. A surface with three accents has none.
+ *
+ * Loaded after styles.css. Additive and reversible by dropping one import.
+ */
+
+@import "@fontsource/ibm-plex-mono/latin-400.css";
+@import "@fontsource/ibm-plex-mono/latin-500.css";
+
+/* ------------------------------------------------------------------ tokens */
+
+:root,
+:root[data-theme="dark"] {
+  --bg: #08080a;
+  --bg-raised: #0d0d10;
+
+  --white: #fafafa;
+  --grey-1: #a1a1aa;
+  --grey-2: #71717a;
+  --grey-3: #3f3f46;
+
+  --breach: #ff4d4f;
+  --breach-dim: rgba(255, 77, 79, 0.14);
+  --cleared: #4ade80;
+  --cleared-dim: rgba(74, 222, 128, 0.12);
+
+  --canvas: var(--bg);
+  --text: var(--white);
+  --secondary: var(--grey-1);
+  --muted: var(--grey-2);
+
+  /* Surfaces are barely there: a lift of a few percent and a hairline. Heavy
+     panels are what made the previous pass feel crowded. */
+  --surface: rgba(255, 255, 255, 0.028);
+  --raised: rgba(255, 255, 255, 0.045);
+  --solid: var(--bg-raised);
+  --rim: rgba(255, 255, 255, 0.07);
+  --rim-light: rgba(255, 255, 255, 0.14);
+  --reflection: none;
+  --selected-reflection: none;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 32px rgba(0, 0, 0, 0.28);
+  --divider: rgba(255, 255, 255, 0.06);
+  --selection: rgba(255, 255, 255, 0.1);
+
+  --watch: var(--white);
+  --good: var(--cleared);
+  --danger: var(--breach);
+  --chart-clear: var(--cleared);
+  --chart-base: var(--grey-3);
+  --focus: var(--white);
+
+  --radius: 12px;
+  --radius-sm: 8px;
+
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #fbfbfc;
+  --bg-raised: #ffffff;
+  --white: #0a0a0b;
+  --grey-1: #52525b;
+  --grey-2: #71717a;
+  --grey-3: #d4d4d8;
+  --breach: #dc2626;
+  --breach-dim: rgba(220, 38, 38, 0.1);
+  --cleared: #16a34a;
+  --cleared-dim: rgba(22, 163, 74, 0.1);
+
+  --canvas: var(--bg);
+  --text: var(--white);
+  --secondary: var(--grey-1);
+  --muted: var(--grey-2);
+  --surface: rgba(255, 255, 255, 0.86);
+  --raised: #ffffff;
+  --solid: #ffffff;
+  --rim: rgba(9, 9, 11, 0.09);
+  --rim-light: rgba(9, 9, 11, 0.16);
+  --shadow: 0 1px 2px rgba(9, 9, 11, 0.05), 0 8px 28px rgba(9, 9, 11, 0.06);
+  --divider: rgba(9, 9, 11, 0.07);
+  --selection: rgba(9, 9, 11, 0.08);
+  --watch: var(--white);
+  --focus: var(--white);
+  color-scheme: light;
+}
+
+/* -------------------------------------------------------------------- type */
+
+:root {
+  --face: Inter, -apple-system, "Segoe UI", sans-serif;
+  --face-data: "IBM Plex Mono", ui-monospace, monospace;
+
+  font-family: var(--face);
+  font-size: 14px;
+  /* Tight tracking is most of what separates a considered dark UI from a
+     default one. It only works when it scales with size. */
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+.page-heading h1 {
+  font-family: var(--face);
+  text-transform: none;
+  font-weight: 500;
+  letter-spacing: -0.032em;
+  line-height: 1.08;
+  color: var(--text);
+}
+
+.page-heading h1 {
+  font-size: clamp(26px, 3.4vw, 44px);
+  margin: 0 0 8px;
+}
+
+.page-heading p {
+  font-family: var(--face);
+  text-transform: none;
+  font-weight: 400;
+  letter-spacing: -0.012em;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+/* Labels are small, sentence case and quiet. Uppercase tracking everywhere is
+   what made the last pass feel like machinery rather than a product. */
+.eyebrow,
+.provenance-tag,
+.nav-count,
+.option-index,
+.gauge-label,
+.metric-foot,
+.caption,
+.model-caption,
+.scene-caption {
+  font-family: var(--face);
+  text-transform: none;
+  letter-spacing: -0.006em;
+  font-weight: 450;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.eyebrow {
+  font-size: 12px;
+  color: var(--grey-2);
+}
+
+.brand,
+.brand-mark {
+  font-family: var(--face);
+  text-transform: none;
+  letter-spacing: -0.024em;
+  font-weight: 550;
+  font-size: 15px;
+}
+
+/* Numbers stay monospaced and tabular: the options table only compares at a
+   glance when the figures line up down the column. */
+.live-reading,
+.limit-result,
+.evidence-summary,
+.metric-card strong,
+.coordinate-mark,
+.option-title,
+.separation-chart text,
+.budget-card input,
+.mission-clock time,
+.gauge-readout strong,
+td,
+.decision-list dd {
+  font-family: var(--face-data);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* -------------------------------------------------------------- atmosphere */
+
+/* One soft light high in the frame and nothing else. The halftone and the twin
+   ink washes were noise; a single gradient does more for depth. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    120% 72% at 50% -22%,
+    rgba(255, 255, 255, 0.055),
+    transparent 62%
+  );
+}
+
+body::after {
+  content: none;
+}
+
+:root[data-theme="light"] body::before {
+  background: radial-gradient(
+    120% 70% at 50% -24%,
+    rgba(9, 9, 11, 0.05),
+    transparent 60%
+  );
+}
+
+.app-shell,
+.scene-workspace {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------------------------------------------------------------- surfaces */
+
+.glass {
+  border: 1px solid var(--rim);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+  background-image: none;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition:
+    border-color 200ms ease,
+    background-color 200ms ease,
+    transform 200ms ease;
+}
+
+.glass::before {
+  background: none;
+  border-color: transparent;
+}
+
+.glass.selected {
+  border-color: var(--rim-light);
+  background-color: var(--raised);
+}
+
+.metric-card,
+.planner-card,
+.inspector,
+.budget-card,
+.limits-summary,
+.access-card,
+.loading-card,
+.scenario-switch,
+.busy-indicator,
+.evidence-item,
+.empty-state,
+.playback-row {
+  border-radius: var(--radius);
+}
+
+button,
+input,
+select,
+.primary-button,
+.approve-button,
+.icon-button,
+.play-button,
+.subtle-button {
+  border-radius: var(--radius-sm);
+  font-family: var(--face);
+  text-transform: none;
+  letter-spacing: -0.011em;
+  font-weight: 500;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+/* The primary action is white on black. In a surface with no brand colour,
+   contrast is the accent. */
+.primary-button,
+.approve-button {
+  background: var(--white);
+  border: 1px solid var(--white);
+  color: var(--bg);
+  text-shadow: none;
+  font-weight: 550;
+}
+
+.primary-button:hover:not(:disabled),
+.approve-button:hover:not(:disabled) {
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+
+.primary-button:active:not(:disabled),
+.approve-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.primary-button:disabled,
+.approve-button:disabled {
+  background: transparent;
+  border-color: var(--rim);
+  color: var(--grey-3);
+}
+
+.subtle-button,
+.icon-button {
+  background: transparent;
+  border: 1px solid var(--rim);
+  color: var(--secondary);
+}
+
+.subtle-button:hover:not(:disabled),
+.icon-button:hover:not(:disabled) {
+  border-color: var(--rim-light);
+  color: var(--text);
+  background: var(--surface);
+}
+
+:focus-visible {
+  outline: 2px solid var(--white);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------- the evidence */
+
+/* The clearance floor is the one number the whole product turns on, so it is
+   the only element allowed to raise its voice — and only when an option
+   actually crosses it. Driven by :has() off a class the chart already sets. */
+.floor-line {
+  stroke: var(--breach);
+  stroke-width: 1;
+  opacity: 0.5;
+  transition: opacity 500ms ease, filter 500ms ease, stroke-width 500ms ease;
+}
+
+.separation-chart:has(.chart-trace.rejected.active) .floor-line {
+  stroke-width: 1.5;
+  opacity: 1;
+  filter: drop-shadow(0 0 6px rgba(255, 77, 79, 0.7));
+}
+
+.floor-label {
+  font-family: var(--face);
+  text-transform: none;
+  letter-spacing: -0.006em;
+  font-size: 10px;
+  fill: var(--muted);
+  transition: fill 500ms ease;
+}
+
+.separation-chart:has(.chart-trace.rejected.active) .floor-label {
+  fill: var(--breach);
+}
+
+.chart-trace {
+  stroke-width: 1.25;
+  opacity: 0.3;
+  transition: opacity 300ms ease, stroke-width 300ms ease;
+}
+
+.chart-trace.baseline {
+  stroke: var(--chart-base);
+  stroke-dasharray: 2 4;
+}
+.chart-trace.rejected {
+  stroke: var(--breach);
+}
+.chart-trace.clear {
+  stroke: var(--cleared);
+}
+.chart-trace.active {
+  opacity: 1;
+  stroke-width: 1.9;
+}
+
+.chart-grid {
+  stroke: var(--divider);
+}
+
+.separation-chart text {
+  fill: var(--grey-2);
+  font-size: 10px;
+}
+
+/* --------------------------------------------------------------- telemetry */
+
+.playback-row.telemetry {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 28px;
+  padding: 20px 28px 22px;
+  clip-path: none;
+}
+
+.telemetry-cluster {
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+}
+
+.telemetry-centre {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "track track track"
+    "play  clock jump"
+    "scrub scrub scrub";
+  align-items: center;
+  gap: 6px 16px;
+  min-width: 0;
+}
+
+.telemetry-centre .event-track {
+  grid-area: track;
+  margin: 0 28px 10px;
+}
+.telemetry-centre .playback-controls {
+  grid-area: play;
+}
+.telemetry-centre .mission-clock {
+  grid-area: clock;
+}
+.telemetry-centre .event-jump {
+  grid-area: jump;
+}
+.telemetry-centre .scrubber {
+  grid-area: scrub;
+  margin-top: 6px;
+}
+
+.gauge {
+  position: relative;
+  width: 62px;
+  flex: 0 0 auto;
+  text-align: center;
+}
+
+.gauge svg {
+  width: 62px;
+  height: 62px;
+  display: block;
+  transform: rotate(135deg);
+}
+
+.gauge circle {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.gauge-track {
+  stroke: var(--divider);
+}
+
+.gauge-fill {
+  stroke: var(--white);
+  transition: stroke-dasharray 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.gauge-danger .gauge-fill {
+  stroke: var(--breach);
+}
+.gauge-chrome .gauge-fill {
+  stroke: var(--grey-1);
+}
+
+.gauge-readout {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.gauge-readout strong {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--text);
+}
+
+.gauge-danger .gauge-readout strong {
+  color: var(--breach);
+}
+
+.gauge-readout span {
+  font-size: 9px;
+  color: var(--grey-2);
+  letter-spacing: -0.004em;
+}
+
+.gauge-label {
+  margin: 8px 0 0;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.mission-clock time {
+  display: block;
+  font-size: clamp(26px, 2.8vw, 36px);
+  font-weight: 400;
+  line-height: 1;
+  color: var(--text);
+}
+
+.mission-clock time span {
+  font-size: 0.44em;
+  color: var(--grey-2);
+  margin-right: 9px;
+}
+
+.mission-clock p {
+  margin: 7px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: -0.006em;
+  text-transform: none;
+}
+
+.event-track {
+  position: relative;
+  height: 28px;
+}
+
+.event-rail,
+.event-progress {
+  position: absolute;
+  top: 4px;
+  height: 1px;
+}
+
+.event-rail {
+  left: 0;
+  right: 0;
+  background: var(--divider);
+}
+
+.event-progress {
+  left: 0;
+  background: var(--grey-1);
+  transition: width 120ms linear;
+}
+
+.event-mark {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.event-mark i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--grey-3);
+  border: none;
+  transition: background 300ms ease, box-shadow 300ms ease;
+}
+
+.event-mark span {
+  font-size: 10px;
+  color: var(--grey-2);
+  white-space: nowrap;
+  letter-spacing: -0.004em;
+}
+
+.event-mark.passed i {
+  background: var(--grey-1);
+}
+
+.event-danger i {
+  background: var(--breach);
+  box-shadow: 0 0 0 3px var(--breach-dim);
+}
+.event-danger span {
+  color: var(--breach);
+}
+
+.option-grid {
+  text-align: center;
+}
+
+.option-dots {
+  display: grid;
+  grid-template-columns: repeat(5, 8px);
+  gap: 5px;
+  border: none;
+  padding: 0;
+  justify-content: center;
+}
+
+.option-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--grey-3);
+  background: transparent;
+  cursor: pointer;
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), background 180ms ease;
+}
+
+.dot-clear {
+  background: var(--cleared);
+  border-color: var(--cleared);
+}
+.dot-rejected {
+  background: var(--breach);
+  border-color: var(--breach);
+}
+.dot-screened {
+  border-color: var(--grey-1);
+}
+.dot-excluded {
+  border-color: var(--grey-3);
+  opacity: 0.5;
+}
+
+.option-dot.current {
+  transform: scale(1.6);
+  outline: 1px solid var(--white);
+  outline-offset: 3px;
+}
+
+.option-dot:hover {
+  transform: scale(1.4);
+}
+
+/* ----------------------------------------------------------------- details */
+
+.divider,
+hr {
+  background: var(--divider);
+  border-color: var(--divider);
+}
+
+.provenance-list,
+.provenance-tag {
+  font-family: var(--face);
+  font-size: 12px;
+  letter-spacing: -0.006em;
+  color: var(--muted);
+}
+
+::selection {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--text);
+}
+
+/* Entrance motion is applied by motion.ts with anime.js; this only sets the
+   pre-animation state so nothing flashes before it runs. */
+.will-reveal {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+  .will-reveal {
+    opacity: 1;
+  }
+}
+
+/* ------------------------------------------------- over a live 3D scene */
+
+/* A 2.8% white lift is the right surface on a flat page and the wrong one over
+   a moving globe: scene labels read straight through and collide with the
+   clearance figures. These panels keep the hairline and the blur but sit on a
+   near-opaque base, which is what a scrim over video has to do. */
+.glass {
+  background-color: rgba(11, 11, 14, 0.975);
+  background-image: linear-gradient(
+    rgba(255, 255, 255, 0.03),
+    rgba(255, 255, 255, 0.03)
+  );
+}
+
+.glass.selected {
+  background-color: rgba(19, 19, 23, 0.98);
+}
+
+:root[data-theme="light"] .glass {
+  background-color: rgba(255, 255, 255, 0.985);
+  background-image: none;
+}
+
+/* Room to breathe. The metric card was running its caption into the meter
+   labels, and crowding is what stops a dark surface reading as considered. */
+.metric-card {
+  padding: 20px 22px 18px;
+}
+
+.metric-card .caption {
+  margin: 10px 0 0;
+  line-height: 1.45;
+  max-width: 30ch;
+}
+
+.clearance-meter {
+  margin: 22px 0 12px;
+}
+
+.metric-foot {
+  gap: 10px;
+  font-size: 11px;
+}
+
+.decision-list,
+.left-stack,
+.right-stack {
+  gap: 12px;
+}
+
+.planner-card,
+.inspector,
+.limits-summary,
+.budget-card {
+  padding: 20px 22px;
+}
+
+/* Scene readouts belong to the globe and pass behind the panels. */
+.coordinate-mark {
+  z-index: 1;
+}
+
+.left-stack,
+.right-stack,
+.scene-bottom {
+  z-index: 6;
+}
