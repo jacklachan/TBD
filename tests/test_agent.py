@@ -1104,3 +1104,57 @@ def test_when_nothing_clears_comfortably_the_roomiest_option_wins():
         f"{cheap['candidate_id']} (+{cheap['margin_above_floor_m']:,.1f} m, "
         f"{cheap['delta_v_mps']} m/s)"
     )
+
+
+def test_the_planner_reports_each_step_as_it_happens(session):
+    """A run's trace used to be readable only once the run had finished.
+
+    Proving that no option works takes most of a minute, and an unexplained
+    spinner for that long is a poor account of a process whose whole claim is
+    that its working is inspectable.
+    """
+    seen: list[tuple[int, str]] = []
+    outcome = plan_case(
+        full_investigation(),
+        session,
+        memory=None,
+        on_event=lambda event: seen.append((event.sequence, event.summary)),
+        prefetch_context=False,
+    )
+    assert outcome.status == STATUS_PROPOSAL_READY
+    # Every recorded event was reported, in order, exactly once.
+    assert seen == [(e.sequence, e.summary) for e in outcome.events]
+    assert [n for n, _ in seen] == list(range(1, len(seen) + 1))
+
+
+def test_a_broken_progress_listener_cannot_fail_a_run(session):
+    """A progress display is not worth losing a decision over."""
+    def explode(event):
+        raise RuntimeError("the display fell over")
+
+    outcome = plan_case(
+        full_investigation(),
+        session,
+        memory=None,
+        on_event=explode,
+        prefetch_context=False,
+    )
+    assert outcome.status == STATUS_PROPOSAL_READY
+
+
+def test_a_designed_burn_reports_what_was_designed_and_how_it_did(session):
+    """"design_maneuver completed" is not an account of anything."""
+    from backend.agent.planner import _tool_summary
+
+    result = dispatch(
+        session,
+        TOOL_DESIGN,
+        {"burn_t_s": 1500.0, "direction": "RETROGRADE", "delta_v_mps": 0.15},
+        phase=PHASE_PLANNING,
+    )
+    summary = _tool_summary(TOOL_DESIGN, result, failed=False)
+    assert "0.15 m/s" in summary
+    assert "retrograde" in summary
+    assert "1,500 s" in summary
+    assert "clears by" in summary
+    print(f"\n[progress] {summary}")

@@ -59,7 +59,7 @@ No collision probability is computed anywhere. Separations are deterministic val
 ```bash
 pip install -r requirements-dev.txt  # Python 3.12+
 cp .env.example .env          # then put your GEMINI_API_KEY in it
-python -m pytest tests/ -q    # 264 tests
+python -m pytest tests/ -q    # 268 tests
 ```
 
 ```bash
@@ -97,7 +97,7 @@ Open **http://127.0.0.1:8000**. The server serves both the API and the productio
 The workspace includes a rotatable 3D globe, an inspectable procedural spacecraft, exact encounter jumps, shared-clock playback, a separation chart, a 25-option comparison table, manual budget changes, AI restriction preview/confirmation, reviewed simulated approval, reset and evidence export. The numerical comparison works without an API key and is labeled separately from AI runs. Set `GEMINI_API_KEY` on the backend to use the real planner. Remote access also requires `DESK_ACCESS_TOKEN`; the browser asks for the operator token and keeps it in memory only.
 
 ```bash
-python -m pytest tests -q                    # 264 tests
+python -m pytest tests -q                    # 268 tests
 npm --prefix frontend test                  # 7 unit tests
 npm --prefix frontend run test:browser      # running API + Vite; Chrome installed
 ```
@@ -123,7 +123,7 @@ Every figure below is printed by a test or a script in this repository, not quot
 | Whole decision chain, no model | 1.24 s for 25 options, five validations and a verified answer |
 | Ten people opening the workspace at once | every request served, nothing refused |
 
-264 Python tests, 10 browser tests, 7 frontend unit tests. `python scripts/diagnose.py` runs the pre-demo gate and exits non-zero if anything is broken.
+268 Python tests, 10 browser tests, 7 frontend unit tests. `python scripts/diagnose.py` runs the pre-demo gate and exits non-zero if anything is broken.
 
 Full evidence, including what is still unverified, is in [Handoff/STATE.md](Handoff/STATE.md).
 

@@ -170,6 +170,9 @@ export interface RunRecord {
   started_at_utc: string;
   finished_at_utc: string;
   error: string;
+  /** The step the planner is on, while it is still running. */
+  step?: string;
+  steps_done?: number;
   result: {
     status?: PlannerStatus;
     unresolved_reason?: string;

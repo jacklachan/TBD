@@ -903,3 +903,39 @@ def test_the_comparison_still_creates_nothing_that_could_be_approved():
     snapshot = client.get(f"/cases/{case_id}").json()
     assert snapshot["proposal"] is None
     assert snapshot["execution"] is None
+
+
+def test_a_running_plan_reports_its_progress_over_http():
+    """The spinner has something to say, and it comes from the run itself."""
+    client = make_client()
+    case = new_case(client)
+    run = client.post(
+        f"/cases/{case['case_id']}/plan",
+        json={
+            "expected_scenario_version": case["scenario_version"],
+            "expected_policy_version": case["policy_version"],
+        },
+    ).json()
+
+    steps: list[tuple[int, str]] = []
+    for _ in range(600):
+        state = client.get(f"/runs/{run['run_id']}").json()
+        entry = (state.get("steps_done", 0), state.get("step", ""))
+        if entry[1] and entry not in steps:
+            steps.append(entry)
+        if state["status"] != "RUNNING":
+            break
+        time.sleep(0.02)
+
+    assert state["status"] == "DONE", state
+    assert steps, "the run never reported a step"
+    assert steps == sorted(steps), "step numbers went backwards"
+    assert all(summary.strip() for _, summary in steps), steps
+
+    # A poller sees the latest step, not every one -- a fast run finishes
+    # several between polls, which is fine for a progress readout. The complete
+    # trace is the persisted one, and that must miss nothing.
+    events = client.get(f"/cases/{case['case_id']}").json()["events"]
+    summaries = [e["summary"] for e in events]
+    assert any("Validated" in summary for summary in summaries), summaries
+    assert steps[-1][0] <= len(events)

@@ -155,7 +155,12 @@ export function useWorkspace() {
     action("AI planner is evaluating evidence", async () => {
       if (!snapshot) return;
       const run = await api.startPlan(snapshot.case_id, versionsOf(snapshot));
-      const result = await waitForRun(run.run_id);
+      const result = await waitForRun(run.run_id, {
+        // The planner's own trace, shown while it runs. A run that proves no
+        // option works takes most of a minute, and watching it reject options
+        // is the part worth seeing.
+        onStep: (step, done) => setBusy(`${done}. ${step}`),
+      });
       const next = await api.getCase(snapshot.case_id);
       if (next.case_id !== current.current?.case_id) return;
       current.current = next;

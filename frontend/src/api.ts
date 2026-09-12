@@ -309,16 +309,22 @@ export async function waitForRun(
     intervalMs?: number;
     timeoutMs?: number;
     signal?: AbortSignal;
+    onStep?: (step: string, done: number) => void;
   } = {},
 ): Promise<RunRecord> {
   // Longer than the planner's own deadline plus its reviewer call, so a run
   // that legitimately uses its whole budget is not reported here as a
   // client timeout. The server is the thing that bounds a run.
-  const { intervalMs = 400, timeoutMs = 180_000, signal } = options;
+  const { intervalMs = 400, timeoutMs = 180_000, signal, onStep } = options;
+  let reported = -1;
   const deadline = Date.now() + timeoutMs;
 
   for (;;) {
     const run = await api.getRun(runId, signal);
+    if (onStep && run.step && (run.steps_done ?? 0) > reported) {
+      reported = run.steps_done ?? 0;
+      onStep(run.step, reported);
+    }
     if (run.status !== "RUNNING") return run;
     if (Date.now() > deadline) {
       throw new Error(`Run ${runId} did not finish within ${timeoutMs} ms`);

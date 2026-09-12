@@ -20,6 +20,7 @@ import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Callable
 
 from backend.agent import guards
 from backend.agent.llm import LLMError, Message, Provider, ToolCall
@@ -180,8 +181,18 @@ class PlannerOutcome:
 
 
 class _Recorder:
-    def __init__(self) -> None:
+    """Accumulates the run's trace, and reports each step as it happens.
+
+    The trace used to be readable only once the run had finished, which for a
+    run that proves no option works is most of a minute of an unexplained
+    spinner. ``on_event`` lets the caller watch. It is called on the worker
+    thread, so whatever is passed must be cheap and must not raise -- a progress
+    display is not worth failing a run over.
+    """
+
+    def __init__(self, on_event: Callable[[CaseEvent], None] | None = None) -> None:
         self.events: list[CaseEvent] = []
+        self.on_event = on_event
 
     def add(self, event_type: str, summary: str, duration_ms: float, **details) -> CaseEvent:
         event = CaseEvent(
@@ -192,6 +203,11 @@ class _Recorder:
             details=details,
         )
         self.events.append(event)
+        if self.on_event is not None:
+            try:
+                self.on_event(event)
+            except Exception:  # noqa: BLE001 - progress must never fail a run
+                pass
         return event
 
 
@@ -319,6 +335,7 @@ def plan_case(
     reviewer_provider: Provider | None = None,
     instruction: str = "",
     prefetch_context: bool = True,
+    on_event: Callable[[CaseEvent], None] | None = None,
 ) -> PlannerOutcome:
     """Run the loop until the model concludes or a bound is reached.
 
@@ -327,7 +344,7 @@ def plan_case(
     model fetch both itself, which is the shape the scripted tests exercise.
     """
     limits = limits or PlannerLimits()
-    recorder = _Recorder()
+    recorder = _Recorder(on_event)
     started = time.perf_counter()
 
     if memory is not None:
@@ -667,6 +684,23 @@ def _tool_summary(name: str, result: dict, failed: bool) -> str:
         return (
             f"Validated {result.get('candidate_id')} against {objects}: "
             f"{result.get('status')}."
+        )
+    if name == "design_maneuver":
+        # The most interesting line in a run, so it says what was designed and
+        # how it did rather than that a tool returned. "Marginal" is included
+        # because a PASS that the reviewer will refuse is not the same news as
+        # a PASS with room in it.
+        margin = result.get("margin_above_floor_m")
+        outcome = result.get("status")
+        if outcome == STATUS_PASS and margin is not None:
+            outcome = (
+                f"clears by {margin:,.0f} m"
+                + (" but is marginal" if result.get("marginal") else "")
+            )
+        return (
+            f"Designed {result.get('delta_v_mps')} m/s "
+            f"{str(result.get('direction', '')).lower()} at "
+            f"T+{result.get('burn_t_s', 0):,.0f} s: {outcome}."
         )
     if name == "widen_search":
         return (

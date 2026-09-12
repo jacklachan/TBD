@@ -164,6 +164,12 @@ class RunState:
     finished_at_utc: str = ""
     result: dict = field(default_factory=dict)
     error: str = ""
+    # What the planner is doing right now, and how many steps it has taken.
+    # A run that proves no option works can take the better part of a minute,
+    # and an unexplained spinner for that long tells the operator nothing about
+    # a process whose whole point is that its working is inspectable.
+    step: str = ""
+    steps_done: int = 0
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -495,6 +501,14 @@ def create_app(
                 session = _session_for(case_row)
                 provider = state.provider_factory()
                 reviewer = state.reviewer_factory() if state.reviewer_factory else None
+                def note(event) -> None:
+                    # Called on this worker thread as each step completes.
+                    # Assignment to two fields is atomic enough for a progress
+                    # readout; a poller that catches them between writes sees a
+                    # stale count next to a fresh line, which is harmless.
+                    run.step = event.summary
+                    run.steps_done = event.sequence
+
                 outcome = plan_case(
                     provider,
                     session,
@@ -502,6 +516,7 @@ def create_app(
                     memory=state.memory,
                     reviewer_provider=reviewer,
                     instruction=payload.instruction,
+                    on_event=note,
                 )
                 _persist_run(state, case_row, session, outcome, run.run_id)
                 run.result = {
