@@ -44,14 +44,16 @@ def _time_grid(
     trajectories: dict[str, Trajectory],
     encounter_times: list[float],
     sample_step_s: float,
+    window: tuple[float, float] | None = None,
 ) -> np.ndarray:
-    base = np.arange(0.0, scenario.horizon_s + sample_step_s, sample_step_s)
-    base = base[base <= scenario.horizon_s]
+    start, end = window if window is not None else (0.0, scenario.horizon_s)
+    base = np.arange(start, end + sample_step_s, sample_step_s)
+    base = base[base <= end]
 
-    extra = [0.0, scenario.horizon_s]
+    extra = [start, end]
     for trajectory in trajectories.values():
-        extra.extend(trajectory.burn_times_s)
-    extra.extend(t for t in encounter_times if 0.0 <= t <= scenario.horizon_s)
+        extra.extend(t for t in trajectory.burn_times_s if start <= t <= end)
+    extra.extend(t for t in encounter_times if start <= t <= end)
 
     combined = np.concatenate([base, np.array(extra, dtype=np.float64)])
     # Round before uniquing so a burn epoch and its neighbouring sample do not
@@ -68,15 +70,29 @@ def build_bundle(
     model_version: str,
     min_separation_m: float,
     sample_step_s: float = DEFAULT_SAMPLE_STEP_S,
+    window: tuple[float, float] | None = None,
 ) -> dict:
-    """Positions and separations for up to three options on one shared clock."""
+    """Positions and separations for up to three options on one shared clock.
+
+    ``window`` restricts the samples to one stretch of the horizon, so a close
+    approach can be replayed at one-second steps without shipping six hours of
+    them. Encounters are still found over the whole horizon; only those inside
+    the window are reported, and each of those is a sample, as always.
+    """
     if not candidates:
         raise ValueError("at least one candidate is required")
     if len(candidates) > MAX_VARIANTS:
         raise ValueError(f"at most {MAX_VARIANTS} variants per bundle, got {len(candidates)}")
     if not np.isfinite(sample_step_s) or not MIN_SAMPLE_STEP_S <= sample_step_s <= 600.0:
         raise ValueError("sample_step_s must be finite and between 1 and 600 seconds")
-    if scenario.horizon_s / sample_step_s > 21600:
+    if window is not None:
+        start, end = window
+        if not (np.isfinite(start) and np.isfinite(end) and 0.0 <= start < end <= scenario.horizon_s):
+            raise ValueError("window must lie inside the horizon with start before end")
+        if end - start > 3600.0:
+            raise ValueError("window may span at most one hour")
+    span = (window[1] - window[0]) if window is not None else scenario.horizon_s
+    if span / sample_step_s > 21600:
         raise ValueError("visualization exceeds the 21601-sample base-grid budget")
 
     trajectories = {
@@ -106,7 +122,12 @@ def build_bundle(
         found.sort(key=lambda e: e["tca_s"])
         encounters_by_variant[candidate_id] = found
 
-    times = _time_grid(scenario, trajectories, encounter_times, sample_step_s)
+    times = _time_grid(scenario, trajectories, encounter_times, sample_step_s, window)
+    if window is not None:
+        for candidate_id, found in encounters_by_variant.items():
+            encounters_by_variant[candidate_id] = [
+                e for e in found if window[0] <= e["tca_s"] <= window[1]
+            ]
 
     debris_positions = {
         debris_id: debris.states_at(times)[0]
@@ -164,6 +185,7 @@ def build_bundle(
         "epoch_utc": epoch_utc,
         "horizon_s": scenario.horizon_s,
         "sample_step_s": sample_step_s,
+        "window": {"start_s": window[0], "end_s": window[1]} if window is not None else None,
         "min_separation_m": min_separation_m,
         "satellite_id": scenario.satellite_id,
         "primary_threat_id": scenario.primary_threat_id,

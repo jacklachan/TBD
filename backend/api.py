@@ -168,6 +168,11 @@ class AssessRequest(BaseModel):
     tca_utc: str = Field(..., min_length=10, max_length=40)
 
 
+class WatchApproveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    item_id: str = Field(..., min_length=1, max_length=120)
+
+
 class ResetRequest(VersionedRequest):
     pass
 
@@ -917,6 +922,8 @@ def create_app(
         expected_scenario_version: int = Query(...),
         expected_policy_version: int = Query(...),
         sample_step_s: float = Query(DEFAULT_SAMPLE_STEP_S, ge=MIN_SAMPLE_STEP_S, le=600.0, allow_inf_nan=False),
+        window_start_s: float | None = Query(None, ge=0.0, allow_inf_nan=False),
+        window_end_s: float | None = Query(None, ge=0.0, allow_inf_nan=False),
     ) -> dict:
         state = _state(request)
         case_row = _case_or_404(state, case_id)
@@ -944,17 +951,27 @@ def create_app(
                 )
             selected.append(candidate)
 
+        window = None
+        if window_start_s is not None or window_end_s is not None:
+            if window_start_s is None or window_end_s is None:
+                raise HTTPException(422, "give both window_start_s and window_end_s, or neither")
+            window = (window_start_s, window_end_s)
+
         scenario = reconstruct(case_row.document)
-        return build_bundle(
-            scenario=scenario,
-            candidates=selected,
-            case_id=case_id,
-            policy_version=case_row.policy_version,
-            epoch_utc=case_row.document["epoch_utc"],
-            model_version=MODEL_VERSION,
-            min_separation_m=case_row.policy.min_separation_m,
-            sample_step_s=sample_step_s,
-        )
+        try:
+            return build_bundle(
+                scenario=scenario,
+                candidates=selected,
+                case_id=case_id,
+                policy_version=case_row.policy_version,
+                epoch_utc=case_row.document["epoch_utc"],
+                model_version=MODEL_VERSION,
+                min_separation_m=case_row.policy.min_separation_m,
+                sample_step_s=sample_step_s,
+                window=window,
+            )
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
 
     # -------------------------------------------------------------- approve
 
@@ -1120,6 +1137,74 @@ def create_app(
             return tracking.cached_screen()
         except tracking.TrackingError as exc:
             raise HTTPException(404, {"error": "CATALOG_MISSING", "message": str(exc)}) from exc
+
+    @app.post("/watch", status_code=202)
+    def start_watch(request: Request) -> dict:
+        """Run the autonomous watch end to end; poll /runs/{run_id}."""
+        from backend import avoidance, tracking
+        from backend.agent.watch import run_watch
+
+        state = _state(request)
+        run = RunState(run_id=f"run_{uuid.uuid4().hex[:10]}", case_id="watch", kind="watch")
+        if not state.model_slots.acquire(blocking=False):
+            raise HTTPException(429, {"error": "CAPACITY", "message": "The model is busy. Try again shortly."})
+        try:
+            state.register_run(run)
+        except Exception:
+            state.model_slots.release()
+            raise
+
+        def work() -> None:
+            try:
+                run.step = "Loading the catalogue screen."
+
+                def note(stage, actor, summary, sequence) -> None:
+                    run.step = f"{actor}: {summary}"
+                    run.steps_done = sequence
+
+                run.result = run_watch(
+                    state.provider_factory,
+                    state.reviewer_factory,
+                    tracking.cached_screen(),
+                    tracking.all_conjunctions(),
+                    avoidance.cached_assess,
+                    on_step=note,
+                )
+                run.status = RUN_DONE
+            except Exception as exc:  # noqa: BLE001 - a dead worker must become a FAILED run
+                run.error = f"{type(exc).__name__}: {exc}"
+                run.status = RUN_FAILED
+            finally:
+                run.finished_at_utc = _now()
+                state.model_slots.release()
+
+        state.executor.submit(work)
+        return {"run_id": run.run_id, "status": run.status}
+
+    @app.post("/watch/{run_id}/approve")
+    def approve_watch_item(run_id: str, payload: WatchApproveRequest, request: Request) -> dict:
+        """The one human step: authorise a queued burn. Simulated; nothing is transmitted."""
+        state = _state(request)
+        with state.lock:
+            run = state.runs.get(run_id)
+            if run is None or run.kind != "watch":
+                raise HTTPException(404, f"unknown watch run {run_id!r}")
+            if run.status != RUN_DONE:
+                raise HTTPException(409, {"error": "WATCH_NOT_DONE", "message": "The watch has not finished."})
+            item = next((i for i in run.result.get("queue", []) if i["item_id"] == payload.item_id), None)
+            if item is None:
+                raise HTTPException(404, f"unknown decision {payload.item_id!r}")
+            if item["status"] == "APPROVED":
+                return {"item": item, "created": False}
+            if item["status"] != "AWAITING_APPROVAL":
+                raise HTTPException(409, {
+                    "error": "NOT_APPROVABLE",
+                    "message": f"This decision is {item['status'].replace('_', ' ').lower()} and cannot be approved.",
+                })
+            item["status"] = "APPROVED"
+            item["approved_at_utc"] = _now()
+            item["approval_note"] = "Simulated authorisation. Nothing is transmitted to any spacecraft."
+            return {"item": item, "created": True}
 
     @app.post("/tracking/agent", status_code=202)
     def tracking_agent(request: Request) -> dict:

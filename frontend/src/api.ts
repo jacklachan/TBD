@@ -26,6 +26,7 @@ import type {
   TrackingScreen,
   VersionStamp,
   VisualizationBundle,
+  WatchItem,
 } from "./contracts";
 
 export const API_BASE =
@@ -289,6 +290,39 @@ export const api = {
 
   exportMarkdown(caseId: string): Promise<string> {
     return request(`/cases/${caseId}/export?format=markdown`);
+  },
+
+  /** The autonomous watch, end to end; poll the returned run with `waitForRun`. */
+  startWatch(): Promise<{ run_id: string; status: string }> {
+    return request("/watch", { method: "POST" });
+  },
+
+  /** The one human step. Simulated; nothing is transmitted. */
+  approveWatchItem(runId: string, itemId: string): Promise<{ item: WatchItem; created: boolean }> {
+    return request(`/watch/${runId}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ item_id: itemId }),
+    });
+  },
+
+  /** One stretch of the horizon at a fine step, for replaying a close approach. */
+  visualizationWindow(
+    caseId: string,
+    versions: VersionStamp,
+    candidateIds: string[],
+    windowStartS: number,
+    windowEndS: number,
+    sampleStepS = 1,
+  ): Promise<VisualizationBundle> {
+    const params = new URLSearchParams({
+      candidate_ids: candidateIds.join(","),
+      expected_scenario_version: String(versions.expected_scenario_version),
+      expected_policy_version: String(versions.expected_policy_version),
+      sample_step_s: String(sampleStepS),
+      window_start_s: String(windowStartS),
+      window_end_s: String(windowEndS),
+    });
+    return request(`/cases/${caseId}/visualization?${params}`);
   },
 
   /** Starts the triage agent; poll the returned run with `waitForRun`. */

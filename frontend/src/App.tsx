@@ -36,6 +36,8 @@ import { Dialog } from "./components/Dialog";
 import { PriorCaseEvidence } from "./components/PriorCaseEvidence";
 import { TrackingPanel } from "./components/TrackingPanel";
 import { CoordinationPanel } from "./components/CoordinationPanel";
+import { WatchPanel } from "./components/WatchPanel";
+import { CrashReplay } from "./components/CrashReplay";
 import type { ViewMode } from "./scene/OrbitalScene";
 
 const OrbitalScene = lazy(() =>
@@ -103,7 +105,7 @@ export default function App() {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(180);
   const [panel, setPanel] = useState<
-    "options" | "evidence" | "about" | "limits" | "elements" | "tracking" | "coordination" | null
+    "options" | "evidence" | "about" | "limits" | "elements" | "tracking" | "coordination" | "watch" | "crash" | null
   >(null);
   const [instruction, setInstruction] = useState("");
   const [token, setToken] = useState("");
@@ -327,6 +329,18 @@ export default function App() {
             onClick={() => setPanel(null)}
           >
             Overview
+          </button>
+          <button
+            className={`pill watch-pill ${panel === "watch" ? "selected" : ""}`}
+            onClick={() => setPanel("watch")}
+          >
+            Autonomous watch
+          </button>
+          <button
+            className={`pill ${panel === "crash" ? "selected" : ""}`}
+            onClick={() => setPanel("crash")}
+          >
+            Crash test
           </button>
           <button
             className={`pill ${panel === "options" ? "selected" : ""}`}
@@ -1711,6 +1725,18 @@ export default function App() {
               Export this evidence
             </button>
           )}
+        </Dialog>
+      )}
+
+      {panel === "watch" && (
+        <Dialog title="Agents on watch. You decide." onClose={() => setPanel(null)}>
+          <WatchPanel modelAccess={!!desk.health?.model_access} />
+        </Dialog>
+      )}
+
+      {panel === "crash" && (
+        <Dialog title="What a collision looks like, and how the burn avoids it." onClose={() => setPanel(null)}>
+          <CrashReplay />
         </Dialog>
       )}
 

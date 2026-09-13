@@ -164,3 +164,29 @@ constellation; tell the team.**
   The record-exchange tamper check was driven in the local UI: the untampered
   record "holds"; changing `MISS_DISTANCE` 2491.888 → 9999 gives "does not hold",
   recomputed 2,491.9 m.
+
+## Autonomous watch and crash replay
+
+- `backend/agent/watch.py`, `POST /watch` (background run) and
+  `POST /watch/{run_id}/approve`: detect (catalogue screen) → triage agent →
+  assessment per NEEDS_BURN pass → AI safety reviewer per burn (parallel, fails
+  closed: BLOCK or UNAVAILABLE keeps it out of the approvable queue) →
+  coordination (real passes are against debris, so none needed; the simulated
+  two-operator case is added, labelled SIMULATED) → decision queue. Timeline
+  records each step's actor. Approval is the only human step, simulated,
+  idempotent, refused for anything not awaiting approval. `/watch` is behind
+  the access guard.
+- Windowed visualization bundles: `window_start_s` / `window_end_s` on
+  `GET /cases/{id}/visualization` (≤ 1 h, encounter times inside the window
+  stay exact samples).
+- UI: *Autonomous watch* tab (six-stage strip, plain-English decision cards,
+  approve, brief, actor timeline) and *Crash test* tab (collision scenario,
+  baseline vs the first comfortable verified option — here only `t15_ret_200`
+  passes, 1,011.4 m closest; two synchronized panes at 1 s samples, linear
+  display interpolation between samples, slow-motion near the pass, illustrative
+  explosion). Crash: 4.0 m at T+04:31:24, closing 7.7 km/s; burn variant 9.383 km
+  at that instant.
+- Verified in Chromium: crash replay plays through contact; watch with
+  **scripted** models on real data (13 s, 4 decisions, approve works). Live GLM
+  run of the watch not yet measured.
+- Tests: `test_watch.py` (7).

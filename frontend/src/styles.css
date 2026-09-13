@@ -2553,3 +2553,182 @@ td .subtle-button {
 .triage-trace summary {
   cursor: pointer;
 }
+
+/* Autonomous watch ------------------------------------------------------- */
+.watch-pill {
+  color: var(--good);
+}
+.watch-stages {
+  list-style: none;
+  padding: 0;
+  margin: 18px 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+.watch-stage {
+  border: 1px solid var(--divider);
+  border-radius: 16px;
+  padding: 12px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0.55;
+  transition: opacity 0.3s, border-color 0.3s;
+}
+.watch-stage strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.watch-stage small {
+  font-size: 11px;
+  color: var(--secondary);
+  line-height: 1.45;
+}
+.watch-index {
+  font-size: 10px;
+  color: var(--secondary);
+}
+.watch-stage.active {
+  opacity: 1;
+  border-color: var(--watch);
+  box-shadow: 0 0 0 1px var(--watch) inset;
+}
+.watch-stage.done {
+  opacity: 1;
+  border-color: var(--good);
+}
+.decision-list-watch {
+  display: grid;
+  gap: 12px;
+}
+.decision-card {
+  padding: 16px 18px;
+}
+.decision-card h4 {
+  margin: 8px 0 6px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.decision-card p {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 6px 0;
+}
+.decision-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.decision-source {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--secondary);
+}
+.decision-label {
+  display: inline-block;
+  min-width: 118px;
+  font-size: 11px;
+  color: var(--secondary);
+}
+.watch-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+}
+.watch-timeline li {
+  display: grid;
+  grid-template-columns: 150px 1fr auto;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--divider);
+}
+.watch-timeline p {
+  font-size: 12px;
+  color: var(--text);
+}
+.watch-timeline .actor {
+  font-size: 11px;
+  color: var(--secondary);
+}
+.watch-timeline .actor.ai {
+  color: var(--good);
+}
+
+/* Crash replay ----------------------------------------------------------- */
+.replay-clock {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin: 14px 0 10px;
+}
+.replay-clock span {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--secondary);
+}
+.replay-clock strong {
+  font-size: 18px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.replay-clock small {
+  color: var(--secondary);
+}
+.replay-clock button {
+  margin-left: auto;
+}
+.replay-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+.replay-pane {
+  position: relative;
+  height: 340px;
+  overflow: hidden;
+}
+.replay-canvas {
+  position: absolute;
+  inset: 0;
+}
+.replay-title {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.replay-title small {
+  color: var(--secondary);
+  font-size: 11px;
+}
+.replay-readout {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  z-index: 1;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.replay-banner {
+  position: absolute;
+  left: 50%;
+  top: 56px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  z-index: 1;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(160, 40, 30, 0.72);
+  color: #fff;
+  font-size: 12px;
+}
+.replay-facts p {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 10px 0;
+}

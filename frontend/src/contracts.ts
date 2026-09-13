@@ -330,6 +330,53 @@ export interface TrackingScreen {
   note: string;
 }
 
+export interface WatchItem {
+  item_id: string;
+  source: "REAL" | "SIMULATED";
+  satellite: string;
+  threat: string;
+  threat_event?: string;
+  threat_can_move: boolean;
+  tca_utc: string | null;
+  miss_km: number;
+  relative_speed_kms?: number;
+  status: "AWAITING_APPROVAL" | "APPROVED" | "BLOCKED_BY_REVIEWER" | "ESCALATE" | "NO_ACTION";
+  recommendation: {
+    direction: string;
+    delta_v_mps: number;
+    minutes_before?: number;
+    burn_t_s?: number;
+  } | null;
+  estimated_miss_km: number | null;
+  rescreen_closest_km: number | null;
+  rescreen_fragments?: number;
+  reviewer: { decision: string; reason_codes: string[]; rationale: string } | null;
+  coordination: {
+    needed: boolean;
+    reason?: string;
+    both_as_planned_m?: number | null;
+    agreed_plan?: string | null;
+    movers?: string[];
+    rule?: string;
+  };
+  approved_at_utc?: string;
+  approval_note?: string;
+}
+
+/** The result of POST /watch, read from GET /runs/{id}. */
+export interface WatchResult {
+  status: "QUEUE_READY" | "PARTIAL";
+  triage_status: string;
+  unresolved_reason: string;
+  brief: string;
+  flagged_numbers: number[];
+  queue: WatchItem[];
+  timeline: { sequence: number; t_s: number; stage: string; actor: string; summary: string }[];
+  model_calls: number;
+  elapsed_s: number;
+  note: string;
+}
+
 export interface TriageItem {
   pass_id: string;
   satellite: string;

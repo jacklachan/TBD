@@ -36,6 +36,27 @@ run. If the planner does not reach "AI proposal ready" within about a minute on
 two tries, record sections 3–6 on "The second encounter" instead; every number
 in those sections without a **[stream]** note is from that scenario.
 
+## 00 · Recommended opening: crash, then the agents — 0:00–0:50
+
+**Screen:** Click **Crash test**. Let it play once (about 20 s): on the left the
+gap closes to contact and the illustrative debris cloud appears; on the right
+the burned trajectory is 9.4 km away at the same instant.
+
+**Say:** "This is what we're preventing. Left: nobody acts — the two objects
+meet 4 metres apart at 7.7 kilometres a second. Right: a small burn hours
+earlier, checked against every object — 9 kilometres clear."
+
+**Screen:** Close it, click **Autonomous watch** → **Start autonomous watch**.
+Let the six stages light up; approve the top decision card.
+
+**Say:** "Now nobody clicks anything until the end. Agents screen 80 real
+Iridium satellites against 2,664 real fragments, an AI picks the passes that
+matter, the engine plans and re-checks each burn, a second AI reviews it, and
+the system works out who needs to move. The one thing it can't do is approve
+a burn — that's the operator."
+
+Rehearse the watch once first; its live duration depends on the model.
+
 ## 0 · Real debris around a real network — 0:00–0:30
 
 **Screen:** Click **Tracking**. Let the three figures land: 213,120 pairs
