@@ -72,6 +72,7 @@ from backend.planning.policy import Policy, policy_from_document
 from backend.planning.verifier import MODEL_VERSION, STATUS_PASS, reconstruct
 from backend.store import CapacityError, IdempotencyConflict, Store, StoreError
 from backend.visualization import DEFAULT_SAMPLE_STEP_S, MIN_SAMPLE_STEP_S, build_bundle
+from backend.operators import Operators, TooManyAttempts
 from backend.security import APIGuard
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -121,6 +122,11 @@ class VersionedRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     expected_scenario_version: int = Field(..., ge=0)
     expected_policy_version: int = Field(..., ge=0)
+
+
+class SignInRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=120)
+    password: str = Field(..., min_length=1, max_length=200)
 
 
 class CreateCaseRequest(BaseModel):
@@ -602,8 +608,11 @@ def create_app(
         )
 
     access_token = os.environ.get("DESK_ACCESS_TOKEN", "").strip()
+    operators = Operators()
+    app.state.operators = operators
     app.add_middleware(APIGuard, token=access_token, origins=origins,
-                       require_remote_token=require_remote_token)
+                       require_remote_token=require_remote_token,
+                       operators=operators)
     # A trajectory bundle for a debris stream is several megabytes of numbers,
     # which compress well; the browser decodes it transparently.
     app.add_middleware(GZipMiddleware, minimum_size=4096)
@@ -1320,10 +1329,53 @@ def create_app(
             # rather than only from the first failed run.
             "model_access": has_model_access(),
             "access_token_required": bool(access_token),
+            # The browser shows a name-and-password form instead of a token
+            # field when this is on. See backend/operators.py for exactly how
+            # much that is and is not worth.
+            "sign_in_enabled": bool(access_token),
         }
 
     # A built frontend is served from the same origin when present, so one
     # container is the whole app. Mounted last so it cannot shadow an API route.
+    # ------------------------------------------------------------- sign-in
+
+    @app.post("/session/login")
+    def sign_in(payload: SignInRequest, request: Request) -> dict:
+        """Exchange demo credentials for a session token.
+
+        Deliberately returns a *new* token rather than the configured one, so
+        the server's access token never reaches a browser, a screenshot or a
+        screen share. It is a convenience gate over a shared login, not
+        authentication -- backend/operators.py says so at length.
+        """
+        if not access_token:
+            raise HTTPException(409, {
+                "error": "SIGN_IN_UNAVAILABLE",
+                "message": "This server has no access token configured, so it needs no sign-in.",
+            })
+        client = (request.client.host if request.client else "") or "unknown"
+        try:
+            session = request.app.state.operators.sign_in(
+                payload.username, payload.password, client=client
+            )
+        except TooManyAttempts as exc:
+            raise HTTPException(429, {"error": "TOO_MANY_ATTEMPTS", "message": str(exc)}) from exc
+        except PermissionError as exc:
+            # One message for both halves: saying which was wrong hands back
+            # most of the answer on a two-field form.
+            raise HTTPException(401, {"error": "SIGN_IN_FAILED", "message": str(exc)}) from exc
+        return {
+            "token": session.token,
+            "user": session.user,
+            "expires_in_s": session.expires_in_s,
+        }
+
+    @app.post("/session/logout")
+    def sign_out(request: Request) -> dict:
+        supplied = request.headers.get("authorization", "")
+        token = supplied[7:] if supplied.startswith("Bearer ") else ""
+        return {"ended": request.app.state.operators.sign_out(token)}
+
     dist = REPO_ROOT / "frontend" / "dist"
     if dist.is_dir():
         app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")

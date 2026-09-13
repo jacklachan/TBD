@@ -109,6 +109,8 @@ export default function App() {
   >(null);
   const [instruction, setInstruction] = useState("");
   const [token, setToken] = useState("");
+  const [operator, setOperator] = useState("");
+  const [password, setPassword] = useState("");
   const [budget, setBudget] = useState("0.20");
   // Pasted catalogue elements, and the exchange panel's issued and received
   // records. Grouped because all three are someone else's data passing through
@@ -458,28 +460,78 @@ export default function App() {
         )}
         {desk.accessRequired && (
           <section className="access-card glass">
-            <h2>Operator access</h2>
-            <p>
-              Enter the access token configured on this server. It stays in
-              memory for this session.
-            </p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void desk.connect(token);
-              }}
-            >
-              <input
-                aria-label="Operator access token"
-                type="password"
-                autoComplete="off"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-              />
-              <button className="primary-button" disabled={!!busy || !token}>
-                Connect <ArrowRight />
-              </button>
-            </form>
+            <h2>Sign in</h2>
+            {desk.health?.sign_in_enabled ? (
+              <>
+                <p>
+                  Sign in with the operator account for this deployment. The
+                  server&rsquo;s own access token is never sent to this page.
+                </p>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void desk.signIn(operator, password);
+                  }}
+                >
+                  <label className="sr-only" htmlFor="operator">
+                    Operator name
+                  </label>
+                  <input
+                    id="operator"
+                    name="username"
+                    placeholder="Operator"
+                    autoComplete="username"
+                    value={operator}
+                    onChange={(e) => setOperator(e.target.value)}
+                  />
+                  <label className="sr-only" htmlFor="operator-password">
+                    Password
+                  </label>
+                  <input
+                    id="operator-password"
+                    name="password"
+                    type="password"
+                    placeholder="Password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <button
+                    className="primary-button"
+                    disabled={!!busy || !operator || !password}
+                  >
+                    Sign in <ArrowRight />
+                  </button>
+                </form>
+              </>
+            ) : (
+              <>
+                <p>
+                  Enter the access token configured on this server. It stays in
+                  memory for this session.
+                </p>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void desk.connect(token);
+                  }}
+                >
+                  <label className="sr-only" htmlFor="access-token">
+                    Operator access token
+                  </label>
+                  <input
+                    id="access-token"
+                    type="password"
+                    autoComplete="off"
+                    value={token}
+                    onChange={(e) => setToken(e.target.value)}
+                  />
+                  <button className="primary-button" disabled={!!busy || !token}>
+                    Connect <ArrowRight />
+                  </button>
+                </form>
+              </>
+            )}
           </section>
         )}
 

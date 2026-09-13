@@ -15,15 +15,23 @@ MAX_REQUEST_BYTES = 16_384
 # decision -- which is how /ingest and /interop were briefly served.
 PROTECTED_PREFIXES = ("/cases", "/runs", "/context", "/ingest", "/interop", "/tracking", "/watch")
 
+# Sign-in cannot sit behind the gate it opens. It is bounded and rate limited in
+# backend/operators.py instead.
+OPEN_PATHS = ("/session/login",)
+
 
 class APIGuard:
     """Protect case data/model quota and bound JSON bodies before parsing."""
 
-    def __init__(self, app, token: str, origins: list[str], require_remote_token: bool):
+    def __init__(self, app, token: str, origins: list[str], require_remote_token: bool,
+                 operators=None):
         self.app = app
         self.token = token
         self.origins = set(origins)
         self.require_remote_token = require_remote_token
+        # Sessions minted by signing in. Accepted alongside the configured
+        # token so the real one never has to reach a browser.
+        self.operators = operators
 
     async def __call__(self, scope, receive, send):
         path = scope.get("path", "")
@@ -31,6 +39,8 @@ class APIGuard:
             path == prefix or path.startswith(prefix + "/")
             for prefix in PROTECTED_PREFIXES
         )
+        if path in OPEN_PATHS:
+            is_api = False
         if scope["type"] != "http" or not is_api or scope.get("method") == "OPTIONS":
             return await self.app(scope, receive, send)
 
@@ -45,8 +55,15 @@ class APIGuard:
             return await refuse(403, "ORIGIN_DENIED", "This browser origin is not permitted.")
         if self.token:
             supplied = headers.get("authorization", "")
-            if not secrets.compare_digest(supplied.encode(), f"Bearer {self.token}".encode()):
-                return await refuse(401, "ACCESS_REQUIRED", "Enter the operator access token.")
+            bearer = supplied[7:] if supplied.startswith("Bearer ") else ""
+            configured = secrets.compare_digest(
+                supplied.encode(), f"Bearer {self.token}".encode()
+            )
+            session = bool(
+                bearer and self.operators is not None and self.operators.is_valid(bearer)
+            )
+            if not (configured or session):
+                return await refuse(401, "ACCESS_REQUIRED", "Sign in to use this desk.")
         elif self.require_remote_token:
             try:
                 local_client = ip_address((scope.get("client") or ("",))[0]).is_loopback

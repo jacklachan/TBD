@@ -697,3 +697,67 @@ No failures. Demo is safe to show.
 
 Run `scripts/smoke_llm.py` with a real key, then `scripts/live_api_check.py`.
 That is the only unexercised path left in the agent layer.
+
+---
+
+## [2026-09-13] — Builder C — sign-in, so the Space secret stays on the server
+
+**Changed paths**
+
+- `backend/operators.py` — new. Session mint/verify, expiry, rate limiting.
+- `backend/security.py` — the guard accepts a session token beside the configured one.
+- `backend/api.py` — `POST /session/login`, `POST /session/logout`, `sign_in_enabled` on `/health`.
+- `frontend/src/{api,contracts,useWorkspace}.ts`, `App.tsx` — name/password form.
+- `DEPLOY.md`, `.env.example`, `tests/test_operators.py` — 20 tests.
+
+A judge opening the Space had to paste `DESK_ACCESS_TOKEN` into a field, which
+means the Space secret is read aloud, screenshotted and pasted into chat. It now
+shows a name and password (`Paan` / `Banaras`, overridable by
+`DESK_ADMIN_USER` / `DESK_ADMIN_PASSWORD`).
+
+**Signing in returns a different token from the configured one**, which is the
+design decision that matters: the real secret never reaches a browser. Sessions
+expire after twelve hours, are capped at 64, and failures are rate limited per
+client so the endpoint is not a free password oracle. Both credential halves are
+compared in constant time and the refusal message is identical for either — on a
+two-field form, naming the wrong field hands back half the answer.
+
+**This is a convenience gate, not authentication.** The credentials default to
+values in this repository. It protects the *token*, not the *application*. That
+is stated in the module docstring, in `DEPLOY.md` and in `.env.example`, and it
+should not be grown into something that looks like more than it is.
+
+**Verified in the browser**, both viewports, against a token-protected server:
+the gate appears, a wrong password stays gated, the right one opens the desk, and
+`the-real-space-secret` appears nowhere in the delivered HTML.
+
+**One defect found while building it.** `SignInRequest` was first declared inside
+`create_app`. With `from __future__ import annotations` the route annotation is a
+string that FastAPI resolves against *module* globals, so the model was invisible
+and the body was silently treated as a query parameter — every request 422'd with
+"Field required". The other request models are module-level for this reason.
+**Declare FastAPI request models at module scope.**
+
+**Commands run**
+
+```
+$ python -m pytest tests/ -q
+383 passed, 2 warnings in 135.26s
+```
+
+**Not verified / not run**
+
+- Still no live model call; no Gemini key in this checkout. `smoke_llm.py` and
+  `live_api_check.py` remain the only unexercised paths in the agent layer.
+- Sign-in was exercised against a local server, not the deployed Space.
+
+**Contract changes**
+
+- `/health` gains `sign_in_enabled`. Additive. `contracts.ts` updated in the same
+  commit.
+
+**Next concrete action**
+
+Set `DESK_ADMIN_USER`/`DESK_ADMIN_PASSWORD` as Space secrets if the defaults
+should not be the live ones, and **rotate `DESK_ACCESS_TOKEN`** — the previous
+value was shared in chat before this existed.

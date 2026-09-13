@@ -30,7 +30,9 @@ Add these in Space Settings -> Variables and secrets as **secrets**:
 | Secret | Value |
 |---|---|
 | HF_TOKEN | Persistent fine-grained token with Inference -> Make calls to Inference Providers permission |
-| DESK_ACCESS_TOKEN | Long random operator password for the app's bearer-token prompt |
+| DESK_ACCESS_TOKEN | Long random secret that gates the API. With sign-in on, judges never see or type it |
+| DESK_ADMIN_USER | Sign-in name. Defaults to `Paan` |
+| DESK_ADMIN_PASSWORD | Sign-in password. Defaults to `Banaras` |
 
 Create the token at https://huggingface.co/settings/tokens. Repository write
 permission is unnecessary for runtime inference. Deployment uses separate
@@ -108,3 +110,26 @@ full-agent workflow target, not an established guarantee.
   There is a concurrency cap, but no per-user billing allowance.
 - Frozen datasets are bundled. There are no runtime CelesTrak calls.
 - Docker/HF build results must be verified separately from local Python tests.
+
+
+## Signing in
+
+When `DESK_ACCESS_TOKEN` is set, the page shows a name and password instead of a
+token field. Signing in mints a **separate** session token, so the Space secret
+itself never reaches a browser, a screenshot or a screen share, and a session
+expires after twelve hours.
+
+Defaults are `Paan` / `Banaras`; override with `DESK_ADMIN_USER` and
+`DESK_ADMIN_PASSWORD`.
+
+**Be clear-eyed about what this is.** It is a convenience gate over a shared
+demo login whose defaults are in this repository, so anyone who can read the
+repository can sign in. It protects the *token*, not the *application*. What it
+genuinely buys is that the secret stays on the server, sessions expire, and
+failed attempts are rate limited so the endpoint is not a free password oracle.
+For anything beyond a judged demo, replace it with an identity provider rather
+than extending it.
+
+With no token configured the form does not appear and the API is open, which is
+the right behaviour for `localhost` and the wrong one for a public URL — so set
+the token before deploying.

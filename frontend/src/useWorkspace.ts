@@ -103,6 +103,26 @@ export function useWorkspace() {
     }
   }
 
+  /** Exchange demo credentials for a session token, then open the desk.
+   *  The server's own access token is never sent here and never arrives. */
+  async function signIn(username: string, password: string) {
+    await action("Signing in", async () => {
+      const session = await api.signIn(username, password);
+      setAccessToken(session.token);
+      const status = await api.health();
+      setHealth(status);
+      const next = await api.createCase("primary");
+      setAccessRequired(false);
+      await refresh(next);
+      setTime(0);
+      try {
+        setContext(await api.socrates());
+      } catch {
+        /* context is optional; the desk works without it */
+      }
+    });
+  }
+
   async function connect(token?: string) {
     if (token !== undefined) setAccessToken(token);
     await action("Loading the frozen scenario", async () => {
@@ -183,6 +203,7 @@ export function useWorkspace() {
     });
 
   return {
+    signIn,
     snapshot,
     analysis,
     bundle,

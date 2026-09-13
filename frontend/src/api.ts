@@ -25,6 +25,7 @@ import type {
   SocratesContext,
   TrackingScreen,
   VersionStamp,
+  SignIn,
   VisualizationBundle,
   WatchItem,
 } from "./contracts";
@@ -356,6 +357,14 @@ export const api = {
 
   socrates(signal?: AbortSignal): Promise<SocratesContext> {
     return request("/context/socrates", {}, signal);
+  },
+
+  /** Exchange demo credentials for a session token. */
+  signIn(username: string, password: string): Promise<SignIn> {
+    return request("/session/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
   },
 
   health(): Promise<Health> {

@@ -561,6 +561,8 @@ export interface Health {
   planner_model: string;
   model_access: boolean;
   access_token_required: boolean;
+  /** Server has a token AND accepts a name/password in place of it. */
+  sign_in_enabled: boolean;
 }
 
 /**
@@ -611,4 +613,11 @@ export interface CdmVerification {
   checks: CdmCheck[];
   verdict: "AGREES" | "DISAGREES" | "NO_CLAIMS";
   note: string;
+}
+
+/** What signing in returns. The token is a session, not the server's own. */
+export interface SignIn {
+  token: string;
+  user: string;
+  expires_in_s: number;
 }
