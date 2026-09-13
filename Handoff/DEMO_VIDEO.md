@@ -59,9 +59,9 @@ about fifteen seconds once; open it before recording.
 **Optional, if the model is responding well in rehearsal:** click **Run triage
 agent** before the passes table and let the brief and triage table appear. Say:
 "An agent does the triage — it picks which passes to assess and briefs the
-operator; every number in that table comes from the assessment tool." Its live
-behaviour on GLM has not been measured; skip it if a rehearsal run is slow or
-unresolved.
+operator; every number in that table comes from the assessment tool." Measured
+live on 13 Sep: brief ready in 13.5 s, five passes assessed, no unsupported
+figures. Still rehearse once; skip it if a run is slow or unresolved.
 
 ## 0b · Two operators, one pass — 15–20 s, optional
 
@@ -153,7 +153,7 @@ changes until a human confirms."
 ## 6 · It says so when nothing works — 2:35–3:00
 
 **Screen:** **Run AI planner**. Speed this section up in the edit and put the
-real elapsed time on screen ("real time: 1 min 30 s" — use your measured
+real elapsed time on screen (measured live on 13 Sep: 27.9 s — use your own
 number). It ends "AI outcome: no approvable option". Open **Evidence**: the last
 event is "The independent completion check ruled out every option in this grid."
 

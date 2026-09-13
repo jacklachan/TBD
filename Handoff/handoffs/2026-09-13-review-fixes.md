@@ -136,8 +136,19 @@ constellation; tell the team.**
   → Space revision `2045f0c` (81 files), no secrets or variables changed.
   Started 02:01:09 UTC; `/health` 200 with `model_access: true`;
   `/tracking/screen` 401 without the operator token (route present, guarded);
-  served frontend bundle hash matches the local build. The full live workflow
-  check was not run: the local `.env` no longer holds `DESK_ACCESS_TOKEN`.
+  served frontend bundle hash matches the local build.
+- **Live checks on `2045f0c`, 13 Sep**, operator token restored to `.env`:
+  `scripts/live_api_check.py` **ALL CHECKS PASSED** — plan 4.8 s (3 model
+  calls, reviewer ALLOW), restriction preview 2.2 s, **replan 27.9 s ending
+  NO_APPROVABLE_OPTION** (was 86.3 s; the pre-fix run failed UNRESOLVED at
+  103.6 s), stale approval refused, idempotent execution, export and context.
+  New features: tracking screen 0.8 s (23.4 s compute at startup, warmed);
+  avoidance for the top pass 3.0 s, same answer as local (2,492 m est, 2,487 m
+  re-screen); debris stream analysis 7.8 s; coordination 2.9 s (both as
+  planned 561.7 m BLOCK, agreed only_ours). **Triage agent on live GLM: brief
+  ready in 13.5 s, 4 model calls, 5 assessments, no flagged figures** — all
+  five triaged NEEDS_BURN (IRIDIUM 170, 131, 171, 100, 156). The brief opened
+  with a "Brief for the operator:" line despite the no-headings instruction.
 - Earlier attempt: `deploy_space.py --dry-run` listed 66 committed files and
   no secrets. The real run was refused: `403 Forbidden: You have read access but
   not the required permissions` on `/api/spaces/Auenchanters/TBH/secrets`. The
