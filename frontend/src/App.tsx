@@ -44,6 +44,7 @@ const SatellitePreview = lazy(() =>
 );
 const scenarios = [
   { id: "primary", name: "The second encounter" },
+  { id: "debris_cloud", name: "Through a breakup debris stream" },
   { id: "collision", name: "Impact if nothing changes" },
   { id: "simple_conflict", name: "A single close approach" },
   { id: "no_encounter", name: "A clear orbit" },
@@ -496,7 +497,7 @@ export default function App() {
               <p className={strike ? "caption strike-note" : "caption"}>
                 {strike
                   ? "The objects occupy the same space. On this trajectory they collide."
-                  : "Minimum to either object · 6-hour horizon"}
+                  : `Minimum to any of ${Math.max(1, (snapshot?.scenario.objects.length ?? 3) - 1)} tracked objects · 6-hour horizon`}
               </p>
               <div className="clearance-meter">
                 <div
@@ -1698,8 +1699,9 @@ export default function App() {
           onClose={() => setPanel(null)}
         >
           <p className="dialog-intro">
-            Orion West is a working name. One spacecraft, two synthetic debris
-            objects, six simulated hours.
+            Orion West is a working name. One spacecraft,{" "}
+            {Math.max(1, (snapshot?.scenario.objects.length ?? 3) - 1)} synthetic
+            debris objects, six simulated hours.
           </p>
           <dl className="provenance-list">
             <dt>Catalog seed</dt>

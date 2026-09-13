@@ -51,6 +51,28 @@ Five regressions added in `tests/test_handoff_refinements.py`; the
   the model's first turn already sees the vetoes. Neither was tried: no
   `HF_TOKEN` in this checkout.
 
+## Debris-stream scenario (added later the same day, one-hour scope)
+
+- `scenarios/cloud.py` → `scenarios/variants/debris_cloud.json`: 14 objects.
+  Keeps `primary.json`'s satellite, DEB-1 and DEB-2 exactly (baseline 133.698 m,
+  trap `t30_ret_100` blocked by DEB-2 at 523.170 m); adds a second trap FRG-09
+  constructed on `t30_ret_200` (477.332 m) and 10 fragments from a simulated
+  breakup, each kept only if ≥ 1.5 floors from every grid option. Verified
+  answer `t30_pro_200`, closest 2,209.532 m (DEB-1); all four 0.20 m/s prograde
+  options pass. Seed 3001, 12 attempts, 17 s to generate.
+- `tests/test_debris_cloud.py` re-verifies those facts from the JSON; the
+  fixture-shape test now allows ≥ 3 objects; CONTRACTS.md updated.
+- 3D scene draws every tracked object (paths only for the spacecraft and the
+  measured object). Captions count objects. GZip on responses ≥ 4 KB.
+- Measured locally: analysis 5.6 s (was ~1.2 s on primary; verifier is still
+  one pass per object), bundle 5.2 MB before compression, tool results ≤ 1.7 KB,
+  CDM record 13.9 KB (limit 16 KB — a larger stream will exceed it).
+- **Not measured:** live GLM planner behaviour on this scenario. Rehearse before
+  recording (DEMO_VIDEO.md says how to fall back).
+- Deferred: vectorised multi-object verifier (would bring analysis back near
+  1 s and allow ~40+ fragments); a real-catalogue screen; two-operator
+  coordination.
+
 ## Commit and deployment
 
 - Committed and pushed to GitHub `main` as `360e89d` (fast-forward from

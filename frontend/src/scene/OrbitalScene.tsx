@@ -112,11 +112,21 @@ export function OrbitalScene(props: Props) {
       debrisMaterial,
     );
     scene.add(debris);
-    const second = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(1, 0),
-      debrisMaterial,
-    );
-    scene.add(second);
+    // Every other tracked object, not only one: a breakup stream can carry a
+    // dozen. Meshes are created on first sight of an ID and hidden when a
+    // bundle no longer contains it.
+    const otherGeometry = new THREE.IcosahedronGeometry(1, 0);
+    const others = new Map<string, THREE.Mesh>();
+    const otherMesh = (id: string) => {
+      let mesh = others.get(id);
+      if (!mesh) {
+        mesh = new THREE.Mesh(otherGeometry, debrisMaterial);
+        mesh.rotation.set(0.3 + others.size * 0.4, -0.6, 0.2);
+        others.set(id, mesh);
+        scene.add(mesh);
+      }
+      return mesh;
+    };
     const lineGeometry = new THREE.BufferGeometry().setAttribute(
       "position",
       new THREE.Float32BufferAttribute(new Float32Array(6), 3),
@@ -159,16 +169,18 @@ export function OrbitalScene(props: Props) {
         v.clone().sub(currentOrigin).multiplyScalar(scale);
       satellite.position.copy(display(sat));
       debris.position.copy(display(other));
-      // The generated fixtures always carry a third object, so this mesh used
-      // to be unconditional. A case built from pasted elements can be just a
-      // spacecraft and one other object, and reaching for a third then read
-      // position samples off undefined.
-      const extraId = next.bundle.object_ids.find(
-        (id) => id !== otherId && id !== next.bundle.satellite_id,
+      // A case built from pasted elements can be a spacecraft and one other
+      // object, so there may be no others at all.
+      const extraIds = new Set(
+        next.bundle.object_ids.filter(
+          (id) => id !== otherId && id !== next.bundle.satellite_id,
+        ),
       );
-      second.visible = extraId !== undefined;
-      if (extraId !== undefined) {
-        second.position.copy(display(vector(variant.positions_m[extraId][s])));
+      for (const [id, mesh] of others) mesh.visible = extraIds.has(id);
+      for (const id of extraIds) {
+        otherMesh(id).position.copy(
+          display(vector(variant.positions_m[id][s])),
+        );
       }
       const gap = sat.distanceTo(other) * scale;
       satellite.scale.setScalar(
@@ -177,11 +189,10 @@ export function OrbitalScene(props: Props) {
       debris.scale.setScalar(
         next.view === "orbit" ? 0.011 : Math.max(0.006, gap * 0.02),
       );
-      second.scale.copy(debris.scale);
+      for (const mesh of others.values()) mesh.scale.copy(debris.scale);
       // Attitude is illustrative; centre positions are the computed samples.
       satellite.rotation.set(0.45, -0.35, 0.4);
       debris.rotation.set(0.8, 0.5, 0.7);
-      second.rotation.set(0.3, -0.6, 0.2);
       earth.position.copy(currentOrigin).multiplyScalar(-scale);
       earth.scale.setScalar(earthRadiusM * scale);
       atmosphere.position.copy(earth.position);
@@ -208,7 +219,10 @@ export function OrbitalScene(props: Props) {
       ) {
         disposeScene(paths);
         paths.clear();
-        for (const id of next.bundle.object_ids) {
+        // Paths for the spacecraft and the object being measured. A full
+        // orbit line for every fragment turned the stream into scribble; the
+        // fragments themselves stay visible as markers.
+        for (const id of [next.bundle.satellite_id, otherId]) {
           const points: THREE.Vector3[] = [];
           const lower = next.view === "orbit" ? 0 : Math.max(0, s - 4);
           const upper =

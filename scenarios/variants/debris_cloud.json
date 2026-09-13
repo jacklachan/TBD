@@ -1,0 +1,323 @@
+{
+  "schema_version": 1,
+  "scenario_id": "debris_cloud",
+  "scenario_version": 1,
+  "seed": 3001,
+  "description": "The second encounter inside a breakup debris stream: the satellite crosses 11 fragments' paths, and the obvious second fix runs into one of them.",
+  "epoch_utc": "2026-09-11T21:51:16.570+00:00",
+  "horizon_s": 21600.0,
+  "objects": [
+    {
+      "object_id": "SAT-1",
+      "name": "NOAA 20 (JPSS-1) (seed orbit)",
+      "kind": "SATELLITE",
+      "maneuverable": true,
+      "initial_state": {
+        "r_m": [
+          -7004764.575802581,
+          -1696637.7398668586,
+          -5.2169016993524355
+        ],
+        "v_mps": [
+          -258.8102174325853,
+          1105.0075014262668,
+          7351.668502094822
+        ]
+      }
+    },
+    {
+      "object_id": "DEB-1",
+      "name": "Synthetic debris 1",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "initial_state": {
+        "r_m": [
+          -5216379.845690938,
+          4857771.626633755,
+          1061441.4903880763
+        ],
+        "v_mps": [
+          -1366.6017227316593,
+          -2942.7624452453283,
+          6694.526678310415
+        ]
+      }
+    },
+    {
+      "object_id": "DEB-2",
+      "name": "Synthetic debris 2",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "initial_state": {
+        "r_m": [
+          -619587.5510957798,
+          -6941288.120909575,
+          -1865437.2043188536
+        ],
+        "v_mps": [
+          3555.3211869681145,
+          -1983.0822261115711,
+          6217.76086393976
+        ]
+      }
+    },
+    {
+      "object_id": "FRG-01",
+      "name": "Breakup fragment 1",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "initial_state": {
+        "r_m": [
+          -2788634.0580663104,
+          -6314865.270171054,
+          -2084813.0666588028
+        ],
+        "v_mps": [
+          3970.6118255064966,
+          -3482.498932479126,
+          5230.56448156267
+        ]
+      }
+    },
+    {
+      "object_id": "FRG-02",
+      "name": "Breakup fragment 2",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "initial_state": {
+        "r_m": [
+          -2813963.5288888384,
+          -6297578.92295319,
+          -2120333.4924073583
+        ],
+        "v_mps": [
+          3952.358043059272,
+          -3521.3837196490595,
+          5212.979232197733
+        ]
+      }
+    },
+    {
+      "object_id": "FRG-03",
+      "name": "Breakup fragment 3",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "initial_state": {
+        "r_m": [
+          -2792872.888142897,
+          -6310198.669787598,
+          -2093002.872364704
+        ],
+        "v_mps": [
+          3968.4582253721937,
+          -3491.0861499739312,
+          5226.861102201235
+        ]
+      }
+    },
+    {
+      "object_id": "FRG-04",
+      "name": "Breakup fragment 4",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "initial_state": {
+        "r_m": [
+          -2795602.876816115,
+          -6311930.443024886,
+          -2094305.2959846375
+        ],
+        "v_mps": [
+          3964.915322572722,
+          -3492.4902286992537,
+          5224.768876437238
+        ]
+      }
+    },
+    {
+      "object_id": "FRG-05",
+      "name": "Breakup fragment 5",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "initial_state": {
+        "r_m": [
+          -2847034.845840935,
+          -6275333.474463578,
+          -2161916.2477044417
+        ],
+        "v_mps": [
+          3927.4796479807596,
+          -3568.495366872773,
+          5193.536793864587
+        ]
+      }
+    },
+    {
+      "object_id": "FRG-06",
+      "name": "Breakup fragment 6",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "initial_state": {
+        "r_m": [
+          -2800870.8454003343,
+          -6303693.204998636,
+          -2103563.869114859
+        ],
+        "v_mps": [
+          3963.03125249915,
+          -3503.232574429686,
+          5222.633132270932
+        ]
+      }
+    },
+    {
+      "object_id": "FRG-07",
+      "name": "Breakup fragment 7",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "initial_state": {
+        "r_m": [
+          -2812546.659911766,
+          -6296060.869026359,
+          -2117918.8746098466
+        ],
+        "v_mps": [
+          3954.2572850945235,
+          -3519.655471201272,
+          5216.068135996738
+        ]
+      }
+    },
+    {
+      "object_id": "FRG-08",
+      "name": "Breakup fragment 8",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "initial_state": {
+        "r_m": [
+          -2838652.214096026,
+          -6279145.150840986,
+          -2150630.295562437
+        ],
+        "v_mps": [
+          3934.4194680458786,
+          -3556.6194372327645,
+          5200.456298304387
+        ]
+      }
+    },
+    {
+      "object_id": "FRG-09",
+      "name": "Breakup fragment 9",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "initial_state": {
+        "r_m": [
+          -3399109.1303050527,
+          5545780.656364612,
+          3102080.630072279
+        ],
+        "v_mps": [
+          -3107.598948152061,
+          -4655.186048703471,
+          4901.382865310804
+        ]
+      }
+    },
+    {
+      "object_id": "FRG-10",
+      "name": "Breakup fragment 10",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "initial_state": {
+        "r_m": [
+          -2789964.1247140486,
+          -6312143.207285069,
+          -2086510.9518223107
+        ],
+        "v_mps": [
+          3970.31909666708,
+          -3484.9605597018763,
+          5231.053446784754
+        ]
+      }
+    },
+    {
+      "object_id": "FRG-11",
+      "name": "Breakup fragment 11",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "initial_state": {
+        "r_m": [
+          -2797638.4969027364,
+          -6306654.166227933,
+          -2098859.0212310227
+        ],
+        "v_mps": [
+          3965.062320665527,
+          -3497.927308556771,
+          5224.511468642388
+        ]
+      }
+    }
+  ],
+  "satellite_id": "SAT-1",
+  "primary_threat_id": "DEB-1",
+  "known_windows": [
+    {
+      "window_id": "gs_pass_1",
+      "label": "Ground station pass",
+      "start_s": 1700.0,
+      "end_s": 1900.0
+    }
+  ],
+  "default_policy": {
+    "policy_version": 1,
+    "max_delta_v_mps": 0.2,
+    "min_separation_m": 1000.0,
+    "blocked_windows": []
+  },
+  "provenance": {
+    "source_kind": "CELESTRAK_GP_TLE",
+    "source_url": "https://celestrak.org/NORAD/elements/gp.php?CATNR=43013&FORMAT=TLE",
+    "source_sha256": "578842c4f5d62bf2e69dd723cfda769a64c891e08d6510bc4f76a7a73f55613c",
+    "norad_id": 43013,
+    "object_name": "NOAA 20 (JPSS-1)",
+    "tle_epoch_utc": "2026-09-11T21:51:16.570+00:00",
+    "frame": "SIM_ECI_TEME_SEEDED",
+    "model_version": "two-body-universal-variable-1",
+    "synthetic_conjunction": true,
+    "note": "Satellite initial state derived from a real catalogue TLE at its own epoch. Every other object is synthetic. DEB-1, DEB-2 and one fragment are constructed backward from chosen encounters; the remaining fragments come from a simulated breakup of a synthetic parent object (isotropic 0.3-4 m/s spread) and are kept only if they stay 1.5 floors clear of every grid option. No conjunction here is real."
+  },
+  "generation_evidence": {
+    "attempts_used": 12,
+    "based_on": "primary.json",
+    "object_count": 14,
+    "fragment_count": 11,
+    "breakup_s_before_epoch": 9849.5,
+    "baseline_vs_primary_m": 133.6982866755231,
+    "trap_candidate_id": "t30_ret_100",
+    "trap_blocked_by": "DEB-2",
+    "trap_vs_blocking_m": 523.1695205618638,
+    "second_trap_candidate_id": "t30_ret_200",
+    "second_trap_blocked_by": "FRG-09",
+    "second_trap_vs_blocking_m": 477.3315461266065,
+    "answer_candidate_id": "t30_pro_200",
+    "answer_closest_m": 2209.5323774676867,
+    "answer_closest_object": "DEB-1",
+    "stream_closest_to_any_option_m": 2419.7110755049043,
+    "passing_options": [
+      "t15_pro_200",
+      "t30_pro_200",
+      "t45_pro_200",
+      "t60_pro_200"
+    ],
+    "rejected_attempts": [
+      "attempt 6: second trap is near the baseline",
+      "attempt 7: second trap is near the baseline",
+      "attempt 8: second trap is near the baseline",
+      "attempt 9: second trap is near the baseline",
+      "attempt 10: second trap is near the baseline"
+    ]
+  },
+  "input_hash": "4f1ff85c3f3f579ade968a0a0f71c0f40e3ae29da01efa1b265f63cdfd76069c"
+}

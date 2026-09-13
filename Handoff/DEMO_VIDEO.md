@@ -24,6 +24,19 @@ says.
 If a take goes wrong — HTTP 429, "reviewer unavailable", an unresolved run —
 wait a minute, **Reset case**, and retake that section. Do not keep a failed take.
 
+## Which scenario
+
+Record on **"Through a breakup debris stream"** (scenario dropdown, second
+entry): the same satellite and first trap, plus 11 fragments from a simulated
+breakup and a second trap. Its numbers differ from "The second encounter" in
+sections 2–3; the differences are listed inline below as **[stream]**.
+
+**Rehearse the AI planner on it once before recording.** Its live model
+behaviour has not been measured — the scenario was added after the last live
+run. If the planner does not reach "AI proposal ready" within about a minute on
+two tries, record sections 3–6 on "The second encounter" instead; every number
+in those sections without a **[stream]** note is from that scenario.
+
 ## 1 · The problem — 0:00–0:25
 
 **Screen:** Overview, scenario "The second encounter", globe turning. Click the
@@ -50,13 +63,22 @@ a second object, five and a half hours later."
 
 **Say:** "Twice the fuel clears both."
 
+**[stream]** The clear alternative is instead **0.20 m/s · Prograde · T+30 min**,
+closest approach 2.21 km. Before clicking it, open **Maneuvers**: the
+0.200 m/s retrograde row `t30_ret_200` reads "Verifier rejected · FRG-09:
+477.3 m". Say: "Doubling the burn doesn't save it either — it flies into a
+fragment from the breakup. Eleven fragments, every one screened for every
+option. The answer is to burn the other way."
+
 ## 3 · The agent does the investigation — 1:00–1:30
 
 **Screen:** Click **Run AI planner**. Let the step readout play (≈5 s). The
 notice reads "AI proposal ready · … model calls · … s" and the card shows
 "AI proposal · reviewer allowed". Open **Evidence** and scroll to the event list:
 the model validating `t30_ret_100` → BLOCK, `t30_ret_200` → PASS, then
-"Safety reviewer returned ALLOW". Close the panel.
+"Safety reviewer returned ALLOW". Close the panel. **[stream]** `t30_ret_200`
+is BLOCK here too; read whatever the trace actually shows — the model's path
+varies run to run.
 
 **Say:** "The planner is a language model working through tools. It validated
 the cheap option, read why it failed, and moved to one that works. It never

@@ -89,9 +89,10 @@ def test_fixture_shape_matches_the_contract(path):
     ):
         assert field in document, f"{path.name} missing {field}"
 
-    assert len(document["objects"]) == 3
+    # Three for the original fixtures; the debris-stream fixture carries more.
+    assert len(document["objects"]) >= 3
     ids = [o["object_id"] for o in document["objects"]]
-    assert len(set(ids)) == 3
+    assert len(set(ids)) == len(ids)
     assert document["satellite_id"] in ids
     assert document["primary_threat_id"] in ids
     assert document["primary_threat_id"] != document["satellite_id"]

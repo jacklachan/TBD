@@ -35,6 +35,7 @@ from typing import Callable
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
@@ -577,6 +578,9 @@ def create_app(
     access_token = os.environ.get("DESK_ACCESS_TOKEN", "").strip()
     app.add_middleware(APIGuard, token=access_token, origins=origins,
                        require_remote_token=require_remote_token)
+    # A trajectory bundle for a debris stream is several megabytes of numbers,
+    # which compress well; the browser decodes it transparently.
+    app.add_middleware(GZipMiddleware, minimum_size=4096)
 
     app.state.desk = AppState(
         store=store or Store(":memory:"),
