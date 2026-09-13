@@ -7,11 +7,10 @@ says.
 
 ## Before you record
 
-- [ ] **The Space runs commit `360e89d` or later.** Check the latest commit message
-  on https://huggingface.co/spaces/Auenchanters/TBH/tree/main reads
-  "Deploy verified application from 360e89d". The older build has the
-  unreadable log chart, zooms the globe when you scroll, and its replan
-  can end "unresolved" — do not record on it.
+- [ ] **The Space runs `b132826` or later.** The latest commit message on
+  https://huggingface.co/spaces/Auenchanters/TBH/tree/main should read
+  "Deploy verified application from b132826" (deployed 13 Sep). Older builds
+  lack the Tracking and Coordinate tabs.
 - [ ] `python scripts/live_api_check.py --base https://auenchanters-tbh.hf.space`
   ends with every check passing. Write down the replan time it prints; you say
   it in section 6.
