@@ -20,6 +20,20 @@ calls are run in order; the grid audit rescues every unresolved reason; deadline
 150 s; chart is linear with labelled dips; README/plan corrected. Detail and
 what is still open in [the review session](handoffs/2026-09-13-review-fixes.md).
 
+**13 September, tracking and demo pass (branch `claude/focused-brown-5r09go`, push blocked 403):**
+the catalogue screen now derives its capture radius from the element sets in hand
+rather than a hardcoded 16 km/s, and ships a `completeness` block measuring both
+assumptions the "nothing else was close" claim rests on (observed closure 15.486
+against 16.0 allowed for; worst straight-line error 26 m against a 10 km margin).
+Conjunctions carry a decision deadline from the avoidance planner's own burn
+ladder, and the queue orders on that rather than on miss distance — the closest
+pass is 105 m and three days out, the urgent one is 4.56 km and six minutes from
+its last placeable burn. The chart heading leads with the 523 m veto; the
+walkthrough page no longer hangs on a spinner when the CDN is unreachable.
+394 Python tests, 7 frontend tests, `diagnose.py` clean. **`smoke_llm.py` still
+never run against a live model** — no token and the router is proxy-blocked here.
+Detail in [tracking and demo](handoffs/2026-09-13-tracking-and-demo.md).
+
 Earlier dated sections are historical. Follow the current explicit user request.
 
 ## Current state
