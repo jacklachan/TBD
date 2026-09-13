@@ -1,8 +1,8 @@
 # Builder C — agent, API, storage and integration
 
-Latest refinement: [2026-09-12 HF migration and evidence review](2026-09-12-hf-refinements.md). This current session supersedes the older status below.
+Latest verification: [13 September Orionwest release and live verification](#2026-09-13--orionwest-release-and-live-verification). The sign-in gate, tracking completeness and veto-first UI are deployed; the real GLM smoke test and full live API workflow pass. Earlier HF migration details remain in [the refinement session](2026-09-12-hf-refinements.md).
 
-**Current status, 12 September 2026:** the agent/API is implemented, merged and hardened. Read [REVIEW.md](../REVIEW.md) for security changes and [FRONTEND.md](../FRONTEND.md) for the two new numerical workspace endpoints, browser transport and integration tests. Older dated sections below are historical evidence. The current checkout has no live model key; scripted provider tests are not live-model proof.
+**Current status, 13 September 2026:** all 394 Python tests pass, alongside the actual GLM function-call round trip and the deployed plan/replan/approval/export workflow. Read the deployment record below for measured timings and the outstanding owner-side inference-token rotation. Earlier dated sections and builder checklists are historical.
 
 ## You own
 
@@ -761,3 +761,93 @@ $ python -m pytest tests/ -q
 Set `DESK_ADMIN_USER`/`DESK_ADMIN_PASSWORD` as Space secrets if the defaults
 should not be the live ones, and **rotate `DESK_ACCESS_TOKEN`** — the previous
 value was shared in chat before this existed.
+
+---
+
+## 2026-09-13 — Orionwest release and live verification
+
+The requested source was already merged into GitHub main as `2e51276`; no
+bundle or flat patch was necessary. The three previously at-risk files
+(`backend/operators.py`, `tests/test_operators.py`, and the tracking/demo
+session document) are tracked in main.
+
+**Published:** application source `8bfde8b1fed680aeee4ef3df1b53482041fcf6c6`,
+Space commit `f36e8b59ea14388f07a6193a415dbb67ee005553` at
+https://huggingface.co/spaces/Auenchanters/Orionwest. Runtime reports the same
+Space SHA and RUNNING on CPU Upgrade. The app URL is
+https://auenchanters-orionwest.hf.space. The old app hostname returns 404.
+
+**Changed paths:** README.md adds the submission demo link and shared sign-in;
+DEPLOY.md fixes the renamed Space/origin and documents code-only redeployment;
+scripts/deploy_space.py updates its example command only. Handoff/STATE.md and
+this existing record capture current results. Application behavior was unchanged
+from the teammate's merged source. Pre-existing local instruction/maintenance
+edits remain preserved separately.
+
+**Space configuration:** the four secret names were confirmed through the Hub
+API after configuration: HF_TOKEN, DESK_ACCESS_TOKEN, DESK_ADMIN_USER and
+DESK_ADMIN_PASSWORD. A new 48-byte random desk access token was generated and
+stored directly as the Space secret; no value was printed or committed. The
+shared demo account is Paan / Banaras as requested. ALLOWED_ORIGINS is now
+https://auenchanters-orionwest.hf.space. Existing planner/reviewer model and
+HF_BASE_URL variables were retained. CLI OAuth authenticated the deployment;
+the separate inference token from the earlier project checkout was loaded only
+into the verification process and the Space's HF_TOKEN secret.
+
+**Verification commands and results:**
+
+- `.venv/Scripts/python.exe -m pytest tests/ -q`: 394 passed in 125.31 s;
+  two dependency deprecations (Starlette/httpx and AnyIO BlockingPortal).
+- `npm --prefix frontend ci --no-audit --no-fund`, `npm --prefix frontend test`,
+  `npm --prefix frontend run build`: install, 7 tests, typecheck and Vite build
+  passed. Vite warns about the 919 kB main chunk; the deployed build has the
+  same warning. No bundle-size refactor was attempted before submission.
+- `scripts/smoke_llm.py`, using Python 3.12 and the project HF REST adapter with
+  the existing private inference credential: GLM model
+  `zai-org/GLM-5.3-Flash:baseten` requested `get_case_briefing({})` in 1067 ms,
+  then consumed the tool result and continued in 2354 ms; **3421 ms total**.
+  This was a real provider call. No model attempt failed in this release check.
+- `scripts/diagnose.py` with the same process-only credential: no failures;
+  its embedded rerun passed 394 tests in 110.95 s. The sole runtime warning was
+  that no local server was running on port 8000. Deployment was tested separately.
+- `git diff --check` and a tracked-file credential-pattern scan passed. The
+  upload dry-run enumerated 85 allowlisted committed application inputs.
+- `git push origin main` succeeded, followed by
+  `python scripts/deploy_space.py --space Auenchanters/Orionwest --code-only`.
+  Hub build logs confirm frontend build, image push and cache export completed.
+  Runtime logs confirm application startup and successful API operations.
+- The old global HF CLI lacked the `spaces` command, so log/secret inspection
+  used `uv run --no-project --python 3.12 --with huggingface_hub hf ...`.
+  The first build-log read failed on Windows console encoding; setting
+  `PYTHONIOENCODING=utf-8` allowed the full log to be read successfully.
+- `/health`: HTTP 200 with sign_in_enabled, access_token_required and model_access
+  all true. Unauthenticated tracking and a wrong password return 401. Correct
+  sign-in works; logout invalidates that session and subsequent use returns 401.
+- Authenticated `/tracking/screen`, with the real application Origin header:
+  HTTP 200 in 0.996 s after startup warming. Completeness status COMPLETE;
+  capture radius 490 km; observed closure 15.486 km/s against 16.0 km/s;
+  worst linear error 0.0256 km against a 10 km margin; 3,573 candidates refined.
+- `scripts/live_api_check.py --base https://auenchanters-orionwest.hf.space`,
+  authenticated with a fresh session token held only in process memory:
+  **ALL CHECKS PASSED**, initial plan **4.5 s**, reduced-budget replan **29.5 s**.
+  The initial result rejected t30_ret_100, proposed independently validated
+  t30_ret_200 with reviewer ALLOW, then correctly invalidated that proposal on
+  policy change. The replan reported NO_APPROVABLE_OPTION. Fresh-case reset,
+  duplicate approval/idempotency, export limitations and SOCRATES context passed.
+- Browser: opened the deployed app, saw the sign-in form, signed in, inspected
+  the rendered Earth/spacecraft 3D scene and the 523 m veto headline. Tracking
+  showed 213,120 pairs, 1,151 passes, the Decide first queue led by IRIDIUM 123
+  with its six-minute snapshot decision window, and the completeness section.
+
+**Limits and remaining owner action:** this is a shared demo login, not private
+user identity. The ten-second replan target is still unmet. Scenario memory is
+in-process and resets on rebuild. Snapshot decision times are relative to the
+frozen catalogue epoch, not a current operational countdown. The supplied
+NEXT-STEPS.md reports an HF inference token exposed in a previous chat; that
+account token has not been rotated. The browser is not signed into HF account
+settings, and the deployment CLI login does not supply a supported token-refresh
+operation. The owner was asked to rotate it privately and save the replacement
+to the existing ignored project .env; then update the Space's HF_TOKEN and rerun
+the real smoke test. No secret value is included in this record.
+
+Contract changes: none. No new application feature or numerical change was needed.

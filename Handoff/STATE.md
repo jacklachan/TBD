@@ -1,5 +1,29 @@
 # Satellite Demo — current state and decisions
 
+## 13 September 2026 — current deployed release
+
+GitHub `main` includes the sign-in, tracking-completeness and veto-first UI
+commits. Application source `8bfde8b1fed680aeee4ef3df1b53482041fcf6c6` is deployed
+on [Auenchanters/Orionwest](https://huggingface.co/spaces/Auenchanters/Orionwest)
+as Space revision `f36e8b59ea14388f07a6193a415dbb67ee005553`, verified RUNNING.
+The app is https://auenchanters-orionwest.hf.space; the old `tbh.hf.space`
+application hostname returns 404. All four secrets are configured; the desk
+access token was rotated and the renamed application origin is configured.
+
+Fresh verification: **394 Python tests, 7 frontend tests, production frontend
+and Docker builds passed**. The real GLM-5.3-Flash/Baseten tool-call smoke test
+passed in **3.421 s**. The complete deployed API workflow passed: **4.5 s** initial
+plan, **29.5 s** reduced-budget replan. Sign-in, logout, unauthenticated rejection,
+the 3D scene, veto heading, tracking decision queue and completeness report were
+verified live. The ten-second replan target remains unmet.
+
+The HF inference token mentioned as exposed in the supplied NEXT-STEPS document
+has **not** been rotated: that requires the owner's token-settings session and
+a replacement credential. The deployed token currently passes live inference.
+Detailed commands, limitations and evidence are in
+[Builder C's deployment record](handoffs/C_AGENT_API.md#2026-09-13--orionwest-release-and-live-verification).
+The summaries and tables below are earlier snapshots, superseded by this record.
+
 Revision 6, 13 September 2026. **Current summary:** continued from teammate commit
 `11b4cff18d8ac08ba587fc679e24c405b1d43f8e` in the isolated `TBD-refinements`
 checkout. The runtime now uses the user's chosen **GLM-5.3-Flash through Hugging
