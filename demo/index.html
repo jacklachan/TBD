@@ -300,8 +300,8 @@ footer span:last-child{margin-left:auto}
         <canvas id="gl" aria-label="Orbital view of the spacecraft and two debris objects"></canvas>
         <div class="gl-fallback" id="glfall">
           <div>
-            <p style="color:var(--white);font-weight:600;margin-bottom:8px">3D view unavailable</p>
-            <p style="font-size:13px">Your browser could not start WebGL. Every number and chart below still works.</p>
+            <p style="color:var(--white);font-weight:600;margin-bottom:8px" id="glfall-title">3D view unavailable</p>
+            <p style="font-size:13px" id="glfall-why">Every number and chart below still works.</p>
           </div>
         </div>
         <div class="loading" id="load">
@@ -546,12 +546,27 @@ function nearest(){const p=D.variants[active].pair_m;let id=null,sep=Infinity;
 const cv=document.getElementById("gl");
 let R3=null, ok=false;
 
+/* Why the globe did not come up, which is not always the same answer. On a
+   venue network the three.js CDN is the thing that fails, and telling a viewer
+   their browser cannot do WebGL sends them to fix the wrong problem. */
+let glReason="";
+
 function buildGL(){
-  if(!window.THREE) return false;
+  if(!window.THREE){
+    glReason="The 3D library is served from a CDN this network did not reach. "+
+             "Everything below is computed from data in this file and is unaffected.";
+    return false;
+  }
   try{
     const test=document.createElement("canvas");
-    if(!(test.getContext("webgl")||test.getContext("experimental-webgl"))) return false;
-  }catch(e){ return false; }
+    if(!(test.getContext("webgl")||test.getContext("experimental-webgl"))){
+      glReason="This browser could not start WebGL. Every number and chart below still works.";
+      return false;
+    }
+  }catch(e){
+    glReason="This browser could not start WebGL. Every number and chart below still works.";
+    return false;
+  }
 
   const ER=6.371, S=1/1000;
   const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:window.devicePixelRatio<2,alpha:true,powerPreference:"high-performance"});
@@ -914,8 +929,26 @@ function boot(){
   set("foot-hash","scenario "+META.input_hash.slice(0,10));
 
   buildOpts();
-  ok=!!buildGL();
-  if(!ok){ document.getElementById("glfall").classList.add("on"); cv.style.display="none"; }
+  /* The globe is the optional half of this page. A CDN that answers a .js
+     request with a captive-portal login page, a driver that loses the context
+     mid-build, a partial download -- any of those throws somewhere inside
+     buildGL, and an escaping exception would leave the spinner up forever with
+     none of the numbers ever drawn. Whatever happens in there, the page below
+     still renders. */
+  try{
+    ok=!!buildGL();
+  }catch(e){
+    ok=false;
+    if(!glReason) glReason="The 3D view could not start. Every number and chart below still works.";
+    console.warn("globe disabled:",e);
+  }
+  if(!ok){
+    const fall=document.getElementById("glfall");
+    fall.classList.add("on");
+    if(glReason) document.getElementById("glfall-why").textContent=glReason;
+    if(!window.THREE) document.getElementById("glfall-title").textContent="3D view offline";
+    cv.style.display="none";
+  }
   seek(worst(BASE)); active=BASE; buildOpts(); paint();
   if(R3) R3.setOpt();
   requestAnimationFrame(t=>{last=t;loop(t);});
