@@ -1,0 +1,20 @@
+Orion West
+Copyright 2026 Orion West contributors
+
+Original project code and documentation are licensed under the Apache License,
+Version 2.0. Third-party software, datasets, imagery, and supplied design-reference
+materials retain their respective licenses and notices; they are not relicensed
+by this project.
+
+The Earth texture is NASA Earth Observatory Blue Marble Next Generation imagery.
+Orbital element sets and conjunction context are sourced from CelesTrak. Source,
+retrieval, and integrity information is recorded in frontend/ASSETS.md,
+scenarios/seed_provenance.json, data/catalog/catalog_provenance.json, and
+data/context/socrates_provenance.json. No NASA or CelesTrak endorsement is implied.
+
+Inter is distributed under the SIL Open Font License. Phosphor and Three.js are
+distributed under the MIT License. Their notices are preserved in
+frontend/public/licenses/. Other installed dependencies retain their own licenses.
+
+README screenshots and animations were captured from the deployed Orion West
+application; their underlying third-party imagery retains the attribution above.

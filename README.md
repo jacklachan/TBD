@@ -8,162 +8,183 @@ app_port: 7860
 pinned: false
 ---
 
-# Orion West
+<div align="center">
 
-[Open the live demo](https://auenchanters-orionwest.hf.space) · [Hugging Face Space](https://huggingface.co/spaces/Auenchanters/Orionwest)
+# 🛰️ Orion West
 
-Demo sign-in: **Paan** / **Banaras**. This shared demo login keeps the server's access token off screen; it is not a private-account identity system.
+### Autonomous orbital decisions with a hard safety veto.
 
-A satellite is predicted to pass too close to a piece of debris. This decides what to do about it, and shows its working.
+Track real debris. Test the burn. Reject what fails. Show the evidence.
 
-The interesting part is what happens next. The cheapest manoeuvre that clears the original threat turns out to put the satellite **523 m from a second object** — so an independent check rejects it, and the planner finds one that clears both. Then an operator can halve the fuel budget in plain English, and the system re-solves and reports honestly that nothing is left that works.
+[![Live demo](https://img.shields.io/badge/Live_demo-Open_the_workspace-22c55e?style=for-the-badge)](https://auenchanters-orionwest.hf.space)
+[![Hugging Face Space](https://img.shields.io/badge/Hugging_Face-Space-ffb000?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/spaces/Auenchanters/Orionwest)
+[![Python](https://img.shields.io/badge/Python-3.12%2B-3776ab?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Apache 2.0](https://img.shields.io/badge/License-Apache--2.0-e879f9?style=for-the-badge)](LICENSE)
 
-## Against the problem statement
+<br />
 
-> *Space Tech & Orbital Sustainability: Build autonomous agents to track space debris, optimize satellite maneuver planning, or coordinate open-source orbital traffic management to protect global communication infrastructure.*
+**[Launch Orion West](https://auenchanters-orionwest.hf.space)** · **[Read the deployment notes](DEPLOY.md)** · **[Explore the evidence](Handoff/STATE.md)**
 
-| Clause | Where it lives | How far it goes |
-|---|---|---|
-| **Autonomous agents** | `backend/agent/` | A bounded planner with six tools, a safety reviewer that can veto, case memory, and plain-English constraint interpretation. It can design a burn of its own rather than only pick one off the grid — and a designed burn passes through the identical independent check, so the freedom costs no safety. Approvability is read off typed results, so the model cannot approve anything — that is enforced in code, not in a prompt. **A second agent triages the real screen** (`backend/agent/tracker.py`, Tracking tab): it lists passes, runs the avoidance assessment on the ones that need it, and briefs the operator; the triage table is built from tool results and figures in its prose that no tool returned are flagged. **The autonomous watch** (`backend/agent/watch.py`, *Autonomous watch* tab) chains them with no operator input: detect → AI triage → burn estimate and re-screen → AI safety review → coordination check → a decision queue. The only human step is approving a burn, which is simulated. |
-| **Track space debris** | `backend/tracking.py`, the **Tracking** tab | **A real screen.** All 80 Iridium NEXT satellites against 2,664 catalogued fragments of the 2009 Iridium 33 / Cosmos 2251 collision and the 2007 Fengyun-1C test, 84 hours, SGP4 at common UTC times, every pass under 10 km refined: 213,120 pairs, 1,151 passes. Checked against CelesTrak SOCRATES: our closest pass (IRIDIUM 170 x FENGYUN 1C DEB 30232, 105 m) is one SOCRATES published (48 m), with closest-approach times 0.03 s apart. Element sets fetched once and committed (`data/catalog/`). Pasted element sets (`POST /ingest/tle`) still work too. |
-| **Optimize satellite manoeuvre planning** | `backend/planning/`, `backend/core/` | The core. 25 options screened against the primary threat, then independently re-verified against every object over the full horizon by a separate code path at a finer step. The two paths agree to 3.6e-08 m. The planner may also design a burn the grid does not contain; that burn is screened by both paths too, agreeing to 7.7e-10 m. |
-| **Coordinate open-source orbital traffic management** | `backend/interop.py`, `?format=cdm`, `POST /interop/verify-cdm` | A decision leaves as a CCSDS-shaped Conjunction Data Message **carrying the state vectors and the manoeuvre, not just the conclusion** — and the receiving endpoint throws the conclusions away and recomputes the encounter from those states with the same verifier that gates our own proposals. The receiver does not have to trust the sender. `python scripts/interop_demo.py` shows the exchange, including a tampered record being caught. **Who moves** (`backend/coordination.py`, Coordinate tab, scenario *Another operator's satellite*): each operator's own burn clears the pass by about 1,465 m, but executed together they bring the satellites to 561.7 m. Both plans are checked together, joint plans are compared under a published rule (least total delta-v, then fewer movers, then larger clearance), and the agreement is fingerprinted so either side can recompute it. |
-| **Protect global communication infrastructure** | `backend/avoidance.py`, **Assess avoidance** | The protected fleet is a real communications constellation. For any real pass, burns at half-orbit multiples before it are estimated with Clohessy-Wiltshire on the SGP4 geometry, then the best is re-screened against every fragment for 12 hours; a burn that creates a new close approach is rejected. For the 105 m pass: 0.25 m/s, 342 min before, estimated 2.49 km, re-screen 2.49 km, nothing else within 5 km. Separately, 19 of the 25 SOCRATES conjunctions shipped involve a communications satellite. |
+</div>
 
-### What we did not build, and why
+<p align="center">
+  <img src="docs/media/overview.png" alt="Orion West live workspace showing a satellite, debris, and a separation chart" width="100%" />
+</p>
 
-The statement offers three tracks joined by *or*. We went deep on manoeuvre planning rather than wide across all three, and the gaps are worth naming rather than glossing:
+<p align="center"><em>The deployed workspace: a decision is only useful when the operator can see why it survived.</em></p>
 
-- **Not the whole catalogue.** We screen one constellation against the debris of the two events that seeded its shell, not eighteen thousand objects against each other. Public element sets are roughly a kilometre accurate at epoch and degrade over days, and carry no covariance: a pass found here is a reason to look, not a prediction. The two-body planner is not used on real passes, because replaying SGP4 geometry in two-body mispredicts them by 7-22 km within hours; real passes get the linearised SGP4 assessment instead.
-- **Coordination is a rule, not a negotiation.** Two operators' plans are checked together and a published rule picks who moves; there is no automated messaging between two live agents, and the partner satellite is synthetic.
-- **No collision probability, anywhere.** A conforming CDM carries a covariance for each object and public element sets do not have one. We report deterministic simulated separation and say what was screened. The CDM export states this in its own header.
+## The one-minute story
 
-### The argument connecting the slice to the whole
+Orion West is a decision-making workspace for orbital conjunctions. It combines deterministic orbital mechanics with bounded AI agents, then puts an independent verifier between a recommendation and an approval.
 
-Orbital traffic management does not usually fail for want of a protocol. It fails because one operator cannot tell whether another operator's proposed manoeuvre is safe — and the expensive part of answering that is verification, not messaging.
+1. **Find the near miss.** A real NOAA-20 orbit is placed in a verified demonstration encounter with debris.
+2. **Try the cheapest answer.** The planner screens 25 manoeuvres. The cheapest option clears the first object, but creates a new 523 m conflict with a second object.
+3. **Let the veto win.** The independent reviewer rejects that option. The next option holds 2.5 km of clearance. Halve the fuel budget and the system honestly reports `NO_APPROVABLE_OPTION`.
 
-This is the demonstration: the cheapest manoeuvre that fixes the original encounter puts the satellite 523 m from a second object, an independent check catches it, and the option that survives costs twice the fuel.
+The point is not that an AI can suggest a burn. The point is that it cannot make an unsafe burn look approved.
 
-Then that decision leaves as a record another operator can verify for themselves — and if the record overstates its clearance, they find out by recomputing it, not by trusting it. A claim that can be checked is the unit of work traffic coordination is actually made of.
+## Why this is different
 
-## For judges: two buttons
+| Design decision | What the operator gets |
+| --- | --- |
+| **Veto-first safety** | Approvability is read from typed validation results. The model can recommend; it cannot approve. |
+| **Independent verification** | A separate code path rebuilds the encounter from raw scenario data, uses a finer scan, and checks every object across the horizon. |
+| **Evidence before prose** | Numbers shown in the UI come from backend evidence. Unsupported figures in an agent brief are flagged instead of trusted. |
+| **Real tracking context** | The Tracking view screens an actual Iridium NEXT fleet against catalogued fragments from the Iridium 33 / Cosmos 2251 and Fengyun-1C events. |
 
-- **Autonomous watch** — one click; watch the six stages light up as the agents find, triage, plan, review and coordinate over real Iridium NEXT and debris data, then approve a burn from the queue.
-- **Crash test** — the same satellite and debris on one clock: doing nothing ends in a collision (4.0 m between centres at 7.7 km/s); the verified burn is 9.4 km away at that instant. Positions are simulated at one-second steps; the explosion is illustrative.
+## See the veto happen
 
-## What is real and what is not
+<p align="center">
+  <img src="docs/media/veto-evidence.png" alt="Orion West evidence panel showing the rejected manoeuvre and its secondary close approach" width="100%" />
+</p>
 
-| | |
-|---|---|
-| Satellite's starting orbit | **Real** — NOAA 20 (JPSS-1), NORAD 43013, from CelesTrak, parsed from the committed element set |
-| Both debris objects, every close approach | **Synthetic**, constructed backward from an encounter and verified by forward propagation |
-| "Real conjunctions this week" panel | **Real** — 25 published close approaches from CelesTrak SOCRATES Plus |
+The first manoeuvre is attractive because it is cheap. It is rejected because it creates another close approach. That chain — proposal → independent scan → veto → safer alternative — is the core product, not a hidden implementation detail.
 
-The orbit is realistic. The encounter is constructed. Those are different claims and the product never blurs them.
+## A living orbital workspace
 
-No collision probability is computed anywhere. Separations are deterministic values under a two-body model over a six-hour horizon. Execution is simulated; nothing is transmitted to any spacecraft.
+<p align="center">
+  <img src="docs/media/orbital-playback.gif" alt="Animated Orion West orbital playback with the satellite, debris, and separation chart" width="900" />
+</p>
 
-## Running it
+The live workspace lets a judge rotate the globe, jump between exact encounters, play the shared clock, inspect the separation chart, compare all 25 options, change the fuel budget, trigger a replan, review evidence, and export a decision record.
 
-```bash
-pip install -r requirements-dev.txt  # Python 3.12+
-cp .env.example .env          # then put your HF_TOKEN in it
-python -m pytest tests/ -q
+<table>
+  <tr>
+    <td width="33%" align="center"><strong>Encounter</strong><br /><br /><img src="docs/media/encounter.png" alt="Orion West encounter view" width="100%" /></td>
+    <td width="33%" align="center"><strong>Tracking</strong><br /><br /><img src="docs/media/tracking.png" alt="Orion West real debris tracking view" width="100%" /></td>
+    <td width="33%" align="center"><strong>Light mode</strong><br /><br /><img src="docs/media/overview-light.png" alt="Orion West workspace in light mode" width="100%" /></td>
+  </tr>
+</table>
+
+## Judge-ready proof
+
+The values below come from repository tests, scripts, or the deployed application — not from a mock UI.
+
+| Signal | Verified result |
+| --- | --- |
+| Candidate manoeuvres | 25 options screened and ranked |
+| Safety veto | Cheapest candidate rejected after a 523 m secondary conflict |
+| Surviving alternative | 2.5 km clearance in the same scenario |
+| Real tracking screen | 80 Iridium NEXT satellites × 2,664 debris objects; 213,120 pairs; 1,151 passes under 10 km across 84 hours |
+| External context check | Closest tracked pass: 105 m locally vs 48 m in a published SOCRATES record; closest-approach times differ by 0.03 s |
+| Live hosted planner | `PROPOSAL_READY` with reviewer `ALLOW` in 4.5 s on GLM-5.3-Flash through Hugging Face |
+| Live constrained replan | `NO_APPROVABLE_OPTION` after “halve the fuel budget” in 29.5 s |
+| Automated regression coverage | 394 Python tests + 7 frontend unit tests |
+
+The hosted AI path is intentionally labelled with its real latency. Orion West does not claim a ten-second replan target that the current model path does not meet.
+
+## Try the live demo
+
+Open **[auenchanters-orionwest.hf.space](https://auenchanters-orionwest.hf.space)**.
+
+| Field | Demo value |
+| --- | --- |
+| Username | `Paan` |
+| Password | `Banaras` |
+
+This is a shared demonstration login for the public Space, not a private-account identity system. Nothing in the README is the server access token.
+
+For a fast walkthrough, open **Autonomous watch** and let the six stages run: detect → AI triage → burn estimate → re-screen → safety review → coordination. The **Crash test** view shows the contrast between doing nothing and the verified burn; the explosion is illustrative and execution is simulated.
+
+## What is real — and what is constructed
+
+| Component | Status |
+| --- | --- |
+| NOAA-20 / JPSS-1 starting orbit, NORAD 43013 | **Real** — parsed from a committed CelesTrak element set |
+| Iridium NEXT and collision-fragment tracking context | **Real** — committed catalogue data and CelesTrak SOCRATES context |
+| Demonstration close approaches | **Synthetic** — constructed backward from an encounter, then verified by forward propagation |
+| Spacecraft execution | **Simulated** — no command is transmitted to a spacecraft |
+| Collision probability | **Not computed** — the product reports deterministic separation and exactly what was screened |
+
+The orbit is realistic. The encounter is constructed. Orion West keeps those claims separate in the UI and in its exported records.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[Scenario + catalogue data] --> B[Planner<br/>25 candidates]
+    B --> C[Independent verifier<br/>full horizon + every object]
+    C --> D{All constraints pass?}
+    D -- No --> E[VETO<br/>explain the conflict]
+    D -- Yes --> F[Decision queue<br/>operator approval]
+    E --> B
+    F --> G[Exportable evidence<br/>JSON / Markdown / CDM]
 ```
 
-```bash
-python scripts/demo_pipeline.py       # the whole decision chain, no UI, no model
-uvicorn backend.api:app --port 8000   # the API
-python scripts/live_api_check.py      # 20 checks end to end against the live model
-python scripts/diagnose.py            # pre-demo gate: data, numerics, build, tests
+The model is a bounded participant in the loop. It has tools for planning, reviewing, memory, and plain-English constraint changes, but typed backend results remain authoritative.
+
+### Repository map
+
+```text
+backend/core/        propagation, trajectories, encounter detection
+backend/planning/    candidate search, primary screening, independent verifier
+backend/agent/       provider seam, planner, reviewer, tracker, autonomous watch
+backend/tracking.py  SGP4-based catalogue screening
+backend/api.py       HTTP surface, auth, approval, exports
+frontend/            React + Three.js workspace
+scenarios/           generated and asserted orbital fixtures
+data/                committed catalogues and provenance records
 ```
 
-The active planner and reviewer use **GLM-5.3-Flash through Hugging Face**:
-`zai-org/GLM-5.3-Flash:baseten` at `https://router.huggingface.co/v1`.
-`HF_BASE_URL` also accepts a dedicated endpoint's HTTPS `/v1` URL. No server GPU
-or model download is needed. Configure `HF_TOKEN`, `PLANNER_MODEL` and
-`REVIEWER_MODEL`, then run `python scripts/smoke_llm.py`. A token being present
-does not prove available credits or successful inference. There is no automatic
-Gemini fallback. See [DEPLOY.md](DEPLOY.md) for the Docker Space and its secrets.
+## Run it locally
 
-Two narrated terminal walkthroughs, for showing the argument without the UI:
+Requirements: Python 3.12+, Node.js 24, and an optional Hugging Face token for the live planner.
 
 ```bash
-python scripts/collision_demo.py --offline   # a strike, and the grid's poor answer
-python scripts/collision_demo.py             # + the burn the agent designs instead
-python scripts/interop_demo.py               # a record issued, checked, and tampered with
-```
-
-Export a decision as JSON, Markdown or a CCSDS-shaped CDM:
-`GET /cases/{id}/export?format=cdm`.
-
-Deployment to Hugging Face Spaces: [DEPLOY.md](DEPLOY.md).
-
-## The interactive workspace
-
-Use Node.js 24 and Python 3.12+. Build the frontend before starting the server:
-
-```bash
+pip install -r requirements-dev.txt
 npm --prefix frontend ci
 npm --prefix frontend run build
+
 python -m uvicorn backend.api:app --host 127.0.0.1 --port 8000
 ```
 
-Open **http://127.0.0.1:8000**. The server serves both the API and the production frontend. For frontend development, keep the API on port 8000 and run `npm --prefix frontend run dev`; Vite opens port 5173 and proxies API requests.
-
-The workspace includes a rotatable 3D globe, an inspectable procedural spacecraft, exact encounter jumps, shared-clock playback, a separation chart, a 25-option comparison table, manual budget changes, AI restriction preview/confirmation, reviewed simulated approval, reset and evidence export. The numerical comparison works without an API key and is labeled separately from AI runs. Set `HF_TOKEN` on the backend to use the real planner (GLM-5.3-Flash through Hugging Face). Remote access also requires `DESK_ACCESS_TOKEN`; the browser asks for the operator token and keeps it in memory only.
+Open `http://127.0.0.1:8000`. The deterministic workflow runs without an API key. To enable the hosted model path, copy `.env.example` to `.env`, set `HF_TOKEN`, `PLANNER_MODEL`, and `REVIEWER_MODEL`, then run:
 
 ```bash
-python -m pytest tests -q                    # 356 tests
-npm --prefix frontend test                  # 7 unit tests
-npm --prefix frontend run test:browser      # running API + Vite; Chrome installed
+python scripts/smoke_llm.py
 ```
 
-The browser suite includes four real numerical-workflow checks and an optional scripted-agent fixture. [Frontend verification and handoff](Handoff/FRONTEND.md) records how to run that fixture, screenshots, and the limits of the checks. [Asset attribution](frontend/ASSETS.md) records the supplied design, NASA imagery and library licenses.
+Useful checks:
 
-## Verified
-
-Every figure below is printed by a test or a script in this repository, not quoted from memory.
-
-| | |
-|---|---|
-| Propagation vs an independent DOP853 reference | 1.155e-06 m over one orbit |
-| Six hours backward then forward again | 8.2e-07 m from where it started |
-| Energy and angular-momentum drift over six hours | below 4.1e-14 relative |
-| Independent verifier vs the search path, 6 options | agree to 2.5e-08 m and 1.4e-08 s |
-| The same check on a burn the planner designed | 1.5e-09 m and 5.2e-09 s |
-| A conjunction record recomputed by its receiver | 2 claims, worst disagreement 1.1e-03 m |
-| The same record with its clearance overstated | rejected: claims 9,999 m, recomputes to 2,491.9 m |
-| Live planner, signature case, deployed (GLM-5.3-Flash, 13 Sep) | `PROPOSAL_READY`, reviewer ALLOW, **4.8 s** through the hosted API, 3 model calls |
-| Live replan after "halve the fuel budget", deployed 13 Sep | `NO_APPROVABLE_OPTION`, **27.9 s** (was 86.3 s, and an earlier run failed unresolved at 103.6 s) — the ten-second target is still not met |
-| Live triage agent over the real screen, deployed 13 Sep | brief ready in **13.5 s**, 4 model calls, 5 passes assessed, no unsupported figures |
-| Live planner, collision case (earlier Gemini runs, historical) | designs past the grid's 11.4 m margin to 1,375–1,990 m, reviewer ALLOW, 22–45 s over five runs |
-| Live constraint change | "halve the fuel budget" → 0.2 to 0.1 m/s, computed by the backend |
-| Whole decision chain, no model | 1.24 s for 25 options, five validations and a verified answer |
-| Ten people opening the workspace at once | every request served, nothing refused |
-
-356 Python tests, 12 browser tests, 7 frontend unit tests. `python scripts/diagnose.py` runs the pre-demo gate and exits non-zero if anything is broken.
-
-Full evidence, including what is still unverified, is in [Handoff/STATE.md](Handoff/STATE.md).
-
-## How it is put together
-
-```
-backend/core/        propagation, trajectories, encounter detection — numpy only
-backend/planning/    the 25-option grid, primary screening, independent verifier
-backend/agent/       provider seam, six tools, bounded planner, reviewer, memory
-backend/api.py       HTTP surface, version gating, approval, export
-scenarios/           the generator and four asserted fixtures
+```bash
+python -m pytest tests -q
+npm --prefix frontend test
+python scripts/demo_pipeline.py
+python scripts/diagnose.py
 ```
 
-Three rules shape most of the design:
+See [DEPLOY.md](DEPLOY.md) for Docker Space configuration and secret names. See [Handoff/STATE.md](Handoff/STATE.md) for the complete verification record, known limits, and live deployment evidence.
 
-**The search is not the verifier.** Screening covers the object that triggered the case; the verifier rebuilds from raw scenario data, scans at a different rate with a different method, and screens every object. A test parses the module and fails if anyone imports one into the other.
+## License and attribution
 
-**The model never supplies a number.** Every figure on screen comes from a typed field the backend computed. A scanner flags any figure in the model's prose that appears nowhere in the evidence.
+Original Orion West code and documentation are released under the [Apache License 2.0](LICENSE). The repository also includes [NOTICE](NOTICE) with attribution boundaries for third-party material.
 
-**The model cannot approve anything.** Approvability is read off validation results. A model that recommends an unvalidated or rejected option produces an unresolved case, not a proposal.
+Third-party assets retain their own licenses: NASA Earth Observatory Blue Marble imagery, CelesTrak orbital data, Inter under the SIL Open Font License, Phosphor, and Three.js under the MIT License. See [frontend/ASSETS.md](frontend/ASSETS.md) and the provenance files for source and integrity details.
 
-## Working on it
+<div align="center">
 
-[Handoff/README.md](Handoff/README.md) is the entry point for the team: current state, contracts, and a file per builder. [Handoff/reference](Handoff/reference/README.md) preserves the original planning documents, superseded by the current package.
+Built for safer, more explainable orbital traffic management.
+
+**[Launch the live workspace →](https://auenchanters-orionwest.hf.space)**
+
+</div>
