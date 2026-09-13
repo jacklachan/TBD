@@ -131,7 +131,14 @@ constellation; tell the team.**
 - Committed and pushed to GitHub `main` as `360e89d` (fast-forward from
   `717fdb4`). Full suite 326 passed with the operator token still in `.env`;
   7 frontend tests passed; production build succeeded.
-- **Deploy not done.** `deploy_space.py --dry-run` listed 66 committed files and
+- **Deployed later the same day** with the Space owner's write token:
+  `deploy_space.py --space Auenchanters/TBH --code-only` from GitHub `b132826`
+  → Space revision `2045f0c` (81 files), no secrets or variables changed.
+  Started 02:01:09 UTC; `/health` 200 with `model_access: true`;
+  `/tracking/screen` 401 without the operator token (route present, guarded);
+  served frontend bundle hash matches the local build. The full live workflow
+  check was not run: the local `.env` no longer holds `DESK_ACCESS_TOKEN`.
+- Earlier attempt: `deploy_space.py --dry-run` listed 66 committed files and
   no secrets. The real run was refused: `403 Forbidden: You have read access but
   not the required permissions` on `/api/spaces/Auenchanters/TBH/secrets`. The
   cached HF login on this machine is `jacklachan` (write token, no orgs); the
