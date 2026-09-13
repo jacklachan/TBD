@@ -78,7 +78,9 @@ After committing the verified source, publish with:
 uv run --no-project --python 3.12 --with huggingface_hub python scripts/deploy_space.py --space Auenchanters/TBH
 ```
 
-A teammate redeploying code without the inference token adds `--keep-space-hf-token`
+A teammate redeploying code should use `--code-only`, which uploads files and leaves every
+Space secret and variable untouched (without it, a missing local DESK_ACCESS_TOKEN rotates the
+operator password). Otherwise, without the inference token, add `--keep-space-hf-token`
 and puts a write token for the Space's account in `.env` as `HF_DEPLOY_TOKEN`, never as `HF_TOKEN`.
 
 The helper uploads with HF_DEPLOY_TOKEN (environment or the ignored local .env) when set, otherwise the CLI login; it copies HF_TOKEN into a Space

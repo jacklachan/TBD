@@ -52,6 +52,10 @@ def main() -> None:
     parser.add_argument("--space", required=True)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
+        "--code-only", action="store_true",
+        help="Upload the committed application files only. Every Space secret and "
+             "variable stays exactly as it is -- no token copied, no password minted.")
+    parser.add_argument(
         "--keep-space-hf-token", action="store_true",
         help="Leave the Space's existing HF_TOKEN secret untouched. For a teammate "
              "redeploying code who does not hold the inference token locally.")
@@ -80,6 +84,26 @@ def main() -> None:
     if origin.scheme != "https" or not origin.hostname:
         raise ValueError("Target Space has no HTTPS application host")
     space_origin = f"https://{origin.netloc}"
+    if not args.code_only:
+        configure_runtime(api, args, space_origin)
+    result = api.create_commit(
+        repo_id=args.space, repo_type="space",
+        commit_message=f"Deploy verified application from {source_commit[:7]}",
+        operations=[CommitOperationAdd(path_in_repo=p, path_or_fileobj=git("show", f"{source_commit}:{p}")) for p in paths],
+    )
+    report = {"space": args.space, "source_commit": source_commit, "code_only": args.code_only,
+              "space_commit": result.oid, "uploaded_files": len(paths), "commit_url": result.commit_url}
+    print(json.dumps(report, indent=2))
+    print("Upload done; values withheld. Verify the Space build and live behaviour next.")
+
+
+def configure_runtime(api, args, space_origin: str) -> None:
+    """Secrets and variables. Skipped entirely by --code-only.
+
+    A missing local DESK_ACCESS_TOKEN mints a new operator password and pushes
+    it, which locks out everyone using the old one -- right for a first deploy,
+    wrong for a teammate redeploying code, which is what --code-only is for.
+    """
     sys.path.insert(0, str(ROOT))
     from backend.config import hf_api_token, hf_base_url, planner_model, reviewer_model
     if not hf_api_token() and not args.keep_space_hf_token:
@@ -99,15 +123,6 @@ def main() -> None:
     for key, value in {"PLANNER_MODEL": planner_model(), "REVIEWER_MODEL": reviewer_model(),
                        "HF_BASE_URL": hf_base_url(), "ALLOWED_ORIGINS": space_origin}.items():
         api.add_space_variable(args.space, key, value)
-    result = api.create_commit(
-        repo_id=args.space, repo_type="space",
-        commit_message=f"Deploy verified application from {source_commit[:7]}",
-        operations=[CommitOperationAdd(path_in_repo=p, path_or_fileobj=git("show", f"{source_commit}:{p}")) for p in paths],
-    )
-    report = {"space": args.space, "source_commit": source_commit,
-              "space_commit": result.oid, "uploaded_files": len(paths), "commit_url": result.commit_url}
-    print(json.dumps(report, indent=2))
-    print("Runtime secrets configured; values withheld. Verify Space build and live behavior next.")
 
 
 if __name__ == "__main__":
