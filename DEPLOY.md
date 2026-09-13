@@ -78,7 +78,10 @@ After committing the verified source, publish with:
 uv run --no-project --python 3.12 --with huggingface_hub python scripts/deploy_space.py --space Auenchanters/TBH
 ```
 
-The helper uses the existing CLI login for upload, copies HF_TOKEN into a Space
+A teammate redeploying code without the inference token adds `--keep-space-hf-token`
+and puts a write token for the Space's account in `.env` as `HF_DEPLOY_TOKEN`, never as `HF_TOKEN`.
+
+The helper uploads with HF_DEPLOY_TOKEN (environment or the ignored local .env) when set, otherwise the CLI login; it copies HF_TOKEN into a Space
 secret, and generates DESK_ACCESS_TOKEN in the ignored local `.env` if needed.
 Use the latter value at the website's Operator access prompt.
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import secrets
 import subprocess
@@ -21,6 +22,25 @@ from huggingface_hub import CommitOperationAdd, HfApi, get_token
 ROOT = Path(__file__).resolve().parents[1]
 FILES = {"README.md", "Dockerfile", ".dockerignore", "requirements.txt"}
 PREFIXES = ("backend/", "scenarios/", "data/context/", "data/catalog/", "frontend/")
+
+
+def deploy_token() -> str | None:
+    """A Hub token for uploading, kept apart from the runtime inference token.
+
+    ``HF_DEPLOY_TOKEN`` (environment, or the ignored local .env) is used only to
+    talk to the Hub. It is read without loading the rest of .env, so an
+    ``HF_TOKEN`` there can never be picked up as the upload credential or --
+    worse -- a write token pushed into the Space as its inference secret.
+    Falls back to the CLI login.
+    """
+    value = os.environ.get("HF_DEPLOY_TOKEN", "").strip()
+    env_path = ROOT / ".env"
+    if not value and env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            key, _, raw = line.partition("=")
+            if key.strip() == "HF_DEPLOY_TOKEN":
+                value = raw.strip().strip("\"'")
+    return value or None
 
 
 def git(*args: str) -> bytes:
@@ -52,7 +72,7 @@ def main() -> None:
         return
 
     # Capture the Hub login before loading the inference-only runtime token.
-    api = HfApi(token=get_token())
+    api = HfApi(token=deploy_token() or get_token())
     info = api.space_info(args.space)
     if info.sdk != "docker":
         raise ValueError("Target must be an existing Docker Space")
@@ -66,7 +86,6 @@ def main() -> None:
         raise ValueError("Set HF_TOKEN in the local .env before deployment, "
                          "or pass --keep-space-hf-token to keep the Space's existing secret")
 
-    import os
     access = os.environ.get("DESK_ACCESS_TOKEN", "").strip()
     if not access:
         access = secrets.token_urlsafe(32)
