@@ -294,6 +294,55 @@ export interface TrackedConjunction {
   miss_km: number;
   relative_speed_kms: number;
   element_age_days: { protected: number; debris: number };
+  triage: TrackedTriage;
+}
+
+/**
+ * How much room is left to act on a pass.
+ *
+ * A burn is placeable a whole number of half-orbits before closest approach,
+ * so the deadline is the last such slot still in the future. Which slot that is
+ * differs per pass, which is why `decide_in_hours` does not run in the same
+ * order as `lead_hours`. Nothing here is a probability.
+ */
+export interface TrackedTriage {
+  posture: "ACTIONABLE" | "NARROWING" | "TOO_LATE";
+  lead_hours: number;
+  /** Absent once no burn slot is left. */
+  decide_in_hours?: number | null;
+  decide_by_utc?: string;
+  burn_slots_open: number;
+  burn_slots_total: number;
+  latest_burn_half_orbits: number;
+}
+
+/**
+ * What the screen can substantiate about the passes it did *not* report.
+ *
+ * The capture radius is the report threshold plus the fastest closure the
+ * catalogue permits times half a coarse step; `status` is INCOMPLETE when the
+ * run could not stand behind that, and `shortfall` says why.
+ */
+export interface TrackingCompleteness {
+  status: "COMPLETE" | "INCOMPLETE";
+  claim: string;
+  capture_radius_km: number;
+  speed_bound: {
+    derived_kms: number;
+    floor_kms: number;
+    applied_kms: number;
+    source: string;
+    fastest_protected_kms: number;
+    fastest_debris_kms: number;
+    margin_kms: number;
+  };
+  observed_head_on_kms: number;
+  speed_headroom_kms: number;
+  linear_margin_km: number;
+  worst_linear_error_km: number;
+  linear_headroom_km: number;
+  candidate_pairs_refined: number;
+  shortfall?: string[];
 }
 
 export interface TrackingCrossCheck {
@@ -323,6 +372,14 @@ export interface TrackingScreen {
   report_threshold_km: number;
   conjunction_count: number;
   conjunctions: TrackedConjunction[];
+  completeness: TrackingCompleteness;
+  triage: {
+    attention_km: number;
+    queue_length: number;
+    by_posture: Partial<Record<TrackedTriage["posture"], number>>;
+    basis: string;
+    queue: TrackedConjunction[];
+  };
   by_satellite: { norad_id: number; name: string; count: number; closest_km: number }[];
   by_event: Record<string, number>;
   cross_check: TrackingCrossCheck[];
@@ -460,7 +517,11 @@ export interface AvoidanceOption {
 /** POST /tracking/assess: burn options for one real pass, re-screened. */
 export interface AvoidanceAssessment {
   mode: "SGP4_CW_ASSESSMENT";
-  conjunction: Omit<TrackedConjunction, "element_age_days">;
+  /**
+   * The avoidance assessment identifies the pass but does not re-derive the
+   * screen's element ages or its decision deadline, so neither is present.
+   */
+  conjunction: Omit<TrackedConjunction, "element_age_days" | "triage">;
   orbital_period_minutes: number;
   floor_km: number;
   comfortable_km: number;

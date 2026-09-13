@@ -19,6 +19,28 @@ export function missText(km: number) {
   return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(2)} km`;
 }
 
+/** "6 min", "2.4 h", "3 days" -- whichever reads at the size the number is. */
+function spanText(hours: number) {
+  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} min`;
+  if (hours < 48) return `${hours.toFixed(1)} h`;
+  return `${(hours / 24).toFixed(1)} days`;
+}
+
+// What is true about the burn ladder, which is not the same as how urgent the
+// pass is: every slot can still be open while the widest one expires in six
+// minutes. Urgency is the deadline, and it gets its own signal below.
+const POSTURE_LABEL: Record<string, string> = {
+  ACTIONABLE: "All burns open",
+  NARROWING: "Options closing",
+  TOO_LATE: "Past last burn",
+};
+
+/** Red inside the hour. Colouring the posture instead would contradict the
+ *  ordering -- a pass with every slot open can still be the next one due. */
+function deadlineTone(hours: number) {
+  return hours < 1 ? "danger" : "watch";
+}
+
 function burnText(option: AvoidanceOption) {
   if (option.direction === null) return "No burn";
   const verb = option.direction === "PROGRADE" ? "speed up" : "slow down";
@@ -377,6 +399,10 @@ export function TrackingPanel({ modelAccess = false }: { modelAccess?: boolean }
 
   const constellation = screen.catalog.groups.find((g) => g.role === "PROTECTED");
   const retrieved = utcText(screen.catalog.retrieved_at_utc);
+  // The head of each ordering. They are usually different rows, which is the
+  // point the intro paragraph makes; when they are not, it still reads true.
+  const first = screen.triage.queue[0];
+  const closest = screen.conjunctions[0];
   return (
     <>
       <p className="dialog-intro">
@@ -398,12 +424,94 @@ export function TrackingPanel({ modelAccess = false }: { modelAccess?: boolean }
           <strong>{screen.conjunction_count.toLocaleString()}</strong>
         </div>
         <div>
-          <span>Closest</span>
+          <span>Decide first</span>
           <strong>
-            {screen.conjunctions[0] ? missText(screen.conjunctions[0].miss_km) : "—"}
+            {first?.triage.decide_in_hours != null
+              ? spanText(first.triage.decide_in_hours)
+              : "—"}
           </strong>
         </div>
       </div>
+
+      {first && (
+        <p className="dialog-intro">
+          Sorted by miss distance the top of this screen is{" "}
+          <strong>{missText(closest!.miss_km)}</strong>, and it is{" "}
+          {spanText(closest!.triage.lead_hours)} away — there is no hurry. The
+          pass that actually needs an answer is{" "}
+          <strong>{first.protected.name}</strong> against{" "}
+          {first.debris.name} at <strong>{missText(first.miss_km)}</strong>:{" "}
+          {spanText(first.triage.lead_hours)} to closest approach, but only{" "}
+          <strong>{spanText(first.triage.decide_in_hours!)}</strong> before the
+          last burn that can still be placed. Closest is not the same as
+          soonest, and neither is the same as most urgent.
+        </p>
+      )}
+
+      <h3>
+        Decide first{" "}
+        <span className="caption">
+          {screen.triage.queue_length.toLocaleString()} passes under{" "}
+          {screen.triage.attention_km} km, ordered by when the decision is due
+        </span>
+      </h3>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Satellite</th>
+              <th>Fragment</th>
+              <th>Decide by</th>
+              <th>Miss</th>
+              <th>Closest approach</th>
+              <th>Burns left</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {screen.triage.queue.map((c) => (
+              <tr key={`q-${c.protected.norad_id}-${c.debris.norad_id}-${c.tca_utc}`}>
+                <td>
+                  {c.protected.name}
+                  <small>NORAD {c.protected.norad_id}</small>
+                </td>
+                <td>
+                  {c.debris.name} {c.debris.norad_id}
+                  <small>{c.debris.event}</small>
+                </td>
+                <td>
+                  {c.triage.decide_in_hours != null ? (
+                    <>
+                      <span className={`status ${deadlineTone(c.triage.decide_in_hours)}`}>
+                        <i />
+                        {spanText(c.triage.decide_in_hours)}
+                      </span>
+                      <small>{utcText(c.triage.decide_by_utc!)}</small>
+                    </>
+                  ) : (
+                    <small>{POSTURE_LABEL[c.triage.posture]}</small>
+                  )}
+                </td>
+                <td>{missText(c.miss_km)}</td>
+                <td>
+                  {spanText(c.triage.lead_hours)}
+                  <small>{utcText(c.tca_utc)}</small>
+                </td>
+                <td>
+                  {c.triage.burn_slots_open}/{c.triage.burn_slots_total}
+                  <small>{POSTURE_LABEL[c.triage.posture]}</small>
+                </td>
+                <td>
+                  <button className="subtle-button" onClick={() => setAssessing(c)}>
+                    Assess avoidance
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="caption">{screen.triage.basis}</p>
 
       <TriageAgent modelAccess={modelAccess} />
 
@@ -489,7 +597,60 @@ export function TrackingPanel({ modelAccess = false }: { modelAccess?: boolean }
         </>
       )}
 
-      <h3>Closest passes in the window</h3>
+      <h3>
+        Why the passes that are <em>not</em> listed are not listed{" "}
+        <span className="caption">
+          the part of a screen nobody checks
+        </span>
+      </h3>
+      <p className="caption">{screen.completeness.claim}</p>
+      <div className="evidence-summary">
+        <div>
+          <span>Capture radius</span>
+          <strong>{screen.completeness.capture_radius_km.toFixed(0)} km</strong>
+        </div>
+        <div>
+          <span>Fastest closure allowed for</span>
+          <strong>{screen.completeness.speed_bound.applied_kms.toFixed(2)} km/s</strong>
+        </div>
+        <div>
+          <span>Fastest actually seen</span>
+          <strong>{screen.completeness.observed_head_on_kms.toFixed(2)} km/s</strong>
+        </div>
+        <div>
+          <span>Refine-list margin used</span>
+          <strong>
+            {missText(screen.completeness.worst_linear_error_km)} of{" "}
+            {screen.completeness.linear_margin_km} km
+          </strong>
+        </div>
+      </div>
+      <p className="caption">
+        {screen.completeness.status === "COMPLETE" ? (
+          <>
+            The capture radius is sized from the element sets in hand — perigee
+            speed of the fastest satellite plus the fastest fragment,{" "}
+            {screen.completeness.speed_bound.derived_kms.toFixed(2)} km/s — not
+            from a constant, so a faster catalogue widens it rather than
+            dropping passes between samples. Nothing in this run closed faster
+            than that, with{" "}
+            {screen.completeness.speed_headroom_kms.toFixed(2)} km/s to spare
+            across {screen.completeness.candidate_pairs_refined.toLocaleString()}{" "}
+            refined candidates.
+          </>
+        ) : (
+          <>
+            This run could not substantiate that claim:{" "}
+            {screen.completeness.shortfall?.join("; ")}. Treat the list as
+            partial.
+          </>
+        )}
+      </p>
+
+      <h3>
+        Closest passes in the window{" "}
+        <span className="caption">the leaderboard, not the work queue</span>
+      </h3>
       <div className="table-scroll">
         <table>
           <thead>

@@ -54,8 +54,49 @@ function km(metres: number): string {
     : `${metres.toFixed(0)} m`;
 }
 
+/**
+ * What the chart is actually showing, said before the physics.
+ *
+ * The interesting thing on this screen is not that separation was computed, it
+ * is that a burn the search ranked first was thrown out for coming 523 m from
+ * something -- and that a different burn holds. That is the whole argument, so
+ * it goes in the heading rather than three scrolls down in a table.
+ *
+ * The verdict is read off the verifier's own `below_floor` flag on each
+ * encounter, never re-derived from the plotted series: the chart is allowed to
+ * clip, smooth and resample, and a heading that disagreed with the validation
+ * would be worse than no heading at all.
+ */
+/** Quote the floor in whatever unit the breach is in: "523 m ... 1 km" makes
+ *  the reader do the conversion the sentence exists to spare them. */
+function sameUnitAs(value: number, reference: number) {
+  return reference < 1000
+    ? `${Math.round(value).toLocaleString("en-US")} m`
+    : km(value);
+}
+
+function verdict(bundle: VisualizationBundle) {
+  const floor = bundle.min_separation_m;
+  const burns = bundle.variants.filter((v) => v.kind === "IMPULSE");
+  const vetoed = burns.find((v) => v.encounters.some((e) => e.below_floor));
+  if (!vetoed) return null;
+
+  const breach = vetoed.encounters
+    .filter((e) => e.below_floor)
+    .reduce((a, b) => (a.min_separation_m <= b.min_separation_m ? a : b));
+  const clear = burns.find(
+    (v) => v !== vetoed && !v.encounters.some((e) => e.below_floor),
+  );
+  return {
+    breach_m: breach.min_separation_m,
+    floor_m: floor,
+    clear_m: clear ? minimum(clear.min_to_any_m).value : null,
+  };
+}
+
 export function SeparationChart({ bundle, selected, sample, onSeek }: Props) {
   const [zoom, setZoom] = useState(false);
+  const call = useMemo(() => verdict(bundle), [bundle]);
   const element = useRef<SVGSVGElement>(null);
   const [width, setWidth] = useState(1100);
   useEffect(() => {
@@ -116,10 +157,28 @@ export function SeparationChart({ bundle, selected, sample, onSeek }: Props) {
     <section className="chart-section" aria-label="Separation evidence">
       <div className="section-heading">
         <div>
-          <h2>Distance is the evidence.</h2>
-          <p className="caption">
-            Closest object at each instant · clipped at {km(high)}
-          </p>
+          {call ? (
+            <>
+              <h2>
+                Vetoed: the ranked-first burn came {km(call.breach_m)} from
+                another object.
+              </h2>
+              <p className="caption">
+                The floor is {sameUnitAs(call.floor_m, call.breach_m)}.{" "}
+                {call.clear_m !== null
+                  ? `A different burn holds ${km(call.clear_m)} and is what gets proposed.`
+                  : "No burn on the grid clears it, which is a real answer."}{" "}
+                · Closest object at each instant · clipped at {km(high)}
+              </p>
+            </>
+          ) : (
+            <>
+              <h2>Distance is the evidence.</h2>
+              <p className="caption">
+                Closest object at each instant · clipped at {km(high)}
+              </p>
+            </>
+          )}
         </div>
         <button
           className="subtle-button"
