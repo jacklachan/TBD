@@ -1417,6 +1417,12 @@ td .subtle-button {
   font-size: 14px;
   font-weight: 400;
 }
+.evidence-summary small {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--secondary);
+}
 .evidence-item {
   padding: 13px 0;
   border-bottom: 1px solid var(--divider);

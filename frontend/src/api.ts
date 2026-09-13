@@ -18,6 +18,7 @@ import type {
   Analysis,
   CaseSnapshot,
   CdmVerification,
+  Coordination,
   Health,
   PolicyDiff,
   RunRecord,
@@ -288,6 +289,10 @@ export const api = {
 
   exportMarkdown(caseId: string): Promise<string> {
     return request(`/cases/${caseId}/export?format=markdown`);
+  },
+
+  coordination(caseId: string): Promise<Coordination> {
+    return request(`/cases/${caseId}/coordination`);
   },
 
   /** Computed once per server from the committed catalogue; can take seconds cold. */

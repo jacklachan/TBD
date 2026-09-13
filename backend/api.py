@@ -483,7 +483,13 @@ def _snapshot(state: AppState, case_id: str) -> dict:
             "satellite_id": document["satellite_id"],
             "primary_threat_id": document["primary_threat_id"],
             "objects": [
-                {"object_id": o["object_id"], "name": o["name"], "kind": o["kind"]}
+                {
+                    "object_id": o["object_id"],
+                    "name": o["name"],
+                    "kind": o["kind"],
+                    "maneuverable": bool(o.get("maneuverable", False)),
+                    "operator": o.get("operator"),
+                }
                 for o in document["objects"]
             ],
             "known_windows": document.get("known_windows", []),
@@ -1092,6 +1098,18 @@ def create_app(
                 "from a committed snapshot; never fetched at runtime."
             ),
         }
+
+    @app.get("/cases/{case_id}/coordination")
+    def coordination(case_id: str, request: Request) -> dict:
+        """Both operators' plans, checked together, and the plan the rule picks."""
+        from backend.coordination import CoordinationError, coordinate
+
+        case_row = _case_or_404(_state(request), case_id)
+        try:
+            result = coordinate(case_row.document, case_row.policy)
+        except CoordinationError as exc:
+            raise HTTPException(422, {"error": "NO_PARTNER_OPERATOR", "message": str(exc)}) from exc
+        return {**result, "case_id": case_id, "policy_version": case_row.policy_version}
 
     @app.get("/tracking/screen")
     def tracking_screen() -> dict:

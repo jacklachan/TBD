@@ -35,6 +35,7 @@ import { SeparationChart } from "./components/SeparationChart";
 import { Dialog } from "./components/Dialog";
 import { PriorCaseEvidence } from "./components/PriorCaseEvidence";
 import { TrackingPanel } from "./components/TrackingPanel";
+import { CoordinationPanel } from "./components/CoordinationPanel";
 import type { ViewMode } from "./scene/OrbitalScene";
 
 const OrbitalScene = lazy(() =>
@@ -46,6 +47,7 @@ const SatellitePreview = lazy(() =>
 const scenarios = [
   { id: "primary", name: "The second encounter" },
   { id: "debris_cloud", name: "Through a breakup debris stream" },
+  { id: "two_operators", name: "Another operator’s satellite" },
   { id: "collision", name: "Impact if nothing changes" },
   { id: "simple_conflict", name: "A single close approach" },
   { id: "no_encounter", name: "A clear orbit" },
@@ -101,7 +103,7 @@ export default function App() {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(180);
   const [panel, setPanel] = useState<
-    "options" | "evidence" | "about" | "limits" | "elements" | "tracking" | null
+    "options" | "evidence" | "about" | "limits" | "elements" | "tracking" | "coordination" | null
   >(null);
   const [instruction, setInstruction] = useState("");
   const [token, setToken] = useState("");
@@ -161,6 +163,10 @@ export default function App() {
     ? optionStatus(option)
     : { label: "Awaiting analysis", tone: "muted" };
   const designedCount = analysis?.options.filter((o) => o.designed).length ?? 0;
+  // A second operator's satellite in the case means there is someone to
+  // coordinate with; otherwise the tab would open onto an error.
+  const hasPartner =
+    (snapshot?.scenario.objects.filter((o) => o.maneuverable).length ?? 0) > 1;
   const comparison = analysis
     ? comparisonIds(analysis, snapshot?.proposal?.candidate_id)
         .map((id) => analysis.options.find((o) => o.candidate_id === id))
@@ -337,6 +343,14 @@ export default function App() {
           >
             Tracking
           </button>
+          {hasPartner && (
+            <button
+              className={`pill ${panel === "coordination" ? "selected" : ""}`}
+              onClick={() => setPanel("coordination")}
+            >
+              Coordinate
+            </button>
+          )}
           <button
             className={`pill ${panel === "evidence" ? "selected" : ""}`}
             onClick={() => setPanel("evidence")}
@@ -1697,6 +1711,12 @@ export default function App() {
               Export this evidence
             </button>
           )}
+        </Dialog>
+      )}
+
+      {panel === "coordination" && snapshot && (
+        <Dialog title="Two operators, one pass." onClose={() => setPanel(null)}>
+          <CoordinationPanel caseId={snapshot.case_id} />
         </Dialog>
       )}
 

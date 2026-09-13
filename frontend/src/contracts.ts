@@ -62,7 +62,13 @@ export interface ScenarioSummary {
   epoch_utc: string;
   satellite_id: string;
   primary_threat_id: string;
-  objects: { object_id: string; name: string; kind: string }[];
+  objects: {
+    object_id: string;
+    name: string;
+    kind: string;
+    maneuverable?: boolean;
+    operator?: string | null;
+  }[];
   known_windows: BurnWindow[];
   provenance: Provenance;
   input_hash: string;
@@ -322,6 +328,43 @@ export interface TrackingScreen {
   cross_check: TrackingCrossCheck[];
   elapsed_s: number;
   note: string;
+}
+
+export interface JointPlan {
+  plan_id: string;
+  label: string;
+  movers: string[];
+  total_delta_v_mps: number;
+  closest_m: number | null;
+  status: "PASS" | "BLOCK";
+  comfortable: boolean;
+  burns: Record<
+    string,
+    { candidate_id: string; burn_t_s: number; direction: string; delta_v_mps: number } | null
+  >;
+  pairs: { objects: string[]; min_separation_m: number; tca_s: number }[];
+}
+
+/** GET /cases/{id}/coordination */
+export interface Coordination {
+  mode: "OPERATOR_COORDINATION";
+  case_id: string;
+  operators: { object_id: string; label: string; role: "OURS" | "PARTNER" }[];
+  floor_m: number;
+  comfortable_m: number;
+  if_nobody_moves: JointPlan;
+  independent_plans: {
+    operator: string;
+    candidate_id: string | null;
+    burn_t_s: number | null;
+    direction: string | null;
+    delta_v_mps: number | null;
+    solo_closest_m: number | null;
+  }[];
+  plans: JointPlan[];
+  rule: string;
+  agreed_plan_id: string | null;
+  agreement_sha256: string;
 }
 
 export interface AvoidanceOption {

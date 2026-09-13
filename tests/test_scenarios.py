@@ -96,7 +96,11 @@ def test_fixture_shape_matches_the_contract(path):
     assert document["satellite_id"] in ids
     assert document["primary_threat_id"] in ids
     assert document["primary_threat_id"] != document["satellite_id"]
-    assert sum(o["maneuverable"] for o in document["objects"]) == 1
+    # One operator's satellite, except the coordination fixture, which adds a
+    # second operator's; the scenario's own satellite is always manoeuvrable.
+    maneuverable = [o["object_id"] for o in document["objects"] if o["maneuverable"]]
+    assert document["satellite_id"] in maneuverable
+    assert len(maneuverable) == (2 if document["scenario_id"] == "two_operators" else 1)
 
     for entry in document["objects"]:
         state = entry["initial_state"]

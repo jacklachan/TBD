@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "scenario_id": "two_operators",
+  "scenario_version": 1,
+  "seed": 4001,
+  "description": "The close approach is with another operator's active satellite. Each operator's own avoidance burn clears it; both burns together do not.",
+  "epoch_utc": "2026-09-11T21:51:16.570+00:00",
+  "horizon_s": 21600.0,
+  "objects": [
+    {
+      "object_id": "SAT-1",
+      "name": "NOAA 20 (JPSS-1) (seed orbit)",
+      "kind": "SATELLITE",
+      "maneuverable": true,
+      "initial_state": {
+        "r_m": [
+          -7004764.575802581,
+          -1696637.7398668586,
+          -5.2169016993524355
+        ],
+        "v_mps": [
+          -258.8102174325853,
+          1105.0075014262668,
+          7351.668502094822
+        ]
+      },
+      "operator": "Orion West"
+    },
+    {
+      "object_id": "OPS-B",
+      "name": "Partner communications satellite",
+      "kind": "SATELLITE",
+      "maneuverable": true,
+      "operator": "Partner operator",
+      "initial_state": {
+        "r_m": [
+          -1620909.0215974546,
+          5155391.962831813,
+          4764476.537231238
+        ],
+        "v_mps": [
+          -4753.913403371049,
+          -4623.73821424285,
+          3376.1086177166876
+        ]
+      }
+    },
+    {
+      "object_id": "DEB-1",
+      "name": "Synthetic debris 1",
+      "kind": "DEBRIS",
+      "maneuverable": false,
+      "operator": null,
+      "initial_state": {
+        "r_m": [
+          -3777212.0172523134,
+          -5576507.548939173,
+          -2495825.879900661
+        ],
+        "v_mps": [
+          4454.525349065099,
+          -4651.023969884702,
+          3772.11226984506
+        ]
+      }
+    }
+  ],
+  "satellite_id": "SAT-1",
+  "primary_threat_id": "OPS-B",
+  "known_windows": [
+    {
+      "window_id": "gs_pass_1",
+      "label": "Ground station pass",
+      "start_s": 1700.0,
+      "end_s": 1900.0
+    }
+  ],
+  "default_policy": {
+    "policy_version": 1,
+    "max_delta_v_mps": 0.2,
+    "min_separation_m": 1000.0,
+    "blocked_windows": []
+  },
+  "provenance": {
+    "source_kind": "CELESTRAK_GP_TLE",
+    "source_url": "https://celestrak.org/NORAD/elements/gp.php?CATNR=43013&FORMAT=TLE",
+    "source_sha256": "578842c4f5d62bf2e69dd723cfda769a64c891e08d6510bc4f76a7a73f55613c",
+    "norad_id": 43013,
+    "object_name": "NOAA 20 (JPSS-1)",
+    "tle_epoch_utc": "2026-09-11T21:51:16.570+00:00",
+    "frame": "SIM_ECI_TEME_SEEDED",
+    "model_version": "two-body-universal-variable-1",
+    "synthetic_conjunction": true,
+    "note": "Satellite initial state derived from a real catalogue TLE at its own epoch. The partner satellite and the debris object are synthetic; the partner is constructed backward from a chosen near head-on pass. No conjunction here is real."
+  },
+  "generation_evidence": {
+    "attempts_used": 134,
+    "baseline_closest_m": 81.4,
+    "ours_plan": {
+      "operator": "SAT-1",
+      "candidate_id": "t15_ret_200",
+      "burn_t_s": 900.0,
+      "direction": "RETROGRADE",
+      "delta_v_mps": 0.2,
+      "solo_closest_m": 1465.8
+    },
+    "partner_plan": {
+      "operator": "OPS-B",
+      "candidate_id": "t15_pro_200",
+      "burn_t_s": 900.0,
+      "direction": "PROGRADE",
+      "delta_v_mps": 0.2,
+      "solo_closest_m": 1465.1
+    },
+    "both_as_planned_closest_m": 561.7,
+    "agreed_plan_id": "only_ours",
+    "agreed_closest_m": 1465.8,
+    "agreed_total_delta_v_mps": 0.2,
+    "rejected_attempts": [
+      "attempt 128: both burning together is still safe",
+      "attempt 129: both burning together is still safe",
+      "attempt 130: both burning together is still safe",
+      "attempt 131: both burning together is still safe",
+      "attempt 132: both burning together is still safe"
+    ]
+  },
+  "input_hash": "d372267330ce69571729a623ba1a83a4940010f5056a5342da8ed7fe31e3f9e1"
+}
