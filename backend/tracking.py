@@ -363,11 +363,3 @@ def all_conjunctions() -> list[dict]:
     return _ALL
 
 
-def element_text(*norad_ids: int) -> str:
-    """The committed element sets for the given objects, as TLE text."""
-    _, objects = load_catalog()
-    by_id = {o.norad_id: o for o in objects}
-    missing = [n for n in norad_ids if n not in by_id]
-    if missing:
-        raise TrackingError(f"not in the committed catalogue: {missing}")
-    return "\n".join(f"{by_id[n].name}\n{by_id[n].line1}\n{by_id[n].line2}" for n in norad_ids)
