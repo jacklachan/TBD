@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.agent.llm import GeminiProvider, ScriptedProvider, text_reply, tool_call
+from backend.agent.llm import GeminiProvider, Message, ScriptedProvider, text_reply, tool_call
 from backend.agent.planner import plan_case
 from backend.agent.tools import CaseSession, PHASE_PLANNING, dispatch
 from backend.agent.memory import CaseMemory
@@ -139,3 +139,101 @@ def test_guard_accepts_computed_margin_but_flags_invented_distance(session):
         text_reply("The 1250 m comfortable threshold is passed with a 1491.9 m margin above the floor. An invented 98765 m distance."),
     ]), session)
     assert outcome.flagged_numbers == (98765.0,)
+
+
+# --------------------------------------------------------------------------
+# 13 September: findings from a live run against the deployed Space
+# --------------------------------------------------------------------------
+
+
+def test_hf_provider_returns_every_call_from_a_parallel_turn():
+    """GLM returned two calls in one turn despite parallel_tool_calls=false.
+
+    That reply used to be a fatal LLMError, which ended a live replan
+    UNRESOLVED after 100 s. Every call is now returned for the planner to run.
+    """
+    from backend.agent.huggingface import HuggingFaceProvider
+    provider = HuggingFaceProvider(api_key="hf_unit_test_only", model="test/model")
+    payload = {"choices": [{"finish_reason": "tool_calls", "message": {"content": None, "tool_calls": [
+        {"id": "c1", "type": "function", "function": {"name": "validate_proposal", "arguments": '{"candidate_id": "a"}'}},
+        {"id": "c2", "type": "function", "function": {"name": "validate_proposal", "arguments": '{"candidate_id": "b"}'}},
+    ]}}]}
+    response = provider._parse(payload, 1.0)
+    assert [c.call_id for c in response.tool_calls] == ["c1", "c2"]
+    history = provider._messages("", [
+        Message(role="model", tool_call=response.tool_calls[0], tool_calls=response.tool_calls),
+    ])
+    assert [c["id"] for c in history[0]["tool_calls"]] == ["c1", "c2"]
+
+
+def test_planner_runs_and_answers_every_call_from_a_parallel_turn(session):
+    from backend.agent.llm import LLMResponse, ToolCall
+    provider = ScriptedProvider([
+        LLMResponse(tool_calls=(
+            ToolCall(name="validate_proposal", arguments={"candidate_id": "t30_ret_100"}, call_id="c1"),
+            ToolCall(name="validate_proposal", arguments={"candidate_id": "t30_ret_200"}, call_id="c2"),
+        )),
+        text_reply("Recommend t30_ret_200; t30_ret_100 was rejected."),
+    ])
+    outcome = plan_case(provider, session)
+    assert outcome.status == "PROPOSAL_READY"
+    assert outcome.tool_calls == 2 and outcome.validations_run == 2
+    assert set(session.validations) == {"t30_ret_100", "t30_ret_200"}
+    # The history replayed on the second model call carries one assistant turn
+    # with both calls and one tool result for each, in order.
+    replayed = provider.calls[1]["messages"]
+    assert len(replayed[1].all_tool_calls) == 2
+    assert [m.call_id for m in replayed[2:4]] == ["c1", "c2"]
+
+
+def test_a_provider_failure_mid_replan_still_gets_the_grid_audit():
+    """The audit used to rescue only NO_CONCLUSION. Live, the run that needed it
+    ended PROVIDER_ERROR, and the operator saw 'unresolved' with no answer."""
+    from fastapi.testclient import TestClient
+    from backend.agent.llm import LLMError
+    from backend.api import create_app
+    from test_api import wait_for_run
+    provider = lambda: ScriptedProvider([
+        tool_call("validate_proposal", candidate_id="t30_ret_100"),
+        LLMError("Unusable Hugging Face reply"),
+    ])
+    with TestClient(create_app(store=Store(), provider_factory=provider)) as client:
+        case = client.post("/cases", json={"scenario_id": "primary"}).json()
+        case = client.post(f"/cases/{case['case_id']}/policy-manual", json={
+            "expected_scenario_version": 1, "expected_policy_version": 1, "max_delta_v_mps": 0.1,
+        }).json()
+        run_id = client.post(f"/cases/{case['case_id']}/plan", json={
+            "expected_scenario_version": 1, "expected_policy_version": 2,
+        }).json()["run_id"]
+        run = wait_for_run(client, run_id)
+        assert run["status"] == "DONE"
+        assert run["result"]["status"] == "NO_APPROVABLE_OPTION"
+        snapshot = client.get(f"/cases/{case['case_id']}").json()
+        assert snapshot["proposal"] is None
+        audit = [e for e in snapshot["events"] if e["event_type"] == "grid_audit"]
+        assert audit[0]["details"]["unresolved_reason"] == "PROVIDER_ERROR"
+
+
+def test_policy_changes_are_refused_on_an_executed_case():
+    from test_api import approve, make_client, new_case, run_plan
+    versions_of = lambda s: {"expected_scenario_version": s["scenario_version"], "expected_policy_version": s["policy_version"]}
+    client = make_client()
+    case = new_case(client)
+    run_plan(client, case)
+    snapshot = client.get(f"/cases/{case['case_id']}").json()
+    assert approve(client, case["case_id"], snapshot).status_code == 200
+    preview = client.post(f"/cases/{case['case_id']}/policy-preview",
+                          json={**versions_of(snapshot), "text": "halve the budget"})
+    assert preview.status_code == 409
+    confirm = client.post(f"/cases/{case['case_id']}/policy-confirm",
+                          json={**versions_of(snapshot), "diff_id": "diff_x"})
+    assert confirm.status_code == 409
+
+
+def test_memory_lists_a_case_planned_twice_once():
+    memory = CaseMemory()
+    for _ in range(2):
+        memory.record(case_id="case_twice", scenario_id="primary", outcome="PROPOSAL_READY", summary="ok")
+    memory.record(case_id="case_other", scenario_id="primary", outcome="PROPOSAL_READY", summary="ok")
+    hits = memory.relevant("primary")
+    assert sorted(h.case_id for h in hits) == ["case_other", "case_twice"]

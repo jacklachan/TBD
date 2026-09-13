@@ -14,11 +14,15 @@ export function Dialog({
   useEffect(() => {
     element.current?.showModal();
   }, []);
+  // Chromium only fires `cancel` for Escape after a user gesture, so a dialog
+  // could close in the DOM while React still believed it was open; the next
+  // panel then never mounted. Listening to `close` as well keeps them in step.
   return (
     <dialog
       className="workspace-dialog glass"
       ref={element}
       onCancel={onClose}
+      onClose={onClose}
       onClick={(e) => {
         if (e.target === element.current) onClose();
       }}

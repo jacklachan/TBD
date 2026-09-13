@@ -181,6 +181,11 @@ class CaseMemory:
         wanted = set(tags)
         records = [self._from_row(row) for row in rows]
         records = [r for r in records if r.case_id != exclude_case_id]
+        # One row is filed per run, so a case that was planned twice appeared
+        # twice in the briefing. Keep the most recent run of each case; rows
+        # arrive newest first.
+        seen: set[str] = set()
+        records = [r for r in records if not (r.case_id in seen or seen.add(r.case_id))]
         records.sort(
             key=lambda r: (len(wanted.intersection(r.tags)), r.created_at_utc),
             reverse=True,

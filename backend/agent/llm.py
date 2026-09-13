@@ -96,6 +96,18 @@ class Message:
     name: str = ""
     result: dict | None = None
     call_id: str = ""
+    # Every call the model made in one turn, when it made more than one. A
+    # chat-completions endpoint refuses a history whose assistant turn lists
+    # two calls and is followed by one result, so the extra calls must be
+    # replayed and answered rather than dropped. ``tool_call`` stays the
+    # single-call spelling every existing caller and test uses.
+    tool_calls: tuple[ToolCall, ...] = ()
+
+    @property
+    def all_tool_calls(self) -> tuple[ToolCall, ...]:
+        if self.tool_calls:
+            return self.tool_calls
+        return (self.tool_call,) if self.tool_call is not None else ()
 
 
 class Provider(Protocol):

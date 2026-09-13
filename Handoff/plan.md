@@ -6,7 +6,9 @@
 
 **Stack:** Python, NumPy, SciPy, Pydantic, FastAPI, SQLite; React, TypeScript, a familiar chart library, Three.js and React Three Fiber. Use SGP4 only to derive the initial state from a cached real TLE. Select compatible dependency versions during setup and record them.
 
-**Specifications:** [CONTRACTS.md](CONTRACTS.md), [IMPLEMENTATION.md](IMPLEMENTATION.md), [DATA.md](DATA.md), [DASHBOARD.md](DASHBOARD.md). These are plans; no source or passing tests exist yet.
+> **Historical plan.** Written before any code existed. The application is now implemented and deployed; [STATE.md](STATE.md) and the latest session record are current. Where this file says Gemini or `backend/domain/models.py`, read GLM via Hugging Face and the owning modules under `backend/`.
+
+**Specifications:** [CONTRACTS.md](CONTRACTS.md), [IMPLEMENTATION.md](IMPLEMENTATION.md), [DATA.md](DATA.md), [DASHBOARD.md](DASHBOARD.md).
 
 ## Product promise and boundaries
 

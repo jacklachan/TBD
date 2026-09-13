@@ -31,6 +31,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--space", required=True)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--keep-space-hf-token", action="store_true",
+        help="Leave the Space's existing HF_TOKEN secret untouched. For a teammate "
+             "redeploying code who does not hold the inference token locally.")
     args = parser.parse_args()
     source_commit = git("rev-parse", "HEAD").decode().strip()
     paths = git("ls-tree", "-r", "--name-only", "HEAD").decode().splitlines()
@@ -58,8 +62,9 @@ def main() -> None:
     space_origin = f"https://{origin.netloc}"
     sys.path.insert(0, str(ROOT))
     from backend.config import hf_api_token, hf_base_url, planner_model, reviewer_model
-    if not hf_api_token():
-        raise ValueError("Set HF_TOKEN in the local .env before deployment")
+    if not hf_api_token() and not args.keep_space_hf_token:
+        raise ValueError("Set HF_TOKEN in the local .env before deployment, "
+                         "or pass --keep-space-hf-token to keep the Space's existing secret")
 
     import os
     access = os.environ.get("DESK_ACCESS_TOKEN", "").strip()
@@ -69,7 +74,8 @@ def main() -> None:
         lines = env_path.read_text(encoding="utf-8").splitlines()
         lines = [line for line in lines if line.partition("=")[0].strip() != "DESK_ACCESS_TOKEN"]
         env_path.write_text("\n".join(lines) + "\nDESK_ACCESS_TOKEN=" + access + "\n", encoding="utf-8")
-    api.add_space_secret(args.space, "HF_TOKEN", hf_api_token())
+    if not args.keep_space_hf_token:
+        api.add_space_secret(args.space, "HF_TOKEN", hf_api_token())
     api.add_space_secret(args.space, "DESK_ACCESS_TOKEN", access)
     for key, value in {"PLANNER_MODEL": planner_model(), "REVIEWER_MODEL": reviewer_model(),
                        "HF_BASE_URL": hf_base_url(), "ALLOWED_ORIGINS": space_origin}.items():

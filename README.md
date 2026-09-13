@@ -102,10 +102,10 @@ python -m uvicorn backend.api:app --host 127.0.0.1 --port 8000
 
 Open **http://127.0.0.1:8000**. The server serves both the API and the production frontend. For frontend development, keep the API on port 8000 and run `npm --prefix frontend run dev`; Vite opens port 5173 and proxies API requests.
 
-The workspace includes a rotatable 3D globe, an inspectable procedural spacecraft, exact encounter jumps, shared-clock playback, a separation chart, a 25-option comparison table, manual budget changes, AI restriction preview/confirmation, reviewed simulated approval, reset and evidence export. The numerical comparison works without an API key and is labeled separately from AI runs. Set `GEMINI_API_KEY` on the backend to use the real planner. Remote access also requires `DESK_ACCESS_TOKEN`; the browser asks for the operator token and keeps it in memory only.
+The workspace includes a rotatable 3D globe, an inspectable procedural spacecraft, exact encounter jumps, shared-clock playback, a separation chart, a 25-option comparison table, manual budget changes, AI restriction preview/confirmation, reviewed simulated approval, reset and evidence export. The numerical comparison works without an API key and is labeled separately from AI runs. Set `HF_TOKEN` on the backend to use the real planner (GLM-5.3-Flash through Hugging Face). Remote access also requires `DESK_ACCESS_TOKEN`; the browser asks for the operator token and keeps it in memory only.
 
 ```bash
-python -m pytest tests -q                    # 270 tests
+python -m pytest tests -q                    # 322 tests
 npm --prefix frontend test                  # 7 unit tests
 npm --prefix frontend run test:browser      # running API + Vite; Chrome installed
 ```
@@ -125,13 +125,14 @@ Every figure below is printed by a test or a script in this repository, not quot
 | The same check on a burn the planner designed | 1.5e-09 m and 5.2e-09 s |
 | A conjunction record recomputed by its receiver | 2 claims, worst disagreement 1.1e-03 m |
 | The same record with its clearance overstated | rejected: claims 9,999 m, recomputes to 2,491.9 m |
-| Live planner, signature case | `PROPOSAL_READY` in 5 model calls, 14.6 s through the API |
-| Live planner, collision case | designs past the grid's 11.4 m margin to 1,375–1,990 m, reviewer ALLOW, 22–45 s over five runs |
+| Live planner, signature case, deployed (GLM-5.3-Flash) | `PROPOSAL_READY`, reviewer ALLOW, **4.7 s** through the hosted API |
+| Live replan after "halve the fuel budget", deployed | `NO_APPROVABLE_OPTION` after the independent grid audit, **86.3 s** — the ten-second target is not met |
+| Live planner, collision case (earlier Gemini runs, historical) | designs past the grid's 11.4 m margin to 1,375–1,990 m, reviewer ALLOW, 22–45 s over five runs |
 | Live constraint change | "halve the fuel budget" → 0.2 to 0.1 m/s, computed by the backend |
 | Whole decision chain, no model | 1.24 s for 25 options, five validations and a verified answer |
 | Ten people opening the workspace at once | every request served, nothing refused |
 
-270 Python tests, 11 browser tests, 7 frontend unit tests. `python scripts/diagnose.py` runs the pre-demo gate and exits non-zero if anything is broken.
+322 Python tests, 12 browser tests, 7 frontend unit tests. `python scripts/diagnose.py` runs the pre-demo gate and exits non-zero if anything is broken.
 
 Full evidence, including what is still unverified, is in [Handoff/STATE.md](Handoff/STATE.md).
 

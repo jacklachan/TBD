@@ -62,7 +62,8 @@ def test_hf_tool_roundtrip_uses_bearer_auth_and_matching_call_ids(monkeypatch):
     ({"tool_calls": [{"id": "c", "function": {"name": "x", "arguments": "bad json"}}]}, "tool_calls"),
     ({"tool_calls": [{"id": "c", "function": {"name": "x", "arguments": "[]"}}]}, "tool_calls"),
     ({"tool_calls": [{"function": {"name": "x", "arguments": "{}"}}]}, "tool_calls"),
-    ({"tool_calls": [{"id": str(n), "function": {"name": "x", "arguments": "{}"}} for n in range(2)]}, "tool_calls"),
+    # Two calls in one turn is no longer an error: GLM does it despite
+    # parallel_tool_calls=false, and the planner now runs them in order.
 ])
 def test_hf_unusable_reply_is_an_explicit_error(message, finish):
     from backend.agent.huggingface import HuggingFaceProvider

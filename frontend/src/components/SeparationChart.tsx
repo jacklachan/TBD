@@ -15,6 +15,45 @@ interface Props {
   onSeek: (time: number) => void;
 }
 
+// Linear axis, clipped. Everything that decides a verdict lives between zero
+// and a few kilometres; a log axis spanning 0.1 km to 10,000 km rendered every
+// dip as the same dot on the bottom line and the three variants as one curve.
+// The ceiling is the smallest of these that leaves the closest approach of
+// every plotted variant inside the frame with room above it.
+// [ceiling, gridline step], both in metres.
+const CEILINGS_M: [number, number][] = [
+  [2_000, 500],
+  [5_000, 1_000],
+  [10_000, 2_000],
+  [20_000, 5_000],
+  [50_000, 10_000],
+  [100_000, 20_000],
+  [200_000, 50_000],
+  [500_000, 100_000],
+  [1_000_000, 200_000],
+];
+
+function ceilingFor(
+  bundle: VisualizationBundle,
+  visible: number[],
+): [number, number] {
+  let needed = bundle.min_separation_m * 3;
+  for (const v of bundle.variants) {
+    let low = Infinity;
+    for (const i of visible) low = Math.min(low, v.min_to_any_m[i]);
+    if (Number.isFinite(low)) needed = Math.max(needed, low * 2);
+  }
+  return (
+    CEILINGS_M.find(([c]) => c >= needed) ?? CEILINGS_M[CEILINGS_M.length - 1]
+  );
+}
+
+function km(metres: number): string {
+  return metres >= 1000
+    ? `${(metres / 1000).toLocaleString("en-US", { maximumFractionDigits: 1 })} km`
+    : `${metres.toFixed(0)} m`;
+}
+
 export function SeparationChart({ bundle, selected, sample, onSeek }: Props) {
   const [zoom, setZoom] = useState(false);
   const element = useRef<SVGSVGElement>(null);
@@ -35,26 +74,34 @@ export function SeparationChart({ bundle, selected, sample, onSeek }: Props) {
     : bundle.horizon_s;
   const left = 62,
     right = width - 18,
-    top = 15,
+    top = 18,
     bottom = 125;
   const x = (t: number) =>
     left + ((t - start) / (end - start)) * (right - left);
-  const low = Math.min(100, Math.max(1, min.value / 2));
   const visible = bundle.t_s
     .map((time, i) => (time >= start && time <= end ? i : -1))
     .filter((i) => i >= 0);
-  let high = bundle.min_separation_m * 3;
-  for (const v of bundle.variants)
-    for (const i of visible) high = Math.max(high, v.min_to_any_m[i]);
-  high = 10 ** Math.ceil(Math.log10(high));
+  const [high, step] = ceilingFor(bundle, visible);
   const y = (d: number) =>
-    bottom -
-    ((Math.log10(Math.max(d, low)) - Math.log10(low)) /
-      (Math.log10(high) - Math.log10(low))) *
-      (bottom - top);
-  const levels = [];
-  for (let value = 10 ** Math.ceil(Math.log10(low)); value <= high; value *= 10)
-    levels.push(value);
+    bottom - (Math.min(d, high) / high) * (bottom - top);
+  const levels: number[] = [];
+  for (let level = step; level <= high; level += step) levels.push(level);
+  const narrow = width < 500;
+
+  // Annotate the selected variant only: every dip through the floor, plus its
+  // closest approach. Other variants stay as unlabelled context so the frame
+  // reads as one story rather than a cloud of captions.
+  const callouts = variant.encounters
+    .filter(
+      (e) =>
+        e.tca_s >= start &&
+        e.tca_s <= end &&
+        (e.below_floor || e.tca_s === criticalTime) &&
+        e.min_separation_m < high,
+    )
+    .sort((a, b) => a.min_separation_m - b.min_separation_m)
+    .slice(0, narrow ? 1 : 3);
+
   const click = (event: React.PointerEvent<SVGSVGElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     const svgX = ((event.clientX - bounds.left) / bounds.width) * width;
@@ -71,7 +118,7 @@ export function SeparationChart({ bundle, selected, sample, onSeek }: Props) {
         <div>
           <h2>Distance is the evidence.</h2>
           <p className="caption">
-            Closest object at each instant · logarithmic distance scale
+            Closest object at each instant · clipped at {km(high)}
           </p>
         </div>
         <button
@@ -91,6 +138,13 @@ export function SeparationChart({ bundle, selected, sample, onSeek }: Props) {
         aria-label={`Minimum separation ${min.value.toFixed(1)} metres at ${clockText(criticalTime)}. Click to scrub time.`}
         onPointerDown={click}
       >
+        <rect
+          x={left}
+          y={y(bundle.min_separation_m)}
+          width={right - left}
+          height={bottom - y(bundle.min_separation_m)}
+          className="floor-band"
+        />
         {levels.map((level) => (
           <g key={level}>
             <line
@@ -101,10 +155,13 @@ export function SeparationChart({ bundle, selected, sample, onSeek }: Props) {
               className="chart-grid"
             />
             <text x={left - 10} y={y(level) + 4} textAnchor="end">
-              {level / 1000} km
+              {level === high ? `≥ ${km(level)}` : km(level)}
             </text>
           </g>
         ))}
+        <text x={left - 10} y={bottom + 4} textAnchor="end">
+          0
+        </text>
         <line
           x1={left}
           x2={right}
@@ -114,7 +171,7 @@ export function SeparationChart({ bundle, selected, sample, onSeek }: Props) {
         />
         <text
           x={right - 4}
-          y={y(bundle.min_separation_m) - 7}
+          y={y(bundle.min_separation_m) + 11}
           textAnchor="end"
           className="floor-label"
         >
@@ -159,13 +216,28 @@ export function SeparationChart({ bundle, selected, sample, onSeek }: Props) {
             />
           </g>
         )}
-        <circle
-          cx={x(criticalTime)}
-          cy={y(min.value)}
-          r="4"
-          className="minimum-dot"
-        />
-        {(width < 500 ? [0, 2, 4, 6] : [0, 1, 2, 3, 4, 5, 6]).map((i) => {
+        {callouts.map((e, i) => {
+          const cx = x(e.tca_s);
+          const cy = y(e.min_separation_m);
+          // Alternate label sides near the frame edges so text stays inside.
+          const anchor =
+            cx > right - 120 ? "end" : cx < left + 120 ? "start" : "middle";
+          const dx = anchor === "end" ? -8 : anchor === "start" ? 8 : 0;
+          return (
+            <g
+              key={`${e.object_id}-${e.tca_s}`}
+              className={`callout ${e.below_floor ? "violation" : ""}`}
+            >
+              <line x1={cx} x2={cx} y1={cy - 6} y2={cy - 22 - i * 12} />
+              <circle cx={cx} cy={cy} r="4" />
+              <text x={cx + dx} y={cy - 26 - i * 12} textAnchor={anchor}>
+                {e.object_id} · {km(e.min_separation_m)} · T+
+                {clockText(e.tca_s).slice(0, 5)}
+              </text>
+            </g>
+          );
+        })}
+        {(narrow ? [0, 2, 4, 6] : [0, 1, 2, 3, 4, 5, 6]).map((i) => {
           const time = start + ((end - start) * i) / 6;
           return (
             <text key={i} x={x(time)} y={151} textAnchor="middle">

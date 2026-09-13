@@ -53,7 +53,6 @@ from backend.agent.memory import (
 from backend.agent.planner import (
     STATUS_NO_APPROVABLE_OPTION,
     STATUS_UNRESOLVED,
-    UNRESOLVED_NO_CONCLUSION,
     CaseEvent,
     PlannerLimits,
     interpret_instruction,
@@ -644,13 +643,14 @@ def create_app(
                     on_event=note,
                 )
                 if (outcome.status == STATUS_UNRESOLVED
-                        and outcome.unresolved_reason == UNRESOLVED_NO_CONCLUSION
                         and session.search_result is not None):
-                    # The model may stop before its allowance is exhausted.
-                    # Model tool calls stay bounded. Finish the finite grid's
-                    # numerical check separately, using the same independent
-                    # verifier as the workspace. This can prove infeasibility,
-                    # but can never invent a planner proposal or reviewer ALLOW.
+                    # The model may stop before its allowance is exhausted, run
+                    # out of time, or lose the provider mid-run. Whichever
+                    # bound was hit, the finite grid can still be checked
+                    # numerically, using the same independent verifier as the
+                    # workspace. This can prove infeasibility, but can never
+                    # invent a planner proposal or reviewer ALLOW. The
+                    # unresolved reason is preserved in the audit event.
                     from backend.analysis import analyze
                     audit_started = time.perf_counter()
                     checked_before = set(session.validations)
@@ -669,7 +669,8 @@ def create_app(
                                  if ruled_out else
                                  "The independent completion check did not establish infeasibility; a reviewed proposal is still required."),
                         duration_ms=audit_seconds * 1000,
-                        details={"model_outcome": outcome.status, "candidate_count": audit["candidate_count"],
+                        details={"model_outcome": outcome.status, "unresolved_reason": outcome.unresolved_reason,
+                                 "candidate_count": audit["candidate_count"],
                                  "additional_validations": len(set(session.validations) - checked_before),
                                  "recommended_id": audit["recommended_id"], "all_options_ruled_out": ruled_out},
                     )
@@ -766,6 +767,8 @@ def create_app(
         state = _state(request)
         case_row = _case_or_404(state, case_id)
         _check_versions(case_row, payload.expected_scenario_version, payload.expected_policy_version)
+        if state.store.execution_for_case(case_id) is not None:
+            raise HTTPException(409, {"error": "CASE_EXECUTED", "message": "Reset before changing the executed case."})
 
         session = _session_for(case_row)
         if not state.model_slots.acquire(blocking=False):
@@ -826,6 +829,8 @@ def create_app(
         state = _state(request)
         case_row = _case_or_404(state, case_id)
         _check_versions(case_row, payload.expected_scenario_version, payload.expected_policy_version)
+        if state.store.execution_for_case(case_id) is not None:
+            raise HTTPException(409, {"error": "CASE_EXECUTED", "message": "Reset before changing the executed case."})
 
         pending = case_row.pending_diff
         if pending is None or pending["diff_id"] != payload.diff_id:

@@ -654,7 +654,7 @@ export default function App() {
                   {view === "orbit"
                     ? "Earth-centered view"
                     : "Local encounter view"}
-                  <small>Drag to orbit · Scroll to zoom</small>
+                  <small>Drag to orbit · Ctrl + scroll to zoom</small>
                 </span>
               </div>
               <button

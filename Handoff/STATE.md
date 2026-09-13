@@ -13,6 +13,13 @@ replan target is not met. Application source `ea758d5`, Space revision `422033b`
 Current evidence and failed attempts:
 [refinement session](handoffs/2026-09-12-hf-refinements.md).
 
+**13 September, review pass (uncommitted, not yet deployed):** a live run
+against the Space reproduced the replan risk — `UNRESOLVED / PROVIDER_ERROR`
+after 103.6 s when GLM returned two tool calls in one turn. Fixed: parallel
+calls are run in order; the grid audit rescues every unresolved reason; deadline
+150 s; chart is linear with labelled dips; README/plan corrected. Detail and
+what is still open in [the review session](handoffs/2026-09-13-review-fixes.md).
+
 Earlier dated sections are historical. Follow the current explicit user request.
 
 ## Current state

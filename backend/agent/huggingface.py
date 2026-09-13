@@ -19,7 +19,11 @@ from backend.config import hf_api_token, hf_base_url, planner_model
 class HuggingFaceProvider:
     def __init__(self, model: str | None = None, api_key: str | None = None,
                  base_url: str | None = None, temperature: float = 0.0,
-                 timeout_s: float = 30.0, max_attempts: int = 2):
+                 timeout_s: float = 75.0, max_attempts: int = 3):
+        # GLM-5.3-Flash thinks before it answers, and a long tool-loop turn has
+        # been observed past 30 s; a transport timeout there surfaced as an
+        # UNRESOLVED run rather than a slow one. Three attempts absorb the
+        # provider's occasional 429 without spending a whole run on it.
         self.model = model or planner_model()
         self.name = f"huggingface:{self.model}"
         self._token = api_key or hf_api_token()
@@ -42,11 +46,11 @@ class HuggingFaceProvider:
                 result.append({"role": "user", "content": message.text})
             elif message.role == "model":
                 item: dict = {"role": "assistant", "content": message.text or None}
-                if message.tool_call:
-                    call = message.tool_call
+                calls = message.all_tool_calls
+                if calls:
                     item["tool_calls"] = [{"id": call.call_id, "type": "function", "function": {
                         "name": call.name, "arguments": json.dumps(call.arguments, allow_nan=False),
-                    }}]
+                    }} for call in calls]
                 result.append(item)
             elif message.role == "tool":
                 result.append({"role": "tool", "tool_call_id": message.call_id,
@@ -103,10 +107,11 @@ class HuggingFaceProvider:
             if not isinstance(text, str):
                 raise ValueError("content must be text")
             raw_calls = message.get("tool_calls") or []
-            if len(raw_calls) > 1:
-                # The planner executes one tool per turn. Never silently drop
-                # the remaining calls or replay an incomplete assistant turn.
-                raise ValueError("endpoint ignored parallel_tool_calls=false")
+            # GLM through the router has been observed returning two calls in
+            # one turn despite parallel_tool_calls=false. Treating that as a
+            # fatal reply ended a live replan UNRESOLVED after 100 s. Every call
+            # is returned; the planner runs them in order and answers each, so
+            # the replayed history stays complete.
             calls = []
             for raw in raw_calls:
                 function = raw["function"]

@@ -52,6 +52,18 @@ export function OrbitalScene(props: Props) {
     controls.dampingFactor = 0.1;
     controls.enablePan = false;
     controls.rotateSpeed = 0.6;
+    // The scene sits behind the whole workspace, so an ungated wheel or
+    // one-finger swipe anywhere over the globe zoomed or rotated it instead of
+    // scrolling the page -- on a phone, the first full-width thing you touch.
+    // Plain wheel now scrolls; Ctrl/Cmd + wheel (which is also how browsers
+    // report a trackpad pinch) zooms. On touch, vertical swipes scroll the page
+    // and horizontal drags still rotate. OrbitControls writes touch-action
+    // inline when it connects, so the override has to come after it.
+    renderer.domElement.style.touchAction = "pan-y";
+    const gateWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) event.stopPropagation();
+    };
+    element.addEventListener("wheel", gateWheel, { capture: true });
     const ambient = new THREE.HemisphereLight("#bedcf1", "#101822", 1.35);
     scene.add(ambient);
     const sunlight = new THREE.DirectionalLight("#fff4db", 3.8);
@@ -319,6 +331,7 @@ export function OrbitalScene(props: Props) {
       update.current = null;
       cancelAnimationFrame(frame);
       observer.disconnect();
+      element.removeEventListener("wheel", gateWheel, { capture: true });
       controls.dispose();
       disposeScene(scene);
       texture.dispose();
@@ -348,7 +361,7 @@ export function OrbitalScene(props: Props) {
         ref={host}
         className="scene-canvas"
         data-testid="orbital-canvas"
-        aria-label="Interactive 3D orbital scene. Drag to rotate, scroll to zoom."
+        aria-label="Interactive 3D orbital scene. Drag to rotate, Ctrl and scroll to zoom."
       />
       {!failed && (
         <div className="scene-labels" aria-hidden="true">
@@ -410,6 +423,8 @@ export function SatellitePreview() {
     controls.enableZoom = false;
     controls.enablePan = false;
     controls.enableDamping = true;
+    // Same reason as the main scene: let a vertical swipe scroll the page.
+    renderer.domElement.style.touchAction = "pan-y";
     element.appendChild(renderer.domElement);
     const resize = () => {
       renderer.setSize(element.clientWidth, element.clientHeight);

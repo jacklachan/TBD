@@ -132,7 +132,10 @@ class PlannerLimits:
     # improve on it has spent its budget reaching something the safety reviewer
     # will refuse.
     max_validations: int = 6
-    deadline_s: float = 90.0
+    # The deployed reduced-budget replan measured 86.3 s under a 90 s deadline,
+    # which is one slow model turn away from an UNRESOLVED run on stage. The
+    # browser client already waits 180 s; the deadline sits well inside that.
+    deadline_s: float = 150.0
 
 
 @dataclass
@@ -426,88 +429,103 @@ def plan_case(
             )
             break
 
-        call: ToolCall = response.tool_calls[0]
-        recorder.add(
-            "model_tool_request",
-            f"Model asked for {call.name}.",
-            elapsed_ms,
-            tool=call.name,
-            arguments=call.arguments,
-        )
-        messages.append(Message(role="model", text=response.text, tool_call=call))
-
-        if tool_calls >= limits.max_tool_calls:
-            unresolved = UNRESOLVED_TOOL_CALLS
-            break
-
-        if call.name in VALIDATING_TOOLS and validations_run >= limits.max_validations:
-            result = {
-                "error": (
-                    f"validation limit of {limits.max_validations} reached in this run"
-                )
-            }
+        # One tool per turn is requested, but a model can still return several.
+        # They are run in the order given, each answered, and the whole turn is
+        # replayed as one assistant message so the history the endpoint sees
+        # stays well formed. Every bound below applies per call.
+        requested: tuple[ToolCall, ...] = response.tool_calls
+        for call in requested:
             recorder.add(
-                "tool_refused",
-                f"Refused {call.name}: validation limit reached.",
-                0.0,
+                "model_tool_request",
+                f"Model asked for {call.name}.",
+                elapsed_ms if call is requested[0] else 0.0,
                 tool=call.name,
+                arguments=call.arguments,
+            )
+        messages.append(
+            Message(
+                role="model",
+                text=response.text,
+                tool_call=requested[0],
+                tool_calls=requested if len(requested) > 1 else (),
+            )
+        )
+
+        for call in requested:
+            if tool_calls >= limits.max_tool_calls:
+                unresolved = UNRESOLVED_TOOL_CALLS
+                break
+
+            if call.name in VALIDATING_TOOLS and validations_run >= limits.max_validations:
+                result = {
+                    "error": (
+                        f"validation limit of {limits.max_validations} reached in this run"
+                    )
+                }
+                recorder.add(
+                    "tool_refused",
+                    f"Refused {call.name}: validation limit reached.",
+                    0.0,
+                    tool=call.name,
+                )
+                messages.append(
+                    Message(
+                        role="tool", name=call.name, result=result, call_id=call.call_id
+                    )
+                )
+                tool_calls += 1
+                continue
+
+            tool_started = time.perf_counter()
+            try:
+                result = dispatch(session, call.name, call.arguments, phase=PHASE_PLANNING)
+                failed = False
+            except ToolError as exc:
+                result = {"error": str(exc)}
+                failed = True
+            tool_ms = (time.perf_counter() - tool_started) * 1000.0
+            tool_calls += 1
+
+            if call.name in VALIDATING_TOOLS and not failed:
+                validations_run += 1
+                passing = session.validations.get(result.get("candidate_id", ""))
+                if (
+                    review_pool is not None
+                    and passing is not None
+                    and passing.status == STATUS_PASS
+                    and passing.validation_id != reviewed_validation_id
+                ):
+                    reviewed_validation_id = passing.validation_id
+                    try:
+                        reviewed_candidate = session.candidate_by_id(passing.candidate_id)
+                    except ToolError:
+                        reviewed_candidate = None
+                    review_future = review_pool.submit(
+                        review,
+                        reviewer_provider,
+                        passing,
+                        session.policy,
+                        reviewed_candidate,
+                    )
+
+            recorder.add(
+                "tool_error" if failed else "tool_result",
+                _tool_summary(call.name, result, failed),
+                tool_ms,
+                tool=call.name,
+                arguments=call.arguments,
+                result=_compact(result),
             )
             messages.append(
                 Message(
-                    role="tool", name=call.name, result=result, call_id=call.call_id
+                    role="tool",
+                    name=call.name,
+                    result=_compact(result),
+                    call_id=call.call_id,
                 )
             )
-            tool_calls += 1
-            continue
-
-        tool_started = time.perf_counter()
-        try:
-            result = dispatch(session, call.name, call.arguments, phase=PHASE_PLANNING)
-            failed = False
-        except ToolError as exc:
-            result = {"error": str(exc)}
-            failed = True
-        tool_ms = (time.perf_counter() - tool_started) * 1000.0
-        tool_calls += 1
-
-        if call.name in VALIDATING_TOOLS and not failed:
-            validations_run += 1
-            passing = session.validations.get(result.get("candidate_id", ""))
-            if (
-                review_pool is not None
-                and passing is not None
-                and passing.status == STATUS_PASS
-                and passing.validation_id != reviewed_validation_id
-            ):
-                reviewed_validation_id = passing.validation_id
-                try:
-                    reviewed_candidate = session.candidate_by_id(passing.candidate_id)
-                except ToolError:
-                    reviewed_candidate = None
-                review_future = review_pool.submit(
-                    review,
-                    reviewer_provider,
-                    passing,
-                    session.policy,
-                    reviewed_candidate,
-                )
-
-        recorder.add(
-            "tool_error" if failed else "tool_result",
-            _tool_summary(call.name, result, failed),
-            tool_ms,
-            tool=call.name,
-            arguments=call.arguments,
-            result=_compact(result),
-        )
-        messages.append(
-            Message(
-                role="tool",
-                name=call.name,
-                result=_compact(result),
-                call_id=call.call_id,
-            )
-        )
+        if unresolved:
+            break
 
     if review_pool is not None:
         review_pool.shutdown(wait=False)
