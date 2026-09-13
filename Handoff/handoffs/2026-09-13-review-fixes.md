@@ -50,4 +50,24 @@ Five regressions added in `tests/test_handoff_refinements.py`; the
   verifier result for every primary-qualified option after a policy change so
   the model's first turn already sees the vetoes. Neither was tried: no
   `HF_TOKEN` in this checkout.
-- Deployment and the post-deploy live check are recorded below once run.
+
+## Commit and deployment
+
+- Committed and pushed to GitHub `main` as `360e89d` (fast-forward from
+  `717fdb4`). Full suite 326 passed with the operator token still in `.env`;
+  7 frontend tests passed; production build succeeded.
+- **Deploy not done.** `deploy_space.py --dry-run` listed 66 committed files and
+  no secrets. The real run was refused: `403 Forbidden: You have read access but
+  not the required permissions` on `/api/spaces/Auenchanters/TBH/secrets`. The
+  cached HF login on this machine is `jacklachan` (write token, no orgs); the
+  Space is on the personal account `Auenchanters`. It failed on the first write,
+  so the Space is unchanged and still serves `ea758d5`.
+- **Next action, for the Space owner:** `git pull`, then
+  `uv run --no-project --python 3.12 --with huggingface_hub python scripts/deploy_space.py --space Auenchanters/TBH`
+  (add `--keep-space-hf-token` if the local `.env` has no inference token), then
+  `python scripts/live_api_check.py --base https://auenchanters-tbh.hf.space` and
+  record the replan time here.
+- Video shot list with verified on-screen numbers: [DEMO_VIDEO.md](../DEMO_VIDEO.md).
+  The record-exchange tamper check was driven in the local UI: the untampered
+  record "holds"; changing `MISS_DISTANCE` 2491.888 → 9999 gives "does not hold",
+  recomputed 2,491.9 m.
