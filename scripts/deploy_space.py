@@ -1,7 +1,7 @@
 """Publish committed application inputs to an existing, explicitly named Space.
 
 Run with huggingface_hub installed (the app itself does not require that SDK):
-    uv run --no-project --with huggingface_hub python scripts/deploy_space.py --space Auenchanters/TBH
+    uv run --no-project --with huggingface_hub python scripts/deploy_space.py --space Auenchanters/Orionwest --code-only
 
 Hub deployment uses the CLI login. Runtime inference uses HF_TOKEN from .env.
 Only the allowlisted committed Git blobs are uploaded; never the working folder.

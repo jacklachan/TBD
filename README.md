@@ -10,6 +10,10 @@ pinned: false
 
 # Orion West
 
+[Open the live demo](https://auenchanters-orionwest.hf.space) · [Hugging Face Space](https://huggingface.co/spaces/Auenchanters/Orionwest)
+
+Demo sign-in: **Paan** / **Banaras**. This shared demo login keeps the server's access token off screen; it is not a private-account identity system.
+
 A satellite is predicted to pass too close to a piece of debris. This decides what to do about it, and shows its working.
 
 The interesting part is what happens next. The cheapest manoeuvre that clears the original threat turns out to put the satellite **523 m from a second object** — so an independent check rejects it, and the planner finds one that clears both. Then an operator can halve the fuel budget in plain English, and the system re-solves and reports honestly that nothing is left that works.

@@ -1,6 +1,8 @@
 # Deploy Orion West on Hugging Face
 
-Target Space: https://huggingface.co/spaces/Auenchanters/TBH
+Target Space: https://huggingface.co/spaces/Auenchanters/Orionwest
+
+Application: https://auenchanters-orionwest.hf.space. The old `auenchanters-tbh.hf.space` application hostname returns 404.
 
 Use **Docker / Blank**, **CPU Upgrade (8 vCPU / 32 GB RAM)**, port **7860**.
 The Dockerfile builds the React/Three.js frontend and serves it through FastAPI,
@@ -46,7 +48,7 @@ Optional public **variables**:
 | PLANNER_MODEL | zai-org/GLM-5.3-Flash:baseten |
 | REVIEWER_MODEL | zai-org/GLM-5.3-Flash:baseten |
 | HF_BASE_URL | https://router.huggingface.co/v1 |
-| ALLOWED_ORIGINS | https://auenchanters-tbh.hf.space |
+| ALLOWED_ORIGINS | https://auenchanters-orionwest.hf.space |
 | DESK_DB | :memory: |
 
 The explicit application origin is required behind the Space's HTTPS proxy.
@@ -77,27 +79,31 @@ The deployment script prepares tracked inputs explicitly and checks for secrets.
 After committing the verified source, publish with:
 
 ```bash
-uv run --no-project --python 3.12 --with huggingface_hub python scripts/deploy_space.py --space Auenchanters/TBH
+uv run --no-project --python 3.12 --with huggingface_hub python scripts/deploy_space.py --space Auenchanters/Orionwest --code-only --dry-run
+uv run --no-project --python 3.12 --with huggingface_hub python scripts/deploy_space.py --space Auenchanters/Orionwest --code-only
 ```
 
-A teammate redeploying code should use `--code-only`, which uploads files and leaves every
-Space secret and variable untouched (without it, a missing local DESK_ACCESS_TOKEN rotates the
-operator password). Otherwise, without the inference token, add `--keep-space-hf-token`
-and puts a write token for the Space's account in `.env` as `HF_DEPLOY_TOKEN`, never as `HF_TOKEN`.
+`--code-only` uploads committed files and leaves every Space secret and variable
+untouched. Configure all four secrets separately before the first deployment.
+When intentionally using the helper's runtime-configuration mode, add
+`--keep-space-hf-token` if the inference token is unavailable locally.
 
-The helper uploads with HF_DEPLOY_TOKEN (environment or the ignored local .env) when set, otherwise the CLI login; it copies HF_TOKEN into a Space
-secret, and generates DESK_ACCESS_TOKEN in the ignored local `.env` if needed.
-Use the latter value at the website's Operator access prompt.
+The helper uploads with `HF_DEPLOY_TOKEN` (environment or ignored local `.env`)
+when set, otherwise the CLI login. Never use a Hub write credential as the
+runtime `HF_TOKEN`. Without `--code-only`, the helper also configures runtime
+values and may generate a new `DESK_ACCESS_TOKEN`; it does not configure the
+two admin-login secrets. Judges use the name/password sign-in, not this token.
 
 Local model proof: python scripts/smoke_llm.py must request a real function and
 consume its result. With the API running, use:
 
 ```bash
-python scripts/live_api_check.py --base https://auenchanters-tbh.hf.space
+python scripts/live_api_check.py --base https://auenchanters-orionwest.hf.space
 ```
 
-The checker needs the same DESK_ACCESS_TOKEN in its environment or local ignored
-.env. Record real plan/replan timings and failed attempts. Ten seconds is a
+The checker accepts either the server access token or a session token from
+`POST /session/login` through `DESK_ACCESS_TOKEN` in its environment. Keep either
+value private. Record real plan/replan timings and failed attempts. Ten seconds is a
 full-agent workflow target, not an established guarantee.
 
 ## Runtime limits
