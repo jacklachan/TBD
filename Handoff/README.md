@@ -4,7 +4,7 @@
 
 **Package revision:** 6 — 13 September 2026. **Status:** deployed on Auenchanters/TBH; HF/GLM workflow and interactive 3D verified. Initial plan 4.7 s, replan 86.3 s: the ten-second replan target is not met. Start with STATE.md and [the current refinement session](handoffs/2026-09-12-hf-refinements.md) for verification and deployment results. Older dated entries are historical evidence.
 
-**Repository:** [jacklachan/TBD](https://github.com/jacklachan/TBD). Three builders, twenty hours, one satellite, two synthetic debris objects, six simulated hours.
+**Repository:** [jacklachan/orionwest](https://github.com/jacklachan/orionwest). Three builders, twenty hours, one satellite, two synthetic debris objects, six simulated hours.
 
 The product compares maneuver options, discovers that a promising burn creates a second close approach, rejects it, and replans. A judge can change constraints in plain English. The target is a fresh verified decision in under ten seconds. A chart provides the numerical evidence; a synchronized moving 3D satellite scene makes the encounter understandable.
 

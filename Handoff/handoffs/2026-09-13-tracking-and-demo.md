@@ -236,7 +236,9 @@ in a startup thread. **Start the server well before demoing** and confirm
 ## Delivery
 
 `git push` to `origin` returns **403 — "Claude doesn't have GitHub access to
-jacklachan/TBD for your organization"** (~10 attempts across sessions). The
+jacklachan/orionwest for your organization"** (~10 attempts across sessions,
+re-checked after the rename from `TBD` on 13 September; the rename does not
+change it). The
 three commits are delivered as patch files instead, verified to apply cleanly
 against `origin/main` with `git apply --check` in a throwaway worktree.
 

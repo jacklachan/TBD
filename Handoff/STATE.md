@@ -49,7 +49,7 @@ Earlier dated sections are historical. Follow the current explicit user request.
 | TLE and SOCRATES data snapshots | Both downloaded and committed. Seed: NOAA 20 (JPSS-1), NORAD 43013, epoch 2026-09-11T21:51:16Z. Context: 25 real conjunctions from SOCRATES Plus |
 | Numerical accuracy and runtime latency | Gate 1 to 1.155e-06 m; verifier agrees with the search to 3.6e-08 m. Final backend suite: 322 passed, 93% coverage. See latest session for GLM timings; **the 10 s target is not established** |
 | 3D model and animation | Built and browser-tested: globe, procedural spacecraft, both debris, shared samples, distance line, playback, exact encounter focus, camera reset, light/dark, WebGL fallback |
-| GitHub destination | jacklachan/TBD; documentation commit requested under Auenchanters |
+| GitHub destination | jacklachan/orionwest (renamed from TBD 13 Sep; the old URL redirects); documentation commit requested under Auenchanters |
 
 The three supplied specifications and earlier plan/research are preserved under `reference/`. Current files in this folder supersede their build instructions.
 
