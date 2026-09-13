@@ -73,6 +73,37 @@ Five regressions added in `tests/test_handoff_refinements.py`; the
   1 s and allow ~40+ fragments); a real-catalogue screen; two-operator
   coordination.
 
+## Real debris tracking and avoidance (later still, same day)
+
+User authorised a one-time CelesTrak download. `scripts/fetch_snapshots.py
+--catalog` fetched, at 2026-09-13T01:20:44Z, four GP groups into
+`data/catalog/` with `catalog_provenance.json`: iridium-NEXT (80),
+iridium-33-debris (110), cosmos-2251-debris (585), fengyun-1c-debris (1,969).
+**This reverses the AGENTS.md "no catalog scanner" scope line for one
+constellation; tell the team.**
+
+- `backend/tracking.py`, `GET /tracking/screen`: SGP4 at common UTC times over
+  84 h, 60 s KD-tree pass, straight-line miss estimate, exact refinement.
+  213,120 pairs, 1,151 passes under 10 km, ~15 s (warmed at server start).
+- SOCRATES cross-check: IRIDIUM 170 × 30232 — published 48 m at
+  02:02:50.465, ours 105 m at 02:02:50.433, same 14.879 km/s; IRIDIUM 117 ×
+  31024 — published 28 m, ours 1.496 km, 0.2 s apart. The first is also our
+  closest pass overall.
+- Measured and rejected: handing a real pass to the two-body planner. Replaying
+  the 105 m pass in two-body from 0.5–3 h before gives 7.5–22 km.
+- `backend/avoidance.py`, `POST /tracking/assess`: burns at 1/3/5/7 half-orbits
+  before the pass × speed up/slow down × 0.10/0.25/0.50 m/s plus no burn;
+  Clohessy-Wiltshire displacement projected onto the encounter plane; options
+  that clear 1.25 km re-screened (SGP4 + CW displacement) against all 2,664
+  fragments for 12 h. 105 m pass → 0.25 m/s slow down 342 min before,
+  estimated 2,492 m, re-screen 2,487 m, nothing else within 5 km. The 1.5 km
+  IRIDIUM 117 pass → no burn. ~1.3 s per assessment.
+- Tracking tab (`TrackingPanel.tsx`); `/tracking` added to the access guard;
+  deploy script now uploads `data/catalog/`. Tests: `test_tracking.py` (5),
+  `test_avoidance.py` (4).
+- Not done: AI agent over the tracking results (it is deterministic today);
+  two-operator coordination.
+
 ## Commit and deployment
 
 - Committed and pushed to GitHub `main` as `360e89d` (fast-forward from

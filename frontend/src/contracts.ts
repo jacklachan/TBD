@@ -324,6 +324,34 @@ export interface TrackingScreen {
   note: string;
 }
 
+export interface AvoidanceOption {
+  option_id: string;
+  lead_minutes: number;
+  direction: "PROGRADE" | "RETROGRADE" | null;
+  delta_v_mps: number;
+  displacement_km: number;
+  predicted_miss_km: number;
+  qualifies: boolean;
+  verdict?: "PASS" | "BLOCK";
+  rescreen_closest_km?: number | null;
+  rescreen_assessed_miss_km?: number;
+  blocked_by?: { debris: { norad_id: number; name: string; event: string }; tca_utc: string; miss_km: number };
+}
+
+/** POST /tracking/assess: burn options for one real pass, re-screened. */
+export interface AvoidanceAssessment {
+  mode: "SGP4_CW_ASSESSMENT";
+  conjunction: Omit<TrackedConjunction, "element_age_days">;
+  orbital_period_minutes: number;
+  floor_km: number;
+  comfortable_km: number;
+  option_count: number;
+  options: AvoidanceOption[];
+  recommended_option_id: string | null;
+  rescreen: { hours_after_burn: number; fragments: number; step_s: number };
+  note: string;
+}
+
 /** Every mutating request states the versions it was composed against. */
 export interface VersionStamp {
   expected_scenario_version: number;

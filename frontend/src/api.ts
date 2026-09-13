@@ -14,6 +14,7 @@
  */
 
 import type {
+  AvoidanceAssessment,
   Analysis,
   CaseSnapshot,
   CdmVerification,
@@ -292,6 +293,21 @@ export const api = {
   /** Computed once per server from the committed catalogue; can take seconds cold. */
   trackingScreen(): Promise<TrackingScreen> {
     return request("/tracking/screen");
+  },
+
+  trackingAssess(
+    protectedNoradId: number,
+    debrisNoradId: number,
+    tcaUtc: string,
+  ): Promise<AvoidanceAssessment> {
+    return request("/tracking/assess", {
+      method: "POST",
+      body: JSON.stringify({
+        protected_norad_id: protectedNoradId,
+        debris_norad_id: debrisNoradId,
+        tca_utc: tcaUtc,
+      }),
+    });
   },
 
   socrates(signal?: AbortSignal): Promise<SocratesContext> {

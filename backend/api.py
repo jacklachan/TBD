@@ -161,6 +161,13 @@ class TleIngestRequest(BaseModel):
     horizon_s: float = Field(21_600.0, ge=60.0, le=172_800.0, allow_inf_nan=False)
 
 
+class AssessRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    protected_norad_id: int = Field(..., ge=1, le=999_999)
+    debris_norad_id: int = Field(..., ge=1, le=999_999)
+    tca_utc: str = Field(..., min_length=10, max_length=40)
+
+
 class ResetRequest(VersionedRequest):
     pass
 
@@ -1093,6 +1100,18 @@ def create_app(
 
         try:
             return tracking.cached_screen()
+        except tracking.TrackingError as exc:
+            raise HTTPException(404, {"error": "CATALOG_MISSING", "message": str(exc)}) from exc
+
+    @app.post("/tracking/assess")
+    def tracking_assess(payload: AssessRequest) -> dict:
+        """Avoidance options for one real pass, re-screened against every fragment."""
+        from backend import avoidance, tracking
+
+        try:
+            return avoidance.cached_assess(payload.protected_norad_id, payload.debris_norad_id, payload.tca_utc)
+        except avoidance.AvoidanceError as exc:
+            raise HTTPException(422, {"error": "ASSESSMENT_REJECTED", "message": str(exc)}) from exc
         except tracking.TrackingError as exc:
             raise HTTPException(404, {"error": "CATALOG_MISSING", "message": str(exc)}) from exc
 

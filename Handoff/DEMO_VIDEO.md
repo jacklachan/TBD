@@ -37,7 +37,26 @@ run. If the planner does not reach "AI proposal ready" within about a minute on
 two tries, record sections 3–6 on "The second encounter" instead; every number
 in those sections without a **[stream]** note is from that scenario.
 
-## 1 · The problem — 0:00–0:25
+## 0 · Real debris around a real network — 0:00–0:30
+
+**Screen:** Click **Tracking**. Let the three figures land: 213,120 pairs
+screened, 1,151 passes under 10 km, closest 105 m. Scroll to **Checked against
+CelesTrak SOCRATES**, then to the top row of **Closest passes** and click
+**Assess avoidance**: "0.25 m/s slow down, 342 min before · estimated 2.49 km ·
+after re-screen closest 2.49 km". Close the panel.
+
+**Say:** "Iridium NEXT carries satellite phone traffic worldwide. We screened
+all eighty of its satellites against every tracked fragment from the 2009
+Iridium–Cosmos collision and the Fengyun-1C missile test — real element sets,
+three and a half days. The closest pass is 105 metres, and CelesTrak's own
+published screening lists the same pass to within three hundredths of a
+second. The avoidance burn is checked against all 2,664 fragments before it's
+offered."
+
+If the Tracking panel is still loading on a freshly started Space, it takes
+about fifteen seconds once; open it before recording.
+
+## 1 · The problem — 0:30–0:55
 
 **Screen:** Overview, scenario "The second encounter", globe turning. Click the
 **Close approach** view: the line between NOAA 20 and DEB-1 reads 133.7 m.
@@ -129,11 +148,17 @@ instead of inventing an answer. That replan took" — *say your number* —
 **Close on:** the workspace, with the line "Orion West · every number
 recomputed, nothing taken on trust."
 
+With section 0 the cut runs to about 3:30. If the limit is three minutes, drop
+section 6 and end on the record check in section 4.
+
 ## Do not say
 
 - "In under ten seconds" — the replan is not.
 - "Collision probability" — none is computed anywhere.
-- "Real debris" or "a real conjunction" — both debris objects are synthetic.
+- "Real debris" or "a real conjunction" **about the scenarios** — their debris
+  is synthetic. In the Tracking tab the fragments and passes are real public
+  data; say "a pass found in public element sets", not "a predicted collision".
+- "Iridium will manoeuvre" — the burn is our assessment, not the operator's.
 - "SGP4 conjunction analysis" — propagation is two-body from the seed epoch.
 
 ## If the Space cannot be redeployed in time
