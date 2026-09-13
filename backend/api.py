@@ -1121,6 +1121,48 @@ def create_app(
         except tracking.TrackingError as exc:
             raise HTTPException(404, {"error": "CATALOG_MISSING", "message": str(exc)}) from exc
 
+    @app.post("/tracking/agent", status_code=202)
+    def tracking_agent(request: Request) -> dict:
+        """Start the triage agent over the catalogue screen; poll /runs/{run_id}."""
+        from backend import avoidance, tracking
+        from backend.agent.tracker import triage
+
+        state = _state(request)
+        run = RunState(run_id=f"run_{uuid.uuid4().hex[:10]}", case_id="tracking", kind="triage")
+        if not state.model_slots.acquire(blocking=False):
+            raise HTTPException(429, {"error": "CAPACITY", "message": "The model is busy. Try again shortly."})
+        try:
+            state.register_run(run)
+        except Exception:
+            state.model_slots.release()
+            raise
+
+        def work() -> None:
+            try:
+                run.step = "Loading the catalogue screen."
+
+                def note(event) -> None:
+                    run.step = event.summary
+                    run.steps_done = event.sequence
+
+                run.result = triage(
+                    state.provider_factory(),
+                    tracking.cached_screen(),
+                    tracking.all_conjunctions(),
+                    avoidance.cached_assess,
+                    on_event=note,
+                )
+                run.status = RUN_DONE
+            except Exception as exc:  # noqa: BLE001 - a dead worker must become a FAILED run
+                run.error = f"{type(exc).__name__}: {exc}"
+                run.status = RUN_FAILED
+            finally:
+                run.finished_at_utc = _now()
+                state.model_slots.release()
+
+        state.executor.submit(work)
+        return {"run_id": run.run_id, "status": run.status}
+
     @app.post("/tracking/assess")
     def tracking_assess(payload: AssessRequest) -> dict:
         """Avoidance options for one real pass, re-screened against every fragment."""

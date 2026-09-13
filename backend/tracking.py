@@ -218,7 +218,7 @@ def _cross_check(objects_by_id: dict, satrecs_by_id: dict, start: datetime, end:
 
 
 def screen(window_hours: float = WINDOW_HOURS, step_s: float = COARSE_STEP_S,
-           report_km: float = REPORT_KM) -> dict:
+           report_km: float = REPORT_KM, include_all: bool = False) -> dict:
     """Screen every protected satellite against every debris object."""
     from sgp4.api import Satrec
 
@@ -330,6 +330,7 @@ def screen(window_hours: float = WINDOW_HOURS, step_s: float = COARSE_STEP_S,
         "by_satellite": sorted(by_satellite.values(), key=lambda s: s["closest_km"])[:10],
         "by_event": by_event,
         "cross_check": cross_check,
+        **({"all_conjunctions": conjunctions} if include_all else {}),
         "elapsed_s": round(time.perf_counter() - started, 2),
         "note": (
             "Real public element sets propagated with SGP4 to common UTC times. "
@@ -341,16 +342,25 @@ def screen(window_hours: float = WINDOW_HOURS, step_s: float = COARSE_STEP_S,
 
 
 _CACHE: dict | None = None
+_ALL: list[dict] = []
 _CACHE_LOCK = threading.Lock()
 
 
 def cached_screen() -> dict:
     """The committed catalogue never changes at runtime, so screen it once."""
-    global _CACHE
+    global _CACHE, _ALL
     with _CACHE_LOCK:
         if _CACHE is None:
-            _CACHE = screen()
+            result = screen(include_all=True)
+            _ALL = result.pop("all_conjunctions")
+            _CACHE = result
         return _CACHE
+
+
+def all_conjunctions() -> list[dict]:
+    """Every pass under the report threshold, not only the listed closest."""
+    cached_screen()
+    return _ALL
 
 
 def element_text(*norad_ids: int) -> str:

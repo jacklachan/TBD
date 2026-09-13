@@ -1725,7 +1725,7 @@ export default function App() {
           title="Real debris, real constellation."
           onClose={() => setPanel(null)}
         >
-          <TrackingPanel />
+          <TrackingPanel modelAccess={!!desk.health?.model_access} />
         </Dialog>
       )}
 

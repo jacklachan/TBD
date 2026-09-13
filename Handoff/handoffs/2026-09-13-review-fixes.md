@@ -101,8 +101,30 @@ constellation; tell the team.**
 - Tracking tab (`TrackingPanel.tsx`); `/tracking` added to the access guard;
   deploy script now uploads `data/catalog/`. Tests: `test_tracking.py` (5),
   `test_avoidance.py` (4).
-- Not done: AI agent over the tracking results (it is deterministic today);
-  two-operator coordination.
+- Superseded the same day by the two items below.
+
+## Operator coordination and the triage agent
+
+- `scenarios/coordination.py` → `scenarios/variants/two_operators.json`
+  (seed 4001, 134 attempts, ~3 min): SAT-1, a synthetic partner satellite OPS-B
+  (maneuverable, `operator: "Partner operator"`), one distant debris object.
+  Nobody moves: 81.4 m. Our own plan `t15_ret_200`: 1,465.8 m alone. Partner's
+  own plan `t15_pro_200`: 1,465.1 m alone. Both together: 561.7 m. Partner
+  reversed with ours: 81.1 m. Agreed under the rule: only Orion West burns.
+- `backend/coordination.py`, `GET /cases/{id}/coordination`: joint screening of
+  every pair involving either satellite (verifier `screen_pair`), published rule
+  (least total delta-v → fewer movers → larger clearance), agreement SHA-256.
+  Coordinate tab appears when a case has two manoeuvrable objects; snapshot
+  objects now include `maneuverable` and `operator`.
+- `backend/agent/tracker.py`, `POST /tracking/agent` (background run, poll
+  `/runs/{id}`): prefetched summary and passes under 1.25 km; tools
+  `get_screen_summary`, `list_passes`, `assess_pass`; limits 10 model calls,
+  14 tool calls, 5 assessments, 150 s; multi-call turns answered in order;
+  triage table built from assessment results; prose guard over every tool
+  figure. UI verified with a **scripted** model on the real data (2 passes
+  assessed, 3 calls, 3.9 s). **Live GLM behaviour not measured** — no inference
+  token on this machine.
+- Tests: `test_coordination.py` (5), `test_tracker.py` (8).
 
 ## Commit and deployment
 

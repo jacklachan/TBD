@@ -56,6 +56,24 @@ offered."
 If the Tracking panel is still loading on a freshly started Space, it takes
 about fifteen seconds once; open it before recording.
 
+**Optional, if the model is responding well in rehearsal:** click **Run triage
+agent** before the passes table and let the brief and triage table appear. Say:
+"An agent does the triage — it picks which passes to assess and briefs the
+operator; every number in that table comes from the assessment tool." Its live
+behaviour on GLM has not been measured; skip it if a rehearsal run is slow or
+unresolved.
+
+## 0b · Two operators, one pass — 15–20 s, optional
+
+**Screen:** Scenario dropdown → **Another operator's satellite** → **Coordinate**
+tab. Point at the red line: each plan alone clears it by about 1.47 km, both
+together 561.7 m. Then the **Agreed** row: only Orion West burns.
+
+**Say:** "When the other object is someone else's satellite, both operators
+dodging can be worse than one. Each plan is safe on its own; together they pass
+at 562 metres. Both plans are checked together, and a rule both sides can apply
+decides who moves."
+
 ## 1 · The problem — 0:30–0:55
 
 **Screen:** Overview, scenario "The second encounter", globe turning. Click the

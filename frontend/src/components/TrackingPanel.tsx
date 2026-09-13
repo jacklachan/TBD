@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "../api";
+import { api, waitForRun } from "../api";
 import type {
   AvoidanceAssessment,
   AvoidanceOption,
   TrackedConjunction,
   TrackingScreen,
+  TriageResult,
 } from "../contracts";
 
 /** "2026-09-16T02:02:50.433+00:00" -> "16 Sep 02:02:50 UTC" */
@@ -205,7 +206,139 @@ function AvoidanceView({
   );
 }
 
-export function TrackingPanel() {
+const TRIAGE_LABEL = {
+  NEEDS_BURN: ["Needs a burn", "danger"],
+  NO_OPTION: ["No option clears it", "watch"],
+  CLEAR: ["Clear", "good"],
+} as const;
+
+function TriageAgent({ modelAccess }: { modelAccess: boolean }) {
+  const [running, setRunning] = useState("");
+  const [result, setResult] = useState<TriageResult | null>(null);
+  const [error, setError] = useState("");
+
+  const start = async () => {
+    setError("");
+    setResult(null);
+    setRunning("Starting the triage agent");
+    try {
+      const run = await api.startTriage();
+      const finished = await waitForRun(run.run_id, {
+        onStep: (step, done) => setRunning(`${done}. ${step}`),
+      });
+      if (finished.status === "FAILED") throw new Error(finished.error);
+      setResult(finished.result as unknown as TriageResult);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "The triage agent failed.");
+    } finally {
+      setRunning("");
+    }
+  };
+
+  return (
+    <section className="triage-agent">
+      <div className="section-heading">
+        <h3>Triage agent</h3>
+        <button className="primary-button" onClick={start} disabled={!modelAccess || !!running}>
+          {running ? "Agent running…" : result ? "Run again" : "Run triage agent"}
+        </button>
+      </div>
+      <p className="caption">
+        A model works through this screen with three tools — summary, list
+        passes, assess a pass — and briefs the operator. It recommends; nothing
+        here can execute a burn. The table below the brief is built from the
+        assessment tool&rsquo;s results, not from the model&rsquo;s prose.
+        {!modelAccess && " Set HF_TOKEN on the server to enable it."}
+      </p>
+      {running && (
+        <div className="loading-card glass">
+          <span className="loading-orbit" />
+          <p>{running}</p>
+        </div>
+      )}
+      {error && <p className="exchange-error">{error}</p>}
+      {result && (
+        <>
+          {result.brief && <p className="triage-brief">{result.brief}</p>}
+          <p className="caption">
+            {result.status === "BRIEF_READY" ? "Brief ready" : `Unresolved: ${result.unresolved_reason}`}{" "}
+            · {result.assessments} passes assessed · {result.model_calls} model calls ·{" "}
+            {result.elapsed_s.toFixed(1)} s
+          </p>
+          {!!result.flagged_numbers.length && (
+            <p className="warning-text">
+              Figures in the brief not found in any tool result:{" "}
+              {result.flagged_numbers.join(", ")}. Use the table.
+            </p>
+          )}
+          {!!result.triage.length && (
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Satellite</th>
+                    <th>Pass</th>
+                    <th>Miss</th>
+                    <th>Triage</th>
+                    <th>Recommendation</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.triage.map((item) => {
+                    const [text, tone] = TRIAGE_LABEL[item.status];
+                    return (
+                      <tr key={item.pass_id}>
+                        <td>
+                          {item.satellite}
+                          <small>{item.pass_id}</small>
+                        </td>
+                        <td>
+                          {utcText(item.tca_utc + "Z")}
+                          <small>fragment {item.fragment_norad_id} · {item.event}</small>
+                        </td>
+                        <td>{missText(item.miss_km)}</td>
+                        <td>
+                          <span className={`status ${tone}`}>
+                            <i />
+                            {text}
+                          </span>
+                        </td>
+                        <td>
+                          {item.recommendation ?? "—"}
+                          {item.estimated_miss_km !== null && item.status === "NEEDS_BURN" && (
+                            <small>
+                              estimated {missText(item.estimated_miss_km)}
+                              {item.rescreen_closest_km !== null &&
+                                ` · re-screen closest ${missText(item.rescreen_closest_km)}`}
+                            </small>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <details className="triage-trace">
+            <summary>Agent trace · {result.events.length} steps</summary>
+            <ol className="event-list">
+              {result.events.map((event) => (
+                <li key={event.sequence}>
+                  <span>{event.event_type.replaceAll("_", " ")}</span>
+                  <p>{event.summary}</p>
+                  <small>{event.duration_ms.toFixed(0)} ms</small>
+                </li>
+              ))}
+            </ol>
+          </details>
+        </>
+      )}
+    </section>
+  );
+}
+
+export function TrackingPanel({ modelAccess = false }: { modelAccess?: boolean }) {
   const [screen, setScreen] = useState<TrackingScreen | null>(null);
   const [error, setError] = useState("");
   const [assessing, setAssessing] = useState<TrackedConjunction | null>(null);
@@ -271,6 +404,8 @@ export function TrackingPanel() {
           </strong>
         </div>
       </div>
+
+      <TriageAgent modelAccess={modelAccess} />
 
       <h3>Where the fragments come from</h3>
       <div className="table-scroll">

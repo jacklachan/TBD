@@ -330,6 +330,35 @@ export interface TrackingScreen {
   note: string;
 }
 
+export interface TriageItem {
+  pass_id: string;
+  satellite: string;
+  fragment_norad_id: number;
+  event: string;
+  tca_utc: string;
+  miss_km: number;
+  relative_speed_kms: number;
+  status: "NEEDS_BURN" | "CLEAR" | "NO_OPTION";
+  recommendation: string | null;
+  estimated_miss_km: number | null;
+  rescreen_closest_km: number | null;
+}
+
+/** The result of POST /tracking/agent, read from GET /runs/{id}. */
+export interface TriageResult {
+  status: "BRIEF_READY" | "UNRESOLVED";
+  unresolved_reason: string;
+  brief: string;
+  triage: TriageItem[];
+  model_calls: number;
+  tool_calls: number;
+  assessments: number;
+  flagged_numbers: number[];
+  events: { sequence: number; event_type: string; summary: string; duration_ms: number }[];
+  elapsed_s: number;
+  note: string;
+}
+
 export interface JointPlan {
   plan_id: string;
   label: string;

@@ -291,6 +291,11 @@ export const api = {
     return request(`/cases/${caseId}/export?format=markdown`);
   },
 
+  /** Starts the triage agent; poll the returned run with `waitForRun`. */
+  startTriage(): Promise<{ run_id: string; status: string }> {
+    return request("/tracking/agent", { method: "POST" });
+  },
+
   coordination(caseId: string): Promise<Coordination> {
     return request(`/cases/${caseId}/coordination`);
   },

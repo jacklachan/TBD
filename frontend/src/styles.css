@@ -2530,3 +2530,26 @@ td .subtle-button {
   color: var(--muted);
   font-size: 10px;
 }
+
+.triage-agent .section-heading {
+  margin-top: 24px;
+}
+.triage-agent h3 {
+  margin: 0;
+}
+.triage-agent .caption {
+  margin: 8px 0 12px;
+}
+.triage-brief {
+  font-size: 14px;
+  line-height: 1.65;
+  margin: 12px 0 6px;
+}
+.triage-trace {
+  margin: 12px 0 4px;
+  font-size: 12px;
+  color: var(--secondary);
+}
+.triage-trace summary {
+  cursor: pointer;
+}
