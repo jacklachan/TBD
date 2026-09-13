@@ -34,6 +34,7 @@ import { isApprovable } from "./contracts";
 import { SeparationChart } from "./components/SeparationChart";
 import { Dialog } from "./components/Dialog";
 import { PriorCaseEvidence } from "./components/PriorCaseEvidence";
+import { TrackingPanel } from "./components/TrackingPanel";
 import type { ViewMode } from "./scene/OrbitalScene";
 
 const OrbitalScene = lazy(() =>
@@ -100,7 +101,7 @@ export default function App() {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(180);
   const [panel, setPanel] = useState<
-    "options" | "evidence" | "about" | "limits" | "elements" | null
+    "options" | "evidence" | "about" | "limits" | "elements" | "tracking" | null
   >(null);
   const [instruction, setInstruction] = useState("");
   const [token, setToken] = useState("");
@@ -329,6 +330,12 @@ export default function App() {
             <span className="nav-count">
               {analysis?.candidate_count ?? "—"}
             </span>
+          </button>
+          <button
+            className={`pill ${panel === "tracking" ? "selected" : ""}`}
+            onClick={() => setPanel("tracking")}
+          >
+            Tracking
           </button>
           <button
             className={`pill ${panel === "evidence" ? "selected" : ""}`}
@@ -1690,6 +1697,15 @@ export default function App() {
               Export this evidence
             </button>
           )}
+        </Dialog>
+      )}
+
+      {panel === "tracking" && (
+        <Dialog
+          title="Real debris, real constellation."
+          onClose={() => setPanel(null)}
+        >
+          <TrackingPanel />
         </Dialog>
       )}
 

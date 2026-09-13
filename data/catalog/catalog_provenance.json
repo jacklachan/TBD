@@ -1,0 +1,39 @@
+{
+  "source_kind": "CELESTRAK_GP_TLE_GROUPS",
+  "retrieved_at_utc": "2026-09-13T01:20:44+00:00",
+  "files": [
+    {
+      "group": "iridium-NEXT",
+      "role": "PROTECTED",
+      "file": "iridium-NEXT.tle",
+      "source_url": "https://celestrak.org/NORAD/elements/gp.php?GROUP=iridium-NEXT&FORMAT=TLE",
+      "object_count": 80,
+      "sha256": "cbff4d22220c1063fe401d9e7bbbc25e175f8e7322294cd4c87ac884ea2c4d70"
+    },
+    {
+      "group": "iridium-33-debris",
+      "role": "DEBRIS",
+      "file": "iridium-33-debris.tle",
+      "source_url": "https://celestrak.org/NORAD/elements/gp.php?GROUP=iridium-33-debris&FORMAT=TLE",
+      "object_count": 110,
+      "sha256": "e00ecc432a59eeb6bc59d2ae0971066f65b95552b33b0fcf5a7a64af3b0a897d"
+    },
+    {
+      "group": "cosmos-2251-debris",
+      "role": "DEBRIS",
+      "file": "cosmos-2251-debris.tle",
+      "source_url": "https://celestrak.org/NORAD/elements/gp.php?GROUP=cosmos-2251-debris&FORMAT=TLE",
+      "object_count": 585,
+      "sha256": "b398fc40966b01101731328af6815ecbf8f7b4394f7b22b9181b78430521942e"
+    },
+    {
+      "group": "fengyun-1c-debris",
+      "role": "DEBRIS",
+      "file": "fengyun-1c-debris.tle",
+      "source_url": "https://celestrak.org/NORAD/elements/gp.php?GROUP=fengyun-1c-debris&FORMAT=TLE",
+      "object_count": 1969,
+      "sha256": "6e9ff018f640270d80049ff73154417298b1c069c4404233961fddfc9079ca98"
+    }
+  ],
+  "note": "Real public element sets, fetched once and committed. Screened with SGP4 as published; no covariance is available, so no probability is computed. Element sets are roughly kilometre-accurate at epoch and degrade over days: a close approach found here is a reason to look, not a prediction."
+}

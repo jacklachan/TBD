@@ -20,7 +20,7 @@ from huggingface_hub import CommitOperationAdd, HfApi, get_token
 
 ROOT = Path(__file__).resolve().parents[1]
 FILES = {"README.md", "Dockerfile", ".dockerignore", "requirements.txt"}
-PREFIXES = ("backend/", "scenarios/", "data/context/", "frontend/")
+PREFIXES = ("backend/", "scenarios/", "data/context/", "data/catalog/", "frontend/")
 
 
 def git(*args: str) -> bytes:

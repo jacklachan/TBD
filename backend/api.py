@@ -545,9 +545,17 @@ def create_app(
     scenarios_dir: Path | None = None,
     limits: PlannerLimits | None = None,
     require_remote_token: bool = False,
+    warm_tracking: bool = False,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(application):
+        if warm_tracking:
+            # The catalogue screen takes seconds and never changes at runtime,
+            # so a served instance computes it once in the background instead
+            # of making the first operator who opens the panel wait.
+            from backend import tracking
+
+            threading.Thread(target=_warm_tracking, args=(tracking,), daemon=True).start()
         yield
         state = application.state.desk
         state.executor.shutdown(wait=True, cancel_futures=True)
@@ -1078,6 +1086,16 @@ def create_app(
             ),
         }
 
+    @app.get("/tracking/screen")
+    def tracking_screen() -> dict:
+        """Real Iridium NEXT satellites against real debris, from the committed catalogue."""
+        from backend import tracking
+
+        try:
+            return tracking.cached_screen()
+        except tracking.TrackingError as exc:
+            raise HTTPException(404, {"error": "CATALOG_MISSING", "message": str(exc)}) from exc
+
     @app.post("/interop/verify-cdm")
     def interop_verify_cdm(payload: CdmRequest) -> dict:
         """Read a conjunction record from another operator and recompute it.
@@ -1266,6 +1284,13 @@ def _markdown_report(snapshot: dict) -> str:
     return "\n".join(lines)
 
 
+def _warm_tracking(tracking_module) -> None:
+    try:
+        tracking_module.cached_screen()
+    except Exception as exc:  # noqa: BLE001 - the endpoint reports it on request
+        _log.warning("tracking warm-up failed: %s", exc)
+
+
 def _default_app() -> FastAPI:
     """Module-level app for `uvicorn backend.api:app`.
 
@@ -1292,6 +1317,7 @@ def _default_app() -> FastAPI:
         ),
         memory=CaseMemory(database_path()) if database_path() != ":memory:" else CaseMemory(),
         require_remote_token=True,
+        warm_tracking=True,
     )
 
 

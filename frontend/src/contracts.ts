@@ -281,6 +281,49 @@ export interface SocratesContext {
   note: string;
 }
 
+export interface TrackedConjunction {
+  protected: { norad_id: number; name: string };
+  debris: { norad_id: number; name: string; event: string };
+  tca_utc: string;
+  miss_km: number;
+  relative_speed_kms: number;
+  element_age_days: { protected: number; debris: number };
+}
+
+export interface TrackingCrossCheck {
+  object_1: { norad_id: number; name: string };
+  object_2: { norad_id: number; name: string };
+  published_tca_utc: string;
+  published_miss_km: number;
+  published_relative_speed_kms: number;
+  status: "RECOMPUTED" | "OUTSIDE_WINDOW" | "PROPAGATION_ERROR";
+  our_tca_utc?: string;
+  our_miss_km?: number;
+  our_relative_speed_kms?: number;
+  tca_difference_s?: number;
+}
+
+/** GET /tracking/screen: real constellation against real debris, SGP4. */
+export interface TrackingScreen {
+  mode: "SGP4_CATALOGUE_SCREEN";
+  window: { start_utc: string; end_utc: string; hours: number; coarse_step_s: number };
+  catalog: {
+    retrieved_at_utc: string;
+    protected_count: number;
+    debris_count: number;
+    groups: { group: string; role: string; object_count: number; label: string }[];
+  };
+  pairs_screened: number;
+  report_threshold_km: number;
+  conjunction_count: number;
+  conjunctions: TrackedConjunction[];
+  by_satellite: { norad_id: number; name: string; count: number; closest_km: number }[];
+  by_event: Record<string, number>;
+  cross_check: TrackingCrossCheck[];
+  elapsed_s: number;
+  note: string;
+}
+
 /** Every mutating request states the versions it was composed against. */
 export interface VersionStamp {
   expected_scenario_version: number;

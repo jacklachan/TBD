@@ -13,7 +13,7 @@ MAX_REQUEST_BYTES = 16_384
 # of a propagation. Listed in one place because an endpoint added outside it is
 # unauthenticated, unbounded and cross-origin by omission rather than by
 # decision -- which is how /ingest and /interop were briefly served.
-PROTECTED_PREFIXES = ("/cases", "/runs", "/context", "/ingest", "/interop")
+PROTECTED_PREFIXES = ("/cases", "/runs", "/context", "/ingest", "/interop", "/tracking")
 
 
 class APIGuard:

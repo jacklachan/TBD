@@ -21,6 +21,7 @@ import type {
   PolicyDiff,
   RunRecord,
   SocratesContext,
+  TrackingScreen,
   VersionStamp,
   VisualizationBundle,
 } from "./contracts";
@@ -286,6 +287,11 @@ export const api = {
 
   exportMarkdown(caseId: string): Promise<string> {
     return request(`/cases/${caseId}/export?format=markdown`);
+  },
+
+  /** Computed once per server from the committed catalogue; can take seconds cold. */
+  trackingScreen(): Promise<TrackingScreen> {
+    return request("/tracking/screen");
   },
 
   socrates(signal?: AbortSignal): Promise<SocratesContext> {
